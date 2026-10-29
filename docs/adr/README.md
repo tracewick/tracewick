@@ -12,3 +12,4 @@ See [ADR 1](0001-record-architecture-decisions.md) for how and why we record dec
 | [5](0005-fail-open-policy.md)                   | Fail-open policy and optional ext-excimer | Accepted |
 | [6](0006-otlp-profiles-experimental.md)         | OTLP profiles export is experimental     | Accepted |
 | [7](0007-language-neutral-spool-format.md)      | Language-neutral spool format for the agent | Accepted |
+| [8](0008-own-http-transport.md)                 | Own HTTP transport instead of PSR-18     | Accepted |

@@ -1,7 +1,7 @@
 name: Stand
 
 # Builds the docker-compose development stand and runs the test suites inside it. Runs only when
-# the stand changes, to save Actions minutes.
+# the stand or the delivery code changes, to save Actions minutes.
 
 on:
   pull_request:
@@ -10,6 +10,11 @@ on:
       - docker/**
       - Makefile
       - .github/workflows/stand.yml
+      # Delivery code is tested against the stand's real backends and Toxiproxy.
+      - src/Transport/**
+      - src/Sink/**
+      - tests/Integration/Sink/**
+      - tests/Support/Toxiproxy.php
   push:
     branches: [main, develop]
     paths:
@@ -17,6 +22,11 @@ on:
       - docker/**
       - Makefile
       - .github/workflows/stand.yml
+      # Delivery code is tested against the stand's real backends and Toxiproxy.
+      - src/Transport/**
+      - src/Sink/**
+      - tests/Integration/Sink/**
+      - tests/Support/Toxiproxy.php
   workflow_dispatch:
 
 permissions:
