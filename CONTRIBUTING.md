@@ -55,6 +55,27 @@ working copy stay yours.
 The PHP container gets these addresses as `PYROSCOPE_URL`, `PYROSCOPE_TOXIC_URL`,
 `OTEL_EXPORTER_OTLP_ENDPOINT` and `TOXIPROXY_URL`. Ports listen on `127.0.0.1` only.
 
+### Toxiproxy and chaos tests
+
+[Toxiproxy](https://github.com/Shopify/toxiproxy) is a TCP proxy that can inject network faults on
+demand. In the stand it sits between PHP and the backends: `http://toxiproxy:14040` is Pyroscope
+and `http://toxiproxy:14318` is the Collector, but with whatever faults a test switches on through
+the API at `TOXIPROXY_URL`. Chaos tests use it to prove the fail-open promise (see
+[ADR 5](docs/adr/0005-fail-open-policy.md)): when a backend is slow, drops connections, returns
+errors or is down, the host application must not notice.
+
+Tests talk to the real backends through the plain URLs and to the faulty ones through the
+`toxiproxy` URLs. A test that adds a toxic must remove it when it ends, for example:
+
+```bash
+# Add 10 s of latency to every response from Pyroscope, then remove it.
+curl -X POST http://127.0.0.1:8474/proxies/pyroscope/toxics \
+     -d '{"name":"slow","type":"latency","stream":"downstream","attributes":{"latency":10000}}'
+curl -X DELETE http://127.0.0.1:8474/proxies/pyroscope/toxics/slow
+```
+
+Proxies are defined in [`docker/toxiproxy/toxiproxy.json`](docker/toxiproxy/toxiproxy.json).
+
 ## Rules
 
 - **Fail-open.** Library code must never throw into, block, or noticeably slow down the host
