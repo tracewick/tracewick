@@ -42,8 +42,8 @@ final class CollapsedExcimerReconciliationTest extends TestCase
     {
         $log = $this->profile();
 
-        $ours = self::parse((new CollapsedEncoder())->encode($this->toProfile($log)));
-        $theirs = self::parse($log->formatCollapsed());
+        $ours = $this->parse((new CollapsedEncoder())->encode($this->toProfile($log)));
+        $theirs = $this->parse($log->formatCollapsed());
 
         self::assertGreaterThan(0, array_sum($theirs));
         self::assertSame(array_sum($theirs), array_sum($ours));
@@ -53,15 +53,15 @@ final class CollapsedExcimerReconciliationTest extends TestCase
     {
         $log = $this->profile();
 
-        $ours = self::parse((new CollapsedEncoder())->encode($this->toProfile($log)));
-        $theirs = self::parse($log->formatCollapsed());
+        $ours = $this->parse((new CollapsedEncoder())->encode($this->toProfile($log)));
+        $theirs = $this->parse($log->formatCollapsed());
 
         foreach (['spinA', 'spinB'] as $method) {
             $frame = self::class . '::' . $method;
-            $expected = self::countContaining($theirs, $frame);
+            $expected = $this->countContaining($theirs, $frame);
 
             self::assertGreaterThan(0, $expected, \sprintf('Excimer saw no samples in %s.', $method));
-            self::assertSame($expected, self::countContaining($ours, $frame), $method);
+            self::assertSame($expected, $this->countContaining($ours, $frame), $method);
         }
     }
 
@@ -73,8 +73,8 @@ final class CollapsedExcimerReconciliationTest extends TestCase
         $profiler->start();
 
         for ($i = 0; $i < 5; ++$i) {
-            self::spinA();
-            self::spinB();
+            $this->spinA();
+            $this->spinB();
         }
 
         $profiler->stop();
@@ -93,7 +93,7 @@ final class CollapsedExcimerReconciliationTest extends TestCase
     /**
      * @return array<string, int> sample count by stack
      */
-    private static function parse(string $collapsed): array
+    private function parse(string $collapsed): array
     {
         $counts = [];
         foreach (explode("\n", trim($collapsed)) as $line) {
@@ -112,7 +112,7 @@ final class CollapsedExcimerReconciliationTest extends TestCase
     /**
      * @param array<string, int> $counts
      */
-    private static function countContaining(array $counts, string $frame): int
+    private function countContaining(array $counts, string $frame): int
     {
         $total = 0;
         foreach ($counts as $stack => $count) {
@@ -125,7 +125,7 @@ final class CollapsedExcimerReconciliationTest extends TestCase
         return $total;
     }
 
-    private static function spinA(): void
+    private function spinA(): void
     {
         $deadline = hrtime(true) + 6_000_000;
         while (hrtime(true) < $deadline) {
@@ -133,7 +133,7 @@ final class CollapsedExcimerReconciliationTest extends TestCase
         }
     }
 
-    private static function spinB(): void
+    private function spinB(): void
     {
         $deadline = hrtime(true) + 4_000_000;
         while (hrtime(true) < $deadline) {
