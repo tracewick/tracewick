@@ -27,6 +27,13 @@ make ci     # run every check CI runs on a pull request
 | `make rector`           | Check for pending Rector refactorings                     |
 | `make deps`             | Detect unused and undeclared Composer dependencies        |
 | `make test`             | Run the unit and integration test suites                  |
+| `make coverage`         | Run the tests with coverage reports in `build/coverage/`  |
+| `make infection`        | Mutation testing with [Infection](https://infection.github.io/) |
+
+Coverage needs [pcov](https://github.com/krakjoe/pcov) or Xdebug. Infection is not a Composer
+dependency because recent versions need PHP 8.3 or newer; install its
+[PHAR](https://infection.github.io/guide/installation.html) (CI uses the version in
+`.github/workflows/ci.yml`).
 
 ## Development stand
 
@@ -107,6 +114,8 @@ request that touches it, on PHP 8.4, and on all supported PHP versions after the
 - **Static analysis** runs at PHPStan level `max`. Do not add baseline entries or `@phpstan-ignore`
   without a comment explaining why.
 - **Tests** accompany every change. Never skip, disable or delete a test to make CI pass.
+  Pull requests must keep line coverage at 90% or more (checked by Codecov) and the mutation
+  score indicator (MSI) at 80% or more (checked by Infection).
 - **Language.** Code, comments, commit messages, issues and documentation are written in English.
 
 ## Branching model
