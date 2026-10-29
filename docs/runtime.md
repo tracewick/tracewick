@@ -59,7 +59,7 @@ A plain PHP application that does not call `fastcgi_finish_request()` keeps the 
 until shutdown functions finish. With a `SpoolSink` that wait is negligible. Otherwise, set
 `finishRequest: true` in `ProfilerConfig`: the profiler then ends the response itself before it
 flushes. Output that shutdown functions registered after the profiler print is then lost, which is
-why the option is off by default.
+why the option is off by default. See [ADR 10](adr/0010-deferred-delivery.md).
 
 ## Long-running workers
 
