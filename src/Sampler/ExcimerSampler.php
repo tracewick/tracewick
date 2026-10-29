@@ -43,7 +43,7 @@ final class ExcimerSampler implements Sampler
         $this->profiler = new \ExcimerProfiler();
         $originNs = $this->clock->nowNs();
 
-        $this->profiler->setPeriod($config->periodNs / 1_000_000_000);
+        $this->profiler->setPeriod($config->periodSeconds());
         $this->profiler->setEventType(match ($config->eventType) {
             EventType::Wall => EXCIMER_REAL,
             EventType::Cpu => EXCIMER_CPU,
@@ -55,6 +55,8 @@ final class ExcimerSampler implements Sampler
 
     public function start(): void
     {
+        // ExcimerProfiler::start() restarts the timer: calling it on every request or job of a
+        // busy worker would keep resetting it, and no sample would ever be taken.
         if ($this->running) {
             return;
         }
@@ -70,10 +72,7 @@ final class ExcimerSampler implements Sampler
 
     public function stop(): void
     {
-        if (!$this->running) {
-            return;
-        }
-
+        // Stopping a stopped ExcimerProfiler is harmless, so no guard is needed here.
         $this->running = false;
 
         try {

@@ -44,6 +44,17 @@ final class ExcimerTraceConverterTest extends TestCase
         self::assertSame(self::ORIGIN_NS + 1_250_000_000, $sample->timestampNs);
     }
 
+    public function testRoundsTimestampToNearestNanosecond(): void
+    {
+        $down = $this->converter()->convertEntry([['function' => 'main']], 1, 1.4e-9);
+        $up = $this->converter()->convertEntry([['function' => 'main']], 1, 1.6e-9);
+
+        self::assertNotNull($down);
+        self::assertNotNull($up);
+        self::assertSame(self::ORIGIN_NS + 1, $down->timestampNs);
+        self::assertSame(self::ORIGIN_NS + 2, $up->timestampNs);
+    }
+
     public function testKeepsOverrunCount(): void
     {
         $sample = $this->converter()->convertEntry([['function' => 'main']], 4, 0.0);

@@ -45,6 +45,13 @@ final class SamplerConfigTest extends TestCase
         self::assertSame(4096, $longest->maxDepth);
     }
 
+    public function testPeriodInSeconds(): void
+    {
+        self::assertSame(0.01, (new SamplerConfig())->periodSeconds());
+        self::assertSame(0.0001, (new SamplerConfig(periodNs: SamplerConfig::MIN_PERIOD_NS))->periodSeconds());
+        self::assertSame(60.0, (new SamplerConfig(periodNs: SamplerConfig::MAX_PERIOD_NS))->periodSeconds());
+    }
+
     #[DataProvider('invalidPeriods')]
     public function testRejectsPeriodOutOfRange(int $periodNs): void
     {
