@@ -1,0 +1,77 @@
+# Development and test stand for Tracewick.
+#
+#   make stand-up     start Pyroscope, Grafana, the OTel Collector and Toxiproxy
+#   make stand-ci     run `make ci` in the PHP container with a real ext-excimer
+#   make stand-down   stop everything and remove volumes
+#
+# Ports bind to 127.0.0.1 only. See CONTRIBUTING.md for details.
+
+name: tracewick
+
+services:
+  php:
+    build:
+      context: docker/php
+      args:
+        PHP_VERSION: ${PHP_VERSION:-8.4}
+        EXCIMER_VERSION: ${EXCIMER_VERSION:-1.2.7}
+    image: tracewick-php:${PHP_VERSION:-8.4}
+    # Started on demand with `docker compose run`, not by `docker compose up`.
+    profiles: [php]
+    user: ${STAND_UID:-1000}:${STAND_GID:-1000}
+    environment:
+      PYROSCOPE_URL: http://pyroscope:4040
+      PYROSCOPE_TOXIC_URL: http://toxiproxy:14040
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      TOXIPROXY_URL: http://toxiproxy:8474
+    volumes:
+      - .:/app
+      - composer-cache:/composer-cache
+
+  pyroscope:
+    image: grafana/pyroscope:2.4.2
+    # The image is distroless and has no tool for a healthcheck; poll /ready from the host instead.
+    ports:
+      - 127.0.0.1:4040:4040
+
+  grafana:
+    image: grafana/grafana:13.3.0
+    depends_on: [pyroscope]
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: 'true'
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: 'true'
+      GF_ANALYTICS_REPORTING_ENABLED: 'false'
+      GF_ANALYTICS_CHECK_FOR_UPDATES: 'false'
+    volumes:
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - 127.0.0.1:3000:3000
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://localhost:3000/api/health]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.164.0
+    command: [--config=/etc/otelcol/config.yaml, --feature-gates=service.profilesSupport]
+    depends_on: [pyroscope]
+    volumes:
+      - ./docker/otel-collector/config.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - 127.0.0.1:4317:4317
+      - 127.0.0.1:4318:4318
+      - 127.0.0.1:13133:13133
+
+  # Injects latency and failures between PHP and the backends for chaos tests.
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.13.0
+    command: [-host=0.0.0.0, -config=/etc/toxiproxy/toxiproxy.json]
+    volumes:
+      - ./docker/toxiproxy/toxiproxy.json:/etc/toxiproxy/toxiproxy.json:ro
+    ports:
+      - 127.0.0.1:8474:8474
+
+volumes:
+  composer-cache:

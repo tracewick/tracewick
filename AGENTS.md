@@ -18,6 +18,8 @@ make cs-fix             # fix coding style and normalize composer.json
 make stan               # PHPStan, level max
 make test-unit          # fast unit tests
 make test-integration   # needs ext-excimer; skipped without it
+make stand-up           # docker-compose stand: Pyroscope, Grafana, OTel Collector, Toxiproxy
+make stand-ci           # `make ci` inside the stand's PHP container, with ext-excimer
 ```
 
 ## Layout
@@ -25,6 +27,7 @@ make test-integration   # needs ext-excimer; skipped without it
 - `src/` library code, PSR-4 `Tracewick\`.
 - `tests/Unit/` tests without ext-excimer or I/O; `tests/Integration/` tests against the real
   extension. PSR-4 `Tracewick\Tests\`.
+- `compose.yaml`, `docker/` the development stand (see CONTRIBUTING.md).
 - `docs/adr/` architecture decision records. Read the accepted ADRs before changing architecture.
 
 ## Architecture

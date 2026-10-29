@@ -28,6 +28,33 @@ make ci     # run every check CI runs on a pull request
 | `make deps`             | Detect unused and undeclared Composer dependencies        |
 | `make test`             | Run the unit and integration test suites                  |
 
+## Development stand
+
+The stand in [`compose.yaml`](compose.yaml) gives you PHP with ext-excimer and the backends Tracewick
+talks to, so you need only Docker with Compose v2 on your machine:
+
+```bash
+make stand-up      # start the backends and wait until they are ready
+make stand-test    # install dependencies and run all test suites with ext-excimer
+make stand-ci      # run everything CI runs on a pull request
+make stand-shell   # open a shell in the PHP container
+make stand-down    # stop everything and remove volumes
+```
+
+Set `PHP_VERSION` (8.2, 8.3, 8.4 or 8.5; 8.4 by default) to use another PHP version, for example
+`make stand-test PHP_VERSION=8.2`. The PHP container runs as your user, so files it creates in the
+working copy stay yours.
+
+| Service        | URL from the host        | URL inside the stand        | Purpose                       |
+|----------------|--------------------------|-----------------------------|-------------------------------|
+| Pyroscope      | http://127.0.0.1:4040    | `http://pyroscope:4040`     | Profile storage and UI        |
+| Grafana        | http://127.0.0.1:3000    | `http://grafana:3000`       | Profiles explorer, no login   |
+| OTel Collector | 127.0.0.1:4317 (gRPC), http://127.0.0.1:4318 | `http://otel-collector:4318` | OTLP; forwards profiles to Pyroscope |
+| Toxiproxy      | http://127.0.0.1:8474 (API) | `http://toxiproxy:14040` (to Pyroscope), `:14318` (to the Collector) | Latency and failure injection |
+
+The PHP container gets these addresses as `PYROSCOPE_URL`, `PYROSCOPE_TOXIC_URL`,
+`OTEL_EXPORTER_OTLP_ENDPOINT` and `TOXIPROXY_URL`. Ports listen on `127.0.0.1` only.
+
 ## Rules
 
 - **Fail-open.** Library code must never throw into, block, or noticeably slow down the host

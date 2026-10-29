@@ -1,8 +1,14 @@
 .DEFAULT_GOAL := help
 
 COMPOSER ?= composer
+PHP_VERSION ?= 8.4
 
-.PHONY: help install lint cs-fix stan rector rector-fix deps test test-unit test-integration audit ci
+# The stand's PHP container runs as the host user so that files it writes stay yours.
+STAND_ENV = PHP_VERSION=$(PHP_VERSION) STAND_UID=$$(id -u) STAND_GID=$$(id -g)
+STAND_RUN = $(STAND_ENV) docker compose run --rm php
+
+.PHONY: help install lint cs-fix stan rector rector-fix deps test test-unit test-integration audit ci \
+	stand-build stand-up stand-down stand-smoke stand-shell stand-install stand-test stand-ci
 
 help: ## Show available targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-18s %s\n", $$1, $$2}'
@@ -46,3 +52,28 @@ audit: ## Check dependencies for known vulnerabilities
 ci: ## Run every check CI runs on a pull request
 	$(COMPOSER) ci
 	$(COMPOSER) audit
+
+stand-build: ## Build the stand's PHP image (PHP_VERSION=8.4 by default)
+	$(STAND_ENV) docker compose build php
+
+stand-up: ## Start Pyroscope, Grafana, the OTel Collector and Toxiproxy
+	docker compose up -d --wait
+	docker/wait-for-url.sh http://127.0.0.1:4040/ready
+
+stand-down: ## Stop the stand and remove its volumes
+	docker compose --profile php down --volumes --remove-orphans
+
+stand-smoke: ## Check that a running stand is wired correctly
+	PHP_VERSION=$(PHP_VERSION) docker/smoke-test.sh
+
+stand-shell: ## Open a shell in the stand's PHP container
+	$(STAND_RUN) bash
+
+stand-install: ## Install Composer dependencies inside the stand
+	$(STAND_RUN) composer install
+
+stand-test: stand-install ## Run all test suites inside the stand, with ext-excimer
+	$(STAND_RUN) composer test
+
+stand-ci: stand-install ## Run every CI check inside the stand, with ext-excimer
+	$(STAND_RUN) make ci
