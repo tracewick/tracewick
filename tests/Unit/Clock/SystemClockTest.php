@@ -17,9 +17,12 @@ final class SystemClockTest extends TestCase
         $now = (new SystemClock())->nowNs();
         $after = (int) (microtime(true) * 1_000_000) * 1_000;
 
-        // One microsecond of tolerance for the rounding of the float system time.
-        self::assertGreaterThanOrEqual($before - 1_000, $now);
-        self::assertLessThanOrEqual($after + 1_000, $now);
+        // The clock reads the monotonic clock just before its system time anchor, so the anchor is
+        // late by however long that took, and microtime() truncates to whole microseconds. A
+        // millisecond of tolerance absorbs both, including a preemption between the two reads,
+        // and is still far below any sampling period.
+        self::assertGreaterThanOrEqual($before - 1_000_000, $now);
+        self::assertLessThanOrEqual($after + 1_000_000, $now);
     }
 
     public function testNeverGoesBackwards(): void
