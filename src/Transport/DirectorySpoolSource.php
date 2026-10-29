@@ -164,14 +164,19 @@ final class DirectorySpoolSource implements SpoolSource
      */
     private function moveToRejected(ClaimedSpoolFile $file): bool
     {
-        $rejected = $this->path(self::REJECTED_DIRECTORY);
-        if (0 === $this->config->maxRejectedFiles
-            || (!is_dir($rejected) && !@mkdir($rejected, 0o777) && !is_dir($rejected))
-            || !@rename($file->handle, $rejected . '/' . $file->name)) {
+        if (0 === $this->config->maxRejectedFiles) {
             return false;
         }
 
-        return true;
+        $rejected = $this->path(self::REJECTED_DIRECTORY);
+        // The second is_dir() covers another reader creating the directory at the same time.
+        if (!is_dir($rejected) && !@mkdir($rejected, 0o777) && !is_dir($rejected)) {
+            return false;
+        }
+
+        $target = $rejected . '/' . $file->name;
+
+        return @rename($file->handle, $target);
     }
 
     /**
