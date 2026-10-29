@@ -85,8 +85,8 @@ final class DrainCommandTest extends TestCase
     {
         $this->spool = new TemporaryDirectory();
         $this->clock = new ManualClock();
-        $this->output = self::memoryStream();
-        $this->errors = self::memoryStream();
+        $this->output = $this->memoryStream();
+        $this->errors = $this->memoryStream();
     }
 
     protected function tearDown(): void
@@ -386,7 +386,7 @@ final class DrainCommandTest extends TestCase
     /**
      * @return resource
      */
-    private static function memoryStream()
+    private function memoryStream()
     {
         $stream = fopen('php://memory', 'w+');
         if (false === $stream) {
