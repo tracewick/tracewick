@@ -148,11 +148,14 @@ final class PprofEncoderTest extends TestCase
         $functionNames = [];
         foreach ($profile->messages(5) as $function) {
             $functionNames[$function->int(1)] = $this->string($strings, $function->int(2));
+            // No frame here has a line, so placeholders must not invent one either.
+            self::assertSame(0, $function->int(5));
         }
 
         $locationNames = [];
         foreach ($profile->messages(4) as $location) {
             $locationNames[$location->int(1)] = $functionNames[$location->message(4)->int(1)] ?? self::fail('Unknown function.');
+            self::assertSame(0, $location->message(4)->int(2));
         }
 
         self::assertCount(3, $locationNames);
