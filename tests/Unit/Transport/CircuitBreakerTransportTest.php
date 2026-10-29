@@ -81,6 +81,32 @@ final class CircuitBreakerTransportTest extends TestCase
         self::assertCount(8, $inner->sent);
     }
 
+    public function testCountsFromZeroAfterASuccess(): void
+    {
+        $inner = new ScriptedTransport(Delivery::failed('1'), Delivery::delivered(), Delivery::failed('2'), Delivery::failed('3'));
+        $breaker = $this->breaker($inner, new CircuitBreakerConfig(2, 1_000));
+
+        for ($i = 0; $i < 3; ++$i) {
+            $this->send($breaker);
+        }
+
+        self::assertFalse($breaker->isOpen());
+        $this->send($breaker);
+        self::assertTrue($breaker->isOpen());
+    }
+
+    public function testMeasuresLongOpenDurationsExactly(): void
+    {
+        $inner = new ScriptedTransport(Delivery::failed('1'), Delivery::delivered());
+        $breaker = $this->breaker($inner, new CircuitBreakerConfig(1, 3_600_000));
+
+        $this->send($breaker);
+        $this->clock->advanceMs(3_599_999);
+        self::assertSame(DeliveryStatus::Skipped, $this->send($breaker)->status);
+        $this->clock->advanceMs(1);
+        self::assertTrue($this->send($breaker)->isDelivered());
+    }
+
     public function testSkippedDeliveriesDoNotCount(): void
     {
         $inner = new ScriptedTransport(

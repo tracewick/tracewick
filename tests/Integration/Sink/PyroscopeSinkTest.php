@@ -82,8 +82,10 @@ final class PyroscopeSinkTest extends TestCase
     }
 
     /**
-     * Values of a label in the application's series, retried until there are some, because
-     * Pyroscope ingests asynchronously.
+     * Values of a label in the application's series, retried until there are some.
+     *
+     * Pyroscope ingests asynchronously, and a freshly started server only serves the first
+     * ingested data about a minute later, once its read path notices that data exists.
      *
      * @return list<string>
      */
@@ -97,7 +99,7 @@ final class PyroscopeSinkTest extends TestCase
             'end' => $aroundMs + 60_000,
         ];
 
-        $deadline = hrtime(true) + 15_000_000_000;
+        $deadline = hrtime(true) + 90_000_000_000;
         do {
             $values = $this->query('/querier.v1.QuerierService/LabelValues', $request)['names'] ?? [];
             if ([] !== $values) {

@@ -200,4 +200,16 @@ final class HttpTransportTest extends TestCase
         self::assertSame(DeliveryStatus::Failed, $delivery->status);
         self::assertMatchesRegularExpression('/^TLS handshake with 127\\.0\\.0\\.1:\\d+ failed$/', $delivery->reason);
     }
+
+    public function testGivesUpOnAServerThatNeverAnswersTheTlsHandshake(): void
+    {
+        // The plain server waits for request headers, so the client hello is never answered.
+        $server = new FakeHttpServer([['stallMs' => 3_000]]);
+        $url = str_replace('http://', 'https://', $server->url());
+
+        $delivery = (new HttpTransport(new HttpConfig($url, 100, 300)))->send(new Payload('x', 'text/plain'));
+
+        self::assertSame(DeliveryStatus::Failed, $delivery->status);
+        self::assertStringStartsWith('Timed out after 300 ms talking to 127.0.0.1:', $delivery->reason);
+    }
 }

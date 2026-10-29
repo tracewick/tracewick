@@ -81,6 +81,16 @@ final class PyroscopeSinkTest extends TestCase
         self::assertSame('1798000002', $transport->payload()->parameters['until'] ?? null);
     }
 
+    public function testRoundsAnEndJustPastASecondUp(): void
+    {
+        $transport = new ScriptedTransport(Delivery::delivered());
+        $sink = new PyroscopeSink(new PyroscopeConfig('http://pyroscope:4040', 'blog'), $transport);
+
+        $sink->send($this->profile(10_000_000, 1_798_000_002_000_000_001));
+
+        self::assertSame('1798000003', $transport->payload()->parameters['until'] ?? null);
+    }
+
     /**
      * @return iterable<string, array{int, string}>
      */
@@ -90,6 +100,9 @@ final class PyroscopeSinkTest extends TestCase
         yield '7 ms rounds to nearest' => [7_000_000, '143'];
         yield '3 ms rounds to nearest' => [3_000_000, '333'];
         yield '1 µs' => [1_000, '1000000'];
+        yield '3 ns rounds down' => [3, '333333333'];
+        yield '400 ms rounds half up' => [400_000_000, '3'];
+        yield '625 ms rounds up from .6' => [625_000_000, '2'];
         yield 'longer than a second' => [3_000_000_000, '1'];
     }
 

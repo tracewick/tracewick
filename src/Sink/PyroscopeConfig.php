@@ -64,7 +64,8 @@ final readonly class PyroscopeConfig
     public function httpConfig(): HttpConfig
     {
         $headers = [];
-        if (null !== $this->basicAuthUser && null !== $this->basicAuthPassword) {
+        // The constructor guarantees that the password is set whenever the user is.
+        if (null !== $this->basicAuthUser) {
             $headers['Authorization'] = 'Basic ' . base64_encode($this->basicAuthUser . ':' . $this->basicAuthPassword);
         }
 

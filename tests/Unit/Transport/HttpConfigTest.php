@@ -78,6 +78,7 @@ final class HttpConfigTest extends TestCase
         yield 'timeout below connect' => ['http://example.com', 500, 499, [], 'The timeout'];
         yield 'timeout too long' => ['http://example.com', 500, 60_001, [], 'The timeout'];
         yield 'header name' => ['http://example.com', 500, 2_000, ['Bad Header' => 'x'], 'Invalid header name'];
+        yield 'header name with a trailing newline' => ['http://example.com', 500, 2_000, ["X-A\n" => 'x'], 'Invalid header name'];
         yield 'reserved header' => ['http://example.com', 500, 2_000, ['content-length' => '1'], 'set by the transport'];
         yield 'host header' => ['http://example.com', 500, 2_000, ['Host' => 'x'], 'set by the transport'];
         yield 'header injection' => ['http://example.com', 500, 2_000, ['X-A' => "a\r\nX-B: b"], 'line break'];
