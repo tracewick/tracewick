@@ -35,6 +35,75 @@ dependency because recent versions need PHP 8.3 or newer; install its
 [PHAR](https://infection.github.io/guide/installation.html) (CI uses the version in
 `.github/workflows/ci.yml`).
 
+## Development stand
+
+The stand in [`compose.yaml`](compose.yaml) gives you PHP with ext-excimer and the backends Tracewick
+talks to, so you need only Docker with Compose v2 on your machine:
+
+```bash
+make stand-up      # start the backends and wait until they are ready
+make stand-smoke   # check that the stand is wired correctly
+make stand-test    # install dependencies and run all test suites with ext-excimer
+make stand-ci      # run everything CI runs on a pull request
+make stand-shell   # open a shell in the PHP container
+make stand-down    # stop everything and remove volumes
+```
+
+Set `PHP_VERSION` (8.2, 8.3, 8.4 or 8.5; 8.4 by default) to use another PHP version, for example
+`make stand-test PHP_VERSION=8.2`. Each PHP version gets its own image (`tracewick-php:<version>`),
+built on first use; after changing anything under `docker/php/`, rebuild it with
+`make stand-build`. The PHP container runs as your user, so files it creates in the working copy
+stay yours.
+
+The stand is for developing and testing Tracewick only. Neither `compose.yaml` nor `docker/` ships
+in the Composer package. Its PHP image deliberately runs with strict development settings
+(`docker/php/conf.d/zz-tracewick.ini`: all errors displayed, assertions on), so that tests fail on
+any notice or deprecation; this says nothing about how applications should configure PHP.
+
+To look at profiles, open Grafana at http://127.0.0.1:3000, choose Explore (or Drilldown →
+Profiles) and the provisioned Pyroscope data source; or use the Pyroscope UI at
+http://127.0.0.1:4040.
+
+| Service        | URL from the host        | URL inside the stand        | Purpose                       |
+|----------------|--------------------------|-----------------------------|-------------------------------|
+| Pyroscope      | http://127.0.0.1:4040    | `http://pyroscope:4040`     | Profile storage and UI        |
+| Grafana        | http://127.0.0.1:3000    | `http://grafana:3000`       | Profiles explorer, no login   |
+| OTel Collector | 127.0.0.1:4317 (gRPC), http://127.0.0.1:4318 | `http://otel-collector:4318` | OTLP; forwards profiles to Pyroscope |
+| Toxiproxy      | http://127.0.0.1:8474 (API) | `http://toxiproxy:14040` (to Pyroscope), `:14318` (to the Collector) | Latency and failure injection |
+
+The PHP container gets these addresses as `PYROSCOPE_URL`, `PYROSCOPE_TOXIC_URL`,
+`OTEL_EXPORTER_OTLP_ENDPOINT` and `TOXIPROXY_URL`. Ports listen on `127.0.0.1` only.
+
+### Toxiproxy and chaos tests
+
+[Toxiproxy](https://github.com/Shopify/toxiproxy) is a TCP proxy that can inject network faults on
+demand. In the stand it sits between PHP and the backends: `http://toxiproxy:14040` is Pyroscope
+and `http://toxiproxy:14318` is the Collector, but with whatever faults a test switches on through
+the API at `TOXIPROXY_URL`. Chaos tests use it to prove the fail-open promise (see
+[ADR 5](docs/adr/0005-fail-open-policy.md)): when a backend is slow, drops connections, returns
+errors or is down, the host application must not notice.
+
+Tests talk to the real backends through the plain URLs and to the faulty ones through the
+`toxiproxy` URLs. A test that adds a toxic must remove it when it ends, for example:
+
+```bash
+# Add 10 s of latency to every response from Pyroscope, then remove it.
+curl -X POST http://127.0.0.1:8474/proxies/pyroscope/toxics \
+     -d '{"name":"slow","type":"latency","stream":"downstream","attributes":{"latency":10000}}'
+curl -X DELETE http://127.0.0.1:8474/proxies/pyroscope/toxics/slow
+```
+
+Proxies are defined in [`docker/toxiproxy/toxiproxy.json`](docker/toxiproxy/toxiproxy.json).
+
+### Updating the stand
+
+The backend images and the ext-excimer version are pinned, so the stand does not change under
+you; Dependabot proposes backend image updates in `compose.yaml` into `develop`. The PHP base image
+follows its minor version tag (`php:8.4-cli-bookworm`), so a rebuild picks up PHP patch releases.
+ext-excimer (`EXCIMER_VERSION` in `compose.yaml` and `docker/php/Dockerfile`) is updated by hand
+when PECL publishes a release. The `Stand` workflow builds and tests the stand on every pull
+request that touches it, on PHP 8.4, and on all supported PHP versions after the merge.
+
 ## Rules
 
 - **Fail-open.** Library code must never throw into, block, or noticeably slow down the host
