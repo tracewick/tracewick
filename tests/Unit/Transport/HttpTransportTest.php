@@ -8,7 +8,9 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Tracewick\Clock\SystemClock;
 use Tracewick\Tests\Support\FakeHttpServer;
+use Tracewick\Tests\Support\ScriptedClock;
 use Tracewick\Transport\Delivery;
 use Tracewick\Transport\DeliveryStatus;
 use Tracewick\Transport\HttpConfig;
@@ -24,6 +26,7 @@ use Tracewick\Transport\TransportException;
 #[UsesClass(Delivery::class)]
 #[UsesClass(Payload::class)]
 #[UsesClass(TransportException::class)]
+#[UsesClass(SystemClock::class)]
 final class HttpTransportTest extends TestCase
 {
     public function testSendsAPostRequest(): void
@@ -211,5 +214,19 @@ final class HttpTransportTest extends TestCase
 
         self::assertSame(DeliveryStatus::Failed, $delivery->status);
         self::assertStringStartsWith('Timed out after 300 ms talking to 127.0.0.1:', $delivery->reason);
+    }
+
+    public function testGivesUpWhenTheDeadlinePassesBetweenWaits(): void
+    {
+        $server = new FakeHttpServer([['status' => 200]]);
+        // The deadline is reached exactly before sending; were the transport to send anyway, the
+        // later reading would leave it time to read the answer.
+        $clock = new ScriptedClock(0, 1_000_000_000, 0);
+        $transport = new HttpTransport(new HttpConfig($server->url(), 500, 1_000), $clock);
+
+        $delivery = $transport->send(new Payload('x', 'text/plain'));
+
+        self::assertSame(DeliveryStatus::Failed, $delivery->status);
+        self::assertStringStartsWith('Timed out after 1000 ms talking to 127.0.0.1:', $delivery->reason);
     }
 }

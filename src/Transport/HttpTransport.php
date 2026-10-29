@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Tracewick\Transport;
 
+use Tracewick\Clock\Clock;
+use Tracewick\Clock\SystemClock;
+
 /**
  * POSTs payloads over HTTP/1.1 with hard time limits, using only PHP's socket streams.
  *
@@ -22,7 +25,13 @@ final readonly class HttpTransport implements Transport
 {
     private const MAX_STATUS_LINE_BYTES = 8_192;
 
-    public function __construct(private HttpConfig $config) {}
+    /**
+     * @param Clock $clock measures the time limits; {@see SystemClock} never goes backwards
+     */
+    public function __construct(
+        private HttpConfig $config,
+        private Clock $clock = new SystemClock(),
+    ) {}
 
     public function send(Payload $payload): Delivery
     {
@@ -35,7 +44,7 @@ final readonly class HttpTransport implements Transport
 
     private function deliver(Payload $payload): Delivery
     {
-        $deadlineNs = $this->monotonicNs() + $this->config->timeoutMs * 1_000_000;
+        $deadlineNs = $this->clock->nowNs() + $this->config->timeoutMs * 1_000_000;
 
         $context = stream_context_create(['ssl' => [
             'verify_peer' => true,
@@ -173,7 +182,7 @@ final readonly class HttpTransport implements Transport
      */
     private function wait($socket, bool $forWrite, int $deadlineNs): void
     {
-        $remainingUs = intdiv($deadlineNs - $this->monotonicNs(), 1_000);
+        $remainingUs = intdiv($deadlineNs - $this->clock->nowNs(), 1_000);
         if ($remainingUs <= 0) {
             throw new TransportException(\sprintf('Timed out after %d ms talking to %s', $this->config->timeoutMs, $this->config->authority()));
         }
@@ -189,11 +198,5 @@ final readonly class HttpTransport implements Transport
         if (0 === $ready) {
             throw new TransportException(\sprintf('Timed out after %d ms talking to %s', $this->config->timeoutMs, $this->config->authority()));
         }
-    }
-
-    private function monotonicNs(): int
-    {
-        // hrtime() returns a float only on 32-bit platforms, where integers cannot hold it.
-        return (int) hrtime(true);
     }
 }
