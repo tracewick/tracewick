@@ -44,7 +44,7 @@ final readonly class Labels implements \IteratorAggregate, \Countable
         }
 
         foreach ($values as $key => $value) {
-            $this->validate((string) $key, $value);
+            $this->validate($key, $value);
         }
 
         ksort($values, \SORT_STRING);
