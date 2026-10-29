@@ -1,0 +1,62 @@
+name: Stand
+
+# Builds the docker-compose development stand and runs the test suites inside it. Runs only when
+# the stand changes, to save Actions minutes.
+
+on:
+  pull_request:
+    paths:
+      - compose.yaml
+      - docker/**
+      - Makefile
+      - .github/workflows/stand.yml
+  push:
+    branches: [main, develop]
+    paths:
+      - compose.yaml
+      - docker/**
+      - Makefile
+      - .github/workflows/stand.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  stand:
+    name: Stand (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # Pull requests build one PHP version; main, develop and manual runs build all of them.
+        php: ${{ github.event_name == 'pull_request' && fromJSON('["8.4"]') || fromJSON('["8.2", "8.3", "8.4", "8.5"]') }}
+    env:
+      PHP_VERSION: ${{ matrix.php }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build the PHP image
+        run: make stand-build
+
+      - name: Start the stand
+        run: make stand-up
+
+      - name: Smoke test
+        run: make stand-smoke
+
+      - name: Tests inside the stand
+        run: make stand-test
+
+      - name: Show service logs
+        if: ${{ failure() }}
+        run: docker compose logs --no-color
+
+      - name: Stop the stand
+        if: ${{ always() }}
+        run: make stand-down

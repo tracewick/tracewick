@@ -23,3 +23,15 @@ updates:
         patterns: ['*']
     commit-message:
       prefix: ci
+
+  - package-ecosystem: docker-compose
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: monthly
+    groups:
+      stand:
+        patterns: ['*']
+    commit-message:
+      prefix: build
+      include: scope
