@@ -55,8 +55,8 @@ final class ExcimerSampler implements Sampler
 
     public function start(): void
     {
-        // ExcimerProfiler::start() restarts the timer: calling it on every request or job of a
-        // busy worker would keep resetting it, and no sample would ever be taken.
+        // ExcimerProfiler::start() is documented to stop and restart a running profiler. Whether
+        // that resets the timer is up to the extension, so a running sampler leaves it alone.
         if ($this->running) {
             return;
         }

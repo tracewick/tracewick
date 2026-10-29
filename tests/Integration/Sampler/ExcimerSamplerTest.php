@@ -185,8 +185,8 @@ final class ExcimerSamplerTest extends TestCase
 
     public function testRepeatedStartDoesNotResetTheTimer(): void
     {
-        // A period longer than the interval between start() calls: restarting the timer on every
-        // call would prevent it from ever firing.
+        // A period longer than the interval between start() calls: if every call restarted the
+        // timer, it would never fire.
         $sampler = new ExcimerSampler(new SamplerConfig(periodNs: 20_000_000));
 
         for ($i = 0; $i < 40; ++$i) {
