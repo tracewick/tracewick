@@ -1,0 +1,36 @@
+name: Bug report
+description: Something does not work as documented.
+labels: [bug]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: A minimal script or configuration that shows the problem.
+      render: php
+  - type: input
+    id: tracewick-version
+    attributes:
+      label: Tracewick version
+    validations:
+      required: true
+  - type: input
+    id: php-version
+    attributes:
+      label: PHP and ext-excimer versions
+      placeholder: PHP 8.4.1, excimer 1.2.5
+    validations:
+      required: true
+  - type: dropdown
+    id: sapi
+    attributes:
+      label: Runtime
+      multiple: true
+      options: [PHP-FPM, CLI, RoadRunner, FrankenPHP, Swoole, Other]

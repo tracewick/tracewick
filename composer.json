@@ -1,0 +1,87 @@
+{
+    "name": "tracewick/tracewick",
+    "description": "Production-grade sampling profiler for PHP built on ext-excimer: flame graphs, pprof and continuous profiling exports.",
+    "license": "Apache-2.0",
+    "type": "library",
+    "keywords": [
+        "profiler",
+        "profiling",
+        "excimer",
+        "flamegraph",
+        "pprof",
+        "pyroscope",
+        "continuous-profiling",
+        "observability"
+    ],
+    "authors": [
+        {
+            "name": "Tracewick contributors",
+            "homepage": "https://github.com/tracewick/tracewick/graphs/contributors"
+        }
+    ],
+    "homepage": "https://github.com/tracewick/tracewick",
+    "support": {
+        "issues": "https://github.com/tracewick/tracewick/issues",
+        "source": "https://github.com/tracewick/tracewick",
+        "security": "https://github.com/tracewick/tracewick/security/policy"
+    },
+    "require": {
+        "php": "~8.2.0 || ~8.3.0 || ~8.4.0 || ~8.5.0"
+    },
+    "require-dev": {
+        "ergebnis/composer-normalize": "^2.48",
+        "friendsofphp/php-cs-fixer": "^3.89",
+        "phpstan/extension-installer": "^1.4",
+        "phpstan/phpstan": "^2.1",
+        "phpstan/phpstan-deprecation-rules": "^2.0",
+        "phpstan/phpstan-phpunit": "^2.0",
+        "phpstan/phpstan-strict-rules": "^2.0",
+        "phpunit/phpunit": "^11.5",
+        "rector/rector": "^2.2",
+        "shipmonk/composer-dependency-analyser": "^1.8"
+    },
+    "suggest": {
+        "ext-excimer": "Required to collect profiles (https://pecl.php.net/package/excimer)"
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "autoload": {
+        "psr-4": {
+            "Tracewick\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tracewick\\Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "ergebnis/composer-normalize": true,
+            "phpstan/extension-installer": true
+        },
+        "platform-check": false,
+        "sort-packages": true
+    },
+    "scripts": {
+        "ci": [
+            "@composer validate --strict",
+            "@normalize:check",
+            "@cs:check",
+            "@rector:check",
+            "@stan",
+            "@deps",
+            "@test"
+        ],
+        "cs:check": "php-cs-fixer check --diff",
+        "cs:fix": "php-cs-fixer fix",
+        "deps": "composer-dependency-analyser",
+        "normalize:check": "@composer normalize --dry-run --diff",
+        "rector:check": "rector process --dry-run",
+        "rector:fix": "rector process",
+        "stan": "phpstan analyse --memory-limit=1G",
+        "test": "phpunit",
+        "test:integration": "phpunit --testsuite integration",
+        "test:unit": "phpunit --testsuite unit"
+    }
+}
