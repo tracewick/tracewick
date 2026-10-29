@@ -60,9 +60,7 @@ final readonly class ExcimerTraceConverter
         // Excimer may append a marker frame when it cuts a stack at the depth limit; whatever
         // lies beyond the limit is dropped so that the limit holds for every consumer.
         $truncated = \count($trace) >= $this->maxDepth;
-        if (\count($trace) > $this->maxDepth) {
-            $trace = \array_slice($trace, 0, $this->maxDepth);
-        }
+        $trace = \array_slice($trace, 0, $this->maxDepth);
 
         $frames = [];
         foreach ($trace as $rawFrame) {
