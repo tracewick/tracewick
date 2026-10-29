@@ -85,8 +85,8 @@ final class DrainCommandTest extends TestCase
     {
         $this->spool = new TemporaryDirectory();
         $this->clock = new ManualClock();
-        $this->output = fopen('php://memory', 'w+') ?: self::fail('Cannot open a memory stream.');
-        $this->errors = fopen('php://memory', 'w+') ?: self::fail('Cannot open a memory stream.');
+        $this->output = self::memoryStream();
+        $this->errors = self::memoryStream();
     }
 
     protected function tearDown(): void
@@ -110,10 +110,13 @@ final class DrainCommandTest extends TestCase
     {
         yield 'missing spool directory' => [['--pyroscope-url=http://pyroscope:4040'], 'The spool directory is required.'];
         yield 'positional argument' => [['drain'], 'Unexpected argument "drain".'];
+        yield 'argument containing an option' => [['x--once'], 'Unexpected argument "x--once".'];
+        yield 'option followed by other text' => [['--once!'], 'Unexpected argument "--once!".'];
         yield 'unknown option' => [['--verbose'], 'Unknown option "--verbose".'];
         yield 'flag with a value' => [['--once=yes'], 'Unknown option "--once=yes".'];
         yield 'option without a value' => [['--limit'], 'Unknown option "--limit".'];
         yield 'invalid limit' => [['--spool-dir=/tmp', '--pyroscope-url=http://pyroscope:4040', '--limit=0'], '--limit must be a whole number from 1 to'];
+        yield 'value with a line break' => [['--spool-dir=/tmp', '--pyroscope-url=http://pyroscope:4040', "--sleep=1\n2"], '--sleep must be a whole number from 0 to 3600'];
     }
 
     /**
@@ -251,7 +254,7 @@ final class DrainCommandTest extends TestCase
         self::assertSame([self::FIRST], $this->spool->entries());
     }
 
-    public function testExitsAfterTheTimeLimit(): void
+    public function testExitsWhenTheTimeLimitIsReached(): void
     {
         $command = $this->command(new ScriptedForwarder(), onSleep: function (): void {
             $this->clock->advanceMs(1_000);
@@ -261,6 +264,19 @@ final class DrainCommandTest extends TestCase
 
         self::assertSame(0, $exitCode);
         self::assertSame([1_000, 1_000, 1_000], $this->sleeps);
+    }
+
+    public function testRunsUntilTheTimeLimitIsReached(): void
+    {
+        // Each pause is a nanosecond short of a second, so three pauses stay below the limit.
+        $command = $this->command(new ScriptedForwarder(), onSleep: function (): void {
+            $this->clock->advanceNs(999_999_999);
+        });
+
+        $exitCode = $command->run([...$this->required(), '--time-limit=3']);
+
+        self::assertSame(0, $exitCode);
+        self::assertSame([1_000, 1_000, 1_000, 1_000], $this->sleeps);
     }
 
     public function testStopsAfterTheCurrentFile(): void
@@ -326,7 +342,7 @@ final class DrainCommandTest extends TestCase
             $this->clock,
             function (int $milliseconds) use ($stopAfterSleeps, $onSleep): void {
                 $this->recordSleep($milliseconds);
-                if (null !== $onSleep) {
+                if ($onSleep instanceof \Closure) {
                     $onSleep(\count($this->sleeps));
                 }
 
@@ -365,6 +381,19 @@ final class DrainCommandTest extends TestCase
     {
         $file = new SpoolFile('blog', EventType::Wall, 10_000_000, 1_798_000_000_000_000_000, 1_798_000_000_100_000_000, [], SpoolFile::FORMAT_PPROF, $payload);
         file_put_contents($this->spool->path . '/' . $name, $file->toBytes());
+    }
+
+    /**
+     * @return resource
+     */
+    private static function memoryStream()
+    {
+        $stream = fopen('php://memory', 'w+');
+        if (false === $stream) {
+            self::fail('Cannot open a memory stream.');
+        }
+
+        return $stream;
     }
 
     /**

@@ -63,7 +63,9 @@ final class SpoolDrainerFixturesTest extends TestCase
     protected function setUp(): void
     {
         $this->spool = new TemporaryDirectory();
-        foreach (glob(self::FIXTURES . '/*.spool') ?: [] as $fixture) {
+        $fixtures = glob(self::FIXTURES . '/*.spool');
+        self::assertNotFalse($fixtures);
+        foreach ($fixtures as $fixture) {
             copy($fixture, $this->spool->path . '/' . basename($fixture));
         }
     }

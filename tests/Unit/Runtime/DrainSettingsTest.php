@@ -109,11 +109,12 @@ final class DrainSettingsTest extends TestCase
      */
     public static function memorySizes(): iterable
     {
+        yield 'one byte' => ['1', 1];
         yield 'bytes' => ['7', 7];
         yield 'kibibytes' => ['512K', 512 * 1_024];
         yield 'mebibytes in lower case' => ['128m', 128 * 1_024 * 1_024];
         yield 'gibibytes' => ['2G', 2 * 1_024 * 1_024 * 1_024];
-        yield 'largest' => ['999999999G', 999_999_999 * 1_024 * 1_024 * 1_024];
+        yield 'largest' => ['8589934591G', 8_589_934_591 * 1_024 * 1_024 * 1_024];
     }
 
     #[DataProvider('memorySizes')]
@@ -134,7 +135,11 @@ final class DrainSettingsTest extends TestCase
         yield 'too long sleep' => [['sleep' => '3601'], '--sleep must be a whole number from 0 to 3600, got "3601".'];
         yield 'zero memory' => [['memory-limit' => '0'], '--memory-limit must be a size such as 128M, got "0".'];
         yield 'unknown unit' => [['memory-limit' => '12T'], '--memory-limit must be a size such as 128M, got "12T".'];
-        yield 'too large memory' => [['memory-limit' => '1000000000G'], '--memory-limit must be a size such as 128M, got "1000000000G".'];
+        yield 'too large memory' => [['memory-limit' => '8589934592G'], '--memory-limit must be a size such as 128M, got "8589934592G".'];
+        yield 'memory with a prefix' => [['memory-limit' => 'x128M'], '--memory-limit must be a size such as 128M, got "x128M".'];
+        yield 'unit only' => [['memory-limit' => 'M'], '--memory-limit must be a size such as 128M, got "M".'];
+        yield 'leading zero' => [['limit' => '07'], '--limit must be a whole number from 1 to ' . \PHP_INT_MAX . ', got "07".'];
+        yield 'overflowing limit' => [['limit' => '99999999999999999999'], '--limit must be a whole number from 1 to ' . \PHP_INT_MAX . ', got "99999999999999999999".'];
         yield 'invalid reader id' => [['reader-id' => 'a/b'], 'The reader id must be'];
     }
 

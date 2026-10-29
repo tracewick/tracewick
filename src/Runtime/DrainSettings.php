@@ -22,6 +22,8 @@ final readonly class DrainSettings
 
     private const MAX_SLEEP_SECONDS = 3_600;
 
+    private const UNITS = ['K' => 1_024, 'M' => 1_024 ** 2, 'G' => 1_024 ** 3];
+
     /** Application name the Pyroscope configuration requires; forwarding uses the name in each file. */
     private const PYROSCOPE_APPLICATION = 'tracewick-drain';
 
@@ -34,11 +36,11 @@ final readonly class DrainSettings
     public function __construct(
         public SpoolReaderConfig $reader,
         public PyroscopeConfig $pyroscope,
-        public bool $once = false,
-        public ?int $limit = null,
-        public ?int $memoryLimit = null,
-        public ?int $timeLimitSeconds = null,
-        public int $sleepSeconds = self::DEFAULT_SLEEP_SECONDS,
+        public bool $once,
+        public ?int $limit,
+        public ?int $memoryLimit,
+        public ?int $timeLimitSeconds,
+        public int $sleepSeconds,
     ) {}
 
     /**
@@ -84,8 +86,9 @@ final readonly class DrainSettings
 
     private static function integer(string $option, string $value, int $min, int $max): int
     {
-        $integer = filter_var($value, \FILTER_VALIDATE_INT);
-        if (!\is_int($integer) || $integer < $min || $integer > $max) {
+        // Only the canonical decimal form survives the round trip, so "1.5", "07" and overflows fail.
+        $integer = (int) $value;
+        if ((string) $integer !== $value || $integer < $min || $integer > $max) {
             throw new LogicException(\sprintf('--%s must be a whole number from %d to %d, got "%s".', $option, $min, $max, $value));
         }
 
@@ -97,15 +100,13 @@ final readonly class DrainSettings
      */
     private static function bytes(string $value): int
     {
-        if (1 !== preg_match('/^([1-9]\d{0,8})([KMG]?)$/i', $value, $match)) {
+        $multiplier = self::UNITS[strtoupper(substr($value, -1))] ?? 1;
+        $number = 1 === $multiplier ? $value : substr($value, 0, -1);
+        $integer = (int) $number;
+        if ((string) $integer !== $number || $integer < 1 || $integer > intdiv(\PHP_INT_MAX, $multiplier)) {
             throw new LogicException(\sprintf('--memory-limit must be a size such as 128M, got "%s".', $value));
         }
 
-        return (int) $match[1] * match (strtoupper($match[2])) {
-            'K' => 1_024,
-            'M' => 1_024 ** 2,
-            'G' => 1_024 ** 3,
-            default => 1,
-        };
+        return $integer * $multiplier;
     }
 }

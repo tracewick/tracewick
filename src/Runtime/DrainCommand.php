@@ -63,10 +63,10 @@ final class DrainCommand
     private bool $stopping = false;
 
     /** @var \Closure(int): void */
-    private \Closure $sleep;
+    private readonly \Closure $sleep;
 
     /** @var \Closure(): int */
-    private \Closure $memoryUsage;
+    private readonly \Closure $memoryUsage;
 
     /**
      * @param resource                                  $output      receives the summary
