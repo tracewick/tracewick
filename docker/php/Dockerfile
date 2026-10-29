@@ -9,7 +9,7 @@ FROM composer:2 AS composer
 
 FROM php:${PHP_VERSION}-cli-bookworm
 
-ARG EXCIMER_VERSION=1.2.7
+ARG EXCIMER_VERSION=1.2.6
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git make unzip \

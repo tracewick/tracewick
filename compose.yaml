@@ -14,7 +14,7 @@ services:
       context: docker/php
       args:
         PHP_VERSION: ${PHP_VERSION:-8.4}
-        EXCIMER_VERSION: ${EXCIMER_VERSION:-1.2.7}
+        EXCIMER_VERSION: ${EXCIMER_VERSION:-1.2.6}
     image: tracewick-php:${PHP_VERSION:-8.4}
     # Started on demand with `docker compose run`, not by `docker compose up`.
     profiles: [php]
