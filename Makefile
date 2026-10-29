@@ -90,7 +90,7 @@ app-build: ## Build the reference app images (Symfony Demo on PHP-FPM, nginx and
 
 app-up: stand-up app-build ## Start the reference app with PostgreSQL and load its fixtures
 	docker compose --profile app up -d --wait postgres httpbin
-	docker compose --profile setup run --rm app-setup
+	docker compose --profile app --profile setup run --rm app-setup
 	docker compose --profile app up -d --wait
 
 app-smoke: ## Check that the reference app answers on PHP-FPM and RoadRunner
