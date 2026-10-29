@@ -135,9 +135,49 @@ Tracewick follows [git flow](https://nvie.com/posts/a-successful-git-branching-m
 - Commit messages and PR titles follow [Conventional Commits](https://www.conventionalcommits.org/),
   for example `feat(encoder): add pprof encoder` or `fix(sampler): keep event type on reset`.
 - Keep pull requests focused: one logical change per PR.
-- Update `CHANGELOG.md` under `Unreleased` when users will notice the change.
+- Do not edit `CHANGELOG.md`: it is generated from commit messages at release time, so write the
+  commit subject for the user who reads the changelog. `feat` lands under Added, `fix` under
+  Fixed, `perf`, `deps` and `revert` under Changed; other types are left out.
 - Pull requests run checks on a single PHP version; the full PHP 8.2–8.5 matrix runs on `main`,
   `develop` and nightly.
+
+## Releasing
+
+Releases follow git flow and are automated with
+[release-please](https://github.com/googleapis/release-please):
+
+1. Branch `release/<version>` from `develop`, stabilize it, and merge it into `main` with a merge
+   commit (not a squash), so that release-please sees every Conventional Commit.
+2. The `Release` workflow opens or updates a `chore: release <version>` pull request into `main`
+   with the generated changelog. Review it and merge it.
+3. Merging it tags `v<version>` and publishes the GitHub Release; Packagist picks up the tag.
+4. The workflow opens a pull request merging `main` back into `develop`. Merge it with a merge
+   commit.
+
+Before 1.0.0, `feat` bumps the minor version and `fix` the patch version. A breaking change
+(`feat!:` or a `BREAKING CHANGE:` footer) bumps the minor version until 1.0.0 and the major
+version after it.
+
+release-please computes the version from the commits since the last release; the release pull
+request shows it in its title. To choose another version, add a `Release-As: <version>` footer to a
+commit that lands on `main`, for example the merge commit of the release branch.
+
+### Release automation setup (maintainers)
+
+Tags `v*` are protected by a ruleset, so the workflow acts as a dedicated GitHub App that is on the
+ruleset's bypass list. Pull requests opened by the App also trigger CI, which pull requests opened
+with `GITHUB_TOKEN` do not.
+
+1. Create a GitHub App owned by the `tracewick` organization (Settings → Developer settings →
+   GitHub Apps), for example `tracewick-release`: no webhook; repository permissions Contents and
+   Pull requests set to Read and write, Metadata Read-only. Install it on `tracewick/tracewick`.
+2. In the repository settings, add the App ID as the Actions variable `RELEASE_APP_ID` and a
+   generated private key as the Actions secret `RELEASE_APP_PRIVATE_KEY`.
+3. Add the App to the bypass list of the tag ruleset (and of branch rulesets on `main` and
+   `develop`, if the release pull requests must not wait for required reviews).
+
+Until the variable is set, the workflow uses `GITHUB_TOKEN`, which needs "Allow GitHub Actions to
+create and approve pull requests" enabled and cannot bypass rulesets.
 
 ## License
 

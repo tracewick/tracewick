@@ -55,6 +55,7 @@ This structure is the target; most layers do not exist yet.
 - Do not add runtime dependencies without discussing them in an issue; keep `require` minimal.
 - Everything in the repository is written in English: code, comments, commit messages, PR texts,
   and documentation.
-- Commit messages and PR titles follow Conventional Commits.
+- Commit messages and PR titles follow Conventional Commits. `CHANGELOG.md` is generated from them
+  by release-please; never edit it in a feature branch.
 - Follow git flow (see CONTRIBUTING.md): branch `feature/*` from `develop` and open pull requests
   into `develop`. Never push to `main` or `develop` directly.
