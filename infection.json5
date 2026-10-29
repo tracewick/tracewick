@@ -10,7 +10,14 @@
         "github": true
     },
     "mutators": {
-        "@default": true
+        "@default": true,
+        "MethodCallRemoval": {
+            "ignoreSourceCodeByRegex": [
+                // Equivalent mutant: ExcimerTraceConverter cuts every trace at the same depth, so
+                // the limit inside the extension only saves memory and cannot be observed.
+                "\\$this->profiler->setMaxDepth\\(.*",
+            ],
+        },
     },
     // Plan target for 1.0: MSI >= 80%. Raise these as the test suite matures, never lower them.
     "minMsi": 80,

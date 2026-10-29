@@ -67,4 +67,12 @@ final readonly class SamplerConfig
             ));
         }
     }
+
+    /**
+     * Sampling period in seconds, the unit ExcimerProfiler expects.
+     */
+    public function periodSeconds(): float
+    {
+        return $this->periodNs / 1_000_000_000;
+    }
 }
