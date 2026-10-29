@@ -244,6 +244,8 @@ final class DirectorySpoolSourceTest extends TestCase
 
     public function testKeepsOnlyTheNewestRejectedFiles(): void
     {
+        mkdir($this->spool->path . '/rejected');
+        $this->write('rejected/README', 'notes');
         $source = $this->source(maxRejectedFiles: 2);
         foreach ([self::THIRD, self::FIRST, self::SECOND] as $name) {
             $this->write($name, $name);
@@ -252,7 +254,7 @@ final class DirectorySpoolSourceTest extends TestCase
             $source->reject($file);
         }
 
-        self::assertSame([self::SECOND, self::THIRD], $this->spool->entries('/rejected'));
+        self::assertSame([self::SECOND, self::THIRD, 'README'], $this->spool->entries('/rejected'));
     }
 
     public function testDeletesRejectedFilesWhenNoneAreKept(): void

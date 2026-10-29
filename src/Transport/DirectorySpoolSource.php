@@ -79,7 +79,9 @@ final class DirectorySpoolSource implements SpoolSource
     public function reject(ClaimedSpoolFile $file): void
     {
         try {
-            if (!$this->moveToRejected($file)) {
+            if ($this->moveToRejected($file)) {
+                $this->trimRejected();
+            } else {
                 @unlink($file->handle);
             }
         } catch (\Throwable) {
@@ -158,8 +160,7 @@ final class DirectorySpoolSource implements SpoolSource
     }
 
     /**
-     * Moves a file to the rejected directory and deletes the oldest rejected files beyond the
-     * configured number. Returns false when the file could not be kept.
+     * Moves a file to the rejected directory. Returns false when the file could not be kept.
      */
     private function moveToRejected(ClaimedSpoolFile $file): bool
     {
@@ -170,13 +171,20 @@ final class DirectorySpoolSource implements SpoolSource
             return false;
         }
 
+        return true;
+    }
+
+    /**
+     * Deletes the oldest rejected files beyond the configured number.
+     */
+    private function trimRejected(): void
+    {
+        $rejected = $this->path(self::REJECTED_DIRECTORY);
         $entries = @scandir($rejected);
         $files = array_filter(false === $entries ? [] : $entries, SpoolTransport::isSpoolFile(...));
         foreach (\array_slice($files, 0, max(0, \count($files) - $this->config->maxRejectedFiles)) as $old) {
             @unlink($rejected . '/' . $old);
         }
-
-        return true;
     }
 
     private function path(string $entry): string
