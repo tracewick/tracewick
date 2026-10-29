@@ -9,11 +9,13 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Exception\LogicException;
+use Tracewick\Sink\ApplicationName;
 use Tracewick\Sink\PyroscopeConfig;
 use Tracewick\Transport\CircuitBreakerConfig;
 use Tracewick\Transport\HttpConfig;
 
 #[CoversClass(PyroscopeConfig::class)]
+#[UsesClass(ApplicationName::class)]
 #[UsesClass(CircuitBreakerConfig::class)]
 #[UsesClass(HttpConfig::class)]
 final class PyroscopeConfigTest extends TestCase

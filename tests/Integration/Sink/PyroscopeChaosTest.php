@@ -16,6 +16,7 @@ use Tracewick\Profile\Profile;
 use Tracewick\Profile\Stack;
 use Tracewick\Sampler\EventType;
 use Tracewick\Sampler\Frame;
+use Tracewick\Sink\ApplicationName;
 use Tracewick\Sink\PyroscopeConfig;
 use Tracewick\Sink\PyroscopeSink;
 use Tracewick\Tests\Support\Toxiproxy;
@@ -34,6 +35,7 @@ use Tracewick\Transport\TransportException;
  */
 #[CoversClass(PyroscopeSink::class)]
 #[UsesClass(PyroscopeConfig::class)]
+#[UsesClass(ApplicationName::class)]
 #[UsesClass(HttpConfig::class)]
 #[UsesClass(HttpTransport::class)]
 #[UsesClass(TransportException::class)]
