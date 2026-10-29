@@ -78,7 +78,7 @@ final readonly class SpoolFile
         try {
             $header = json_decode(substr($bytes, self::PREAMBLE_BYTES, $headerLength), true, flags: \JSON_THROW_ON_ERROR | \JSON_BIGINT_AS_STRING);
         } catch (\JsonException $e) {
-            throw new SpoolFileException(\sprintf('The header is not valid JSON: %s', $e->getMessage()), previous: $e);
+            throw new SpoolFileException(\sprintf('The header is not valid JSON: %s', $e->getMessage()), $e->getCode(), previous: $e);
         }
 
         if (!\is_array($header) || (array_is_list($header) && [] !== $header)) {

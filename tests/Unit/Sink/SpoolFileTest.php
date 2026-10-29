@@ -111,7 +111,7 @@ final class SpoolFileTest extends TestCase
             self::fail('The header was accepted.');
         } catch (SpoolFileException $e) {
             self::assertInstanceOf(\JsonException::class, $e->getPrevious());
-            self::assertSame(0, $e->getCode());
+            self::assertSame(\JSON_ERROR_SYNTAX, $e->getCode());
         }
     }
 
