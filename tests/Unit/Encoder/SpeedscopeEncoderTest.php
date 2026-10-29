@@ -62,7 +62,7 @@ final class SpeedscopeEncoderTest extends TestCase
             new Frame('work', null, '/app/w.php', 2),
         ], [new Stack([0], 1), new Stack([1], 2)]);
 
-        $data = self::decode((new SpeedscopeEncoder())->encode($profile));
+        $data = $this->decode((new SpeedscopeEncoder())->encode($profile));
 
         self::assertSame(['frames' => [['name' => 'work', 'file' => '/app/w.php']]], $data['shared']);
         self::assertSame([[0], [0]], $data['profiles'][0]['samples']);
@@ -70,11 +70,31 @@ final class SpeedscopeEncoderTest extends TestCase
         self::assertSame(30, $data['profiles'][0]['endValue']);
     }
 
+    public function testKeepsFramesOfDifferentFilesApart(): void
+    {
+        $profile = new Profile(EventType::Wall, 10, 0, 100, [
+            new Frame('work', null, '/app/a.php', 1),
+            new Frame('work', null, '/app/b.php', 1),
+            new Frame('a', null, 'b.php', 1),
+            new Frame('ab', null, '.php', 1),
+        ], [new Stack([0, 1, 2, 3], 1)]);
+
+        $data = $this->decode((new SpeedscopeEncoder())->encode($profile));
+
+        self::assertSame([
+            ['name' => 'work', 'file' => '/app/a.php'],
+            ['name' => 'work', 'file' => '/app/b.php'],
+            ['name' => 'a', 'file' => 'b.php'],
+            ['name' => 'ab', 'file' => '.php'],
+        ], $data['shared']['frames']);
+        self::assertSame([[0, 1, 2, 3]], $data['profiles'][0]['samples']);
+    }
+
     public function testReplacesInvalidUtf8(): void
     {
         $profile = new Profile(EventType::Wall, 10, 0, 100, [new Frame("bad\xFFname")], [new Stack([0], 1)]);
 
-        $data = self::decode((new SpeedscopeEncoder())->encode($profile));
+        $data = $this->decode((new SpeedscopeEncoder())->encode($profile));
 
         self::assertSame([['name' => "bad\u{FFFD}name"]], $data['shared']['frames']);
     }
@@ -85,11 +105,11 @@ final class SpeedscopeEncoderTest extends TestCase
     }
 
     /**
-     * @return array{shared: array{frames: list<array<string, string>>}, profiles: list<array{samples: list<list<int>>, weights: list<int>, endValue: int}>}
+     * @return array{shared: array{frames: list<array<string, string>>}, profiles: array{array{samples: list<list<int>>, weights: list<int>, endValue: int}}}
      */
-    private static function decode(string $json): array
+    private function decode(string $json): array
     {
-        /** @var array{shared: array{frames: list<array<string, string>>}, profiles: list<array{samples: list<list<int>>, weights: list<int>, endValue: int}>} */
+        /** @var array{shared: array{frames: list<array<string, string>>}, profiles: array{array{samples: list<list<int>>, weights: list<int>, endValue: int}}} */
         return json_decode($json, true, 512, \JSON_THROW_ON_ERROR);
     }
 }
