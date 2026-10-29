@@ -2,6 +2,7 @@
 #
 #   make stand-up     start Pyroscope, Grafana, the OTel Collector and Toxiproxy
 #   make stand-ci     run `make ci` in the PHP container with a real ext-excimer
+#   make app-up       also start the reference app (Symfony Demo on PHP-FPM and RoadRunner)
 #   make stand-down   stop everything and remove volumes
 #
 # Ports bind to 127.0.0.1 only. See CONTRIBUTING.md for details.
@@ -72,6 +73,83 @@ services:
       - ./docker/toxiproxy/toxiproxy.json:/etc/toxiproxy/toxiproxy.json:ro
     ports:
       - 127.0.0.1:8474:8474
+
+  # Reference application (profile "app"): the Symfony Demo with PostgreSQL and an external HTTP
+  # service, served by PHP-FPM behind nginx and by RoadRunner. Start it with `make app-up`.
+
+  postgres:
+    image: postgres:18.6
+    profiles: [app]
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    healthcheck:
+      test: [CMD, pg_isready, -U, app, -d, app]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # The "external API" the reference app calls, reached through Toxiproxy (toxiproxy:18080).
+  httpbin:
+    image: mccutchen/go-httpbin:2.26.0
+    profiles: [app]
+
+  app-setup:
+    build: &app-build
+      context: docker/reference-app
+      target: fpm
+      args:
+        EXCIMER_VERSION: ${EXCIMER_VERSION:-1.2.6}
+    image: tracewick-reference-fpm
+    # Run once with `docker compose run`, before the app services start.
+    profiles: [setup]
+    command: [reference-app-setup]
+    environment: &app-env
+      DATABASE_URL: postgresql://app:app@postgres:5432/app?serverVersion=18&charset=utf8
+      APP_SECRET: reference-app-not-a-secret
+      EXTERNAL_HTTP_URL: http://toxiproxy:18080
+      PYROSCOPE_URL: http://pyroscope:4040
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  app-fpm:
+    build: *app-build
+    image: tracewick-reference-fpm
+    profiles: [app]
+    environment: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  app-nginx:
+    build:
+      context: docker/reference-app
+      target: nginx
+    image: tracewick-reference-nginx
+    profiles: [app]
+    depends_on: [app-fpm]
+    ports:
+      - 127.0.0.1:8081:80
+
+  app-roadrunner:
+    build:
+      context: docker/reference-app
+      target: roadrunner
+      args:
+        EXCIMER_VERSION: ${EXCIMER_VERSION:-1.2.6}
+    image: tracewick-reference-roadrunner
+    profiles: [app]
+    environment:
+      <<: *app-env
+      APP_RUNTIME: 'Runtime\RoadRunnerSymfonyNyholm\Runtime'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - 127.0.0.1:8082:8080
 
 volumes:
   composer-cache:

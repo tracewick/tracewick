@@ -8,7 +8,8 @@ STAND_ENV = PHP_VERSION=$(PHP_VERSION) STAND_UID=$$(id -u) STAND_GID=$$(id -g)
 STAND_RUN = $(STAND_ENV) docker compose run --rm php
 
 .PHONY: help install lint cs-fix stan rector rector-fix deps test test-unit test-integration coverage infection audit ci \
-	stand-build stand-up stand-down stand-smoke stand-shell stand-install stand-test stand-ci
+	stand-build stand-up stand-down stand-smoke stand-shell stand-install stand-test stand-ci \
+	app-build app-up app-smoke
 
 help: ## Show available targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-18s %s\n", $$1, $$2}'
@@ -67,7 +68,7 @@ stand-up: ## Start Pyroscope, Grafana, the OTel Collector and Toxiproxy
 	docker/wait-for-url.sh http://127.0.0.1:4040/ready
 
 stand-down: ## Stop the stand and remove its volumes
-	docker compose --profile php down --volumes --remove-orphans
+	docker compose --profile php --profile app --profile setup down --volumes --remove-orphans
 
 stand-smoke: ## Check that a running stand is wired correctly
 	PHP_VERSION=$(PHP_VERSION) docker/smoke-test.sh
@@ -83,3 +84,14 @@ stand-test: stand-install ## Run all test suites inside the stand, with ext-exci
 
 stand-ci: stand-install ## Run every CI check inside the stand, with ext-excimer
 	$(STAND_RUN) make ci
+
+app-build: ## Build the reference app images (Symfony Demo on PHP-FPM, nginx and RoadRunner)
+	docker compose --profile app --profile setup build
+
+app-up: stand-up app-build ## Start the reference app with PostgreSQL and load its fixtures
+	docker compose --profile app up -d --wait postgres httpbin
+	docker compose --profile app --profile setup run --rm app-setup
+	docker compose --profile app up -d --wait
+
+app-smoke: ## Check that the reference app answers on PHP-FPM and RoadRunner
+	docker/reference-app/smoke-test.sh

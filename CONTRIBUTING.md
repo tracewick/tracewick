@@ -74,6 +74,29 @@ http://127.0.0.1:4040.
 The PHP container gets these addresses as `PYROSCOPE_URL`, `PYROSCOPE_TOXIC_URL`,
 `OTEL_EXPORTER_OTLP_ENDPOINT` and `TOXIPROXY_URL`. Ports listen on `127.0.0.1` only.
 
+### Reference application
+
+Profiles are only as convincing as the application they come from, so the stand includes a real
+one: the [Symfony Demo](https://github.com/symfony/demo) blog with PostgreSQL, served two ways:
+
+| Variant              | URL                     | What it exercises                                     |
+|----------------------|-------------------------|-------------------------------------------------------|
+| PHP-FPM behind nginx | http://127.0.0.1:8081   | Classic request-per-process lifecycle                 |
+| RoadRunner           | http://127.0.0.1:8082   | Long-running workers: flushing, memory over time      |
+
+```bash
+make app-up      # start the stand plus the reference app, load the demo fixtures
+make app-smoke   # check both variants
+make stand-down  # stop everything
+```
+
+Besides the demo pages (for example `/en/blog/`), `/reference/external` reads from PostgreSQL and
+calls an external HTTP service ([go-httpbin](https://github.com/mccutchen/go-httpbin)) through
+Toxiproxy (`toxiproxy:18080`), so wall-time profiles show both database and network waits; a
+Toxiproxy latency toxic on the `http-mock` proxy makes that wait longer. The app runs on PHP 8.4
+(the Symfony Demo requires it), with ext-excimer installed. The demo's code is downloaded at build
+time; only the files under `docker/reference-app/` belong to this repository.
+
 ### Toxiproxy and chaos tests
 
 [Toxiproxy](https://github.com/Shopify/toxiproxy) is a TCP proxy that can inject network faults on
