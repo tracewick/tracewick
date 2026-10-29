@@ -67,6 +67,7 @@ final class ProfileTest extends TestCase
         ], $profile->stacks);
         self::assertSame(6, $profile->eventCount());
         self::assertSame(6 * self::PERIOD_NS, $profile->sampledNs());
+        self::assertArrayHasKey(1, $profile->stacks);
         self::assertEquals([$main, $handle, $render], $profile->framesOf($profile->stacks[1]));
     }
 
@@ -84,11 +85,11 @@ final class ProfileTest extends TestCase
     public function testDistinguishesEveryFrameField(): void
     {
         $profile = Profile::fromBatch(new SampleBatch(EventType::Wall, self::PERIOD_NS, 0, 100, [
-            new Sample([new Frame('f', null, '/a.php', 1, null)], 1, 10),
-            new Sample([new Frame('f', 'C', '/a.php', 1, null)], 1, 10),
-            new Sample([new Frame('f', null, '/b.php', 1, null)], 1, 10),
+            new Sample([new Frame('f', null, '/a.php', 1)], 1, 10),
+            new Sample([new Frame('f', 'C', '/a.php', 1)], 1, 10),
+            new Sample([new Frame('f', null, '/b.php', 1)], 1, 10),
             new Sample([new Frame('f', null, '/a.php', 1, 5)], 1, 10),
-            new Sample([new Frame('g', null, '/a.php', 1, null)], 1, 10),
+            new Sample([new Frame('g', null, '/a.php', 1)], 1, 10),
         ]));
 
         self::assertCount(5, $profile->frames);
@@ -114,6 +115,7 @@ final class ProfileTest extends TestCase
         ]));
 
         self::assertEquals([new Stack([], 2)], $profile->stacks);
+        self::assertArrayHasKey(0, $profile->stacks);
         self::assertSame([], $profile->framesOf($profile->stacks[0]));
     }
 
@@ -134,9 +136,10 @@ final class ProfileTest extends TestCase
     public function testFramesOfIgnoresUnknownIds(): void
     {
         $frame = new Frame('f');
-        $profile = new Profile(EventType::Wall, self::PERIOD_NS, 0, 100, [$frame], [new Stack([0, 7], 1)]);
+        $stack = new Stack([0, 7], 1);
+        $profile = new Profile(EventType::Wall, self::PERIOD_NS, 0, 100, [$frame], [$stack]);
 
-        self::assertSame([$frame], $profile->framesOf($profile->stacks[0]));
+        self::assertSame([$frame], $profile->framesOf($stack));
     }
 
     public function testDurationIsNeverNegative(): void
