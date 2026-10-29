@@ -69,6 +69,43 @@ final class SpoolTransportTest extends TestCase
         self::assertCount(1, $this->spool->entries('/a/b'));
     }
 
+    public function testCreatesTheDirectoryWithFullPermissionsLeftToTheUmask(): void
+    {
+        $transport = new SpoolTransport(new SpoolConfig($this->spool->path . '/spool', 10, 1_024, 0));
+        $umask = umask(0);
+
+        try {
+            $transport->send(new Payload('profile', 'text/plain'));
+        } finally {
+            umask($umask);
+        }
+
+        self::assertSame(0o777, fileperms($this->spool->path . '/spool') & 0o777);
+    }
+
+    public function testWritesNothingOutsideTheDirectory(): void
+    {
+        $transport = new SpoolTransport(new SpoolConfig($this->spool->path . '/spool', 10, 1_024, 0));
+
+        $transport->send(new Payload('profile', 'text/plain'));
+
+        self::assertSame(['spool'], $this->spool->entries());
+        self::assertCount(1, $this->spool->entries('/spool'));
+    }
+
+    public function testCountsThePayloadAgainstTheFreeSpace(): void
+    {
+        $free = disk_free_space($this->spool->path);
+        self::assertIsFloat($free);
+        // Writing 8 MiB would leave 4 MiB less than is free now; other writers cannot close that gap.
+        $transport = new SpoolTransport(new SpoolConfig($this->spool->path, 10, 8 * 1_024 * 1_024, (int) $free - 4 * 1_024 * 1_024));
+
+        $delivery = $transport->send(new Payload(str_repeat('x', 8 * 1_024 * 1_024), 'text/plain'));
+
+        self::assertSame(DeliveryStatus::Skipped, $delivery->status);
+        self::assertSame([], $this->spool->entries());
+    }
+
     public function testAcceptsAFileOfExactlyTheMaximumSize(): void
     {
         $transport = new SpoolTransport($this->config());

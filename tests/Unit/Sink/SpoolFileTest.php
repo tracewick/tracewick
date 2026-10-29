@@ -69,6 +69,8 @@ final class SpoolFileTest extends TestCase
         yield 'wrong magic' => ['XWSP' . substr(self::file(), 4), 'The file does not start with the spool magic bytes.'];
         yield 'version 0' => ["TWSP\x00" . substr(self::file(), 5), 'Spool format version 0 is not supported.'];
         yield 'version 2' => ["TWSP\x02" . substr(self::file(), 5), 'Spool format version 2 is not supported.'];
+        yield 'empty header' => ["TWSP\x01\x00\x00\x00\x00", 'The header is not valid JSON: Syntax error'];
+        yield 'header of exactly the limit, cut short' => ["TWSP\x01" . pack('N', 1_048_576) . '{}', 'The file ends inside the header.'];
         yield 'header too large' => ["TWSP\x01" . pack('N', 1_048_577) . '{}', 'The header of 1048577 bytes exceeds the limit of 1048576 bytes.'];
         yield 'file ends in the header' => ["TWSP\x01" . pack('N', 10) . '{}', 'The file ends inside the header.'];
         yield 'header not JSON' => [self::raw('{"application":'), 'The header is not valid JSON: Syntax error'];
@@ -87,6 +89,7 @@ final class SpoolFileTest extends TestCase
         yield 'end before start' => [self::file(['end_ns' => 4]), 'The profile window ends before it starts.'];
         yield 'labels missing' => [self::file(['labels' => null]), 'Header key "labels" must be an object.'];
         yield 'labels as list' => [self::file(['labels' => ['a']]), 'Header key "labels" must be an object.'];
+        yield 'numeric label key' => [self::file(['labels' => ['1' => 'a']]), 'Label key "1" must not be a number.'];
         yield 'label value not a string' => [self::file(['labels' => ['a' => 1]]), 'Label "a" must have a string value.'];
         yield 'format missing' => [self::file(['format' => null]), 'Header key "format" must be a string.'];
         yield 'payload size missing' => [self::file(['payload_size' => null]), 'Header key "payload_size" must be a non-negative 64-bit integer.'];
@@ -99,6 +102,17 @@ final class SpoolFileTest extends TestCase
         $this->expectExceptionMessage($message);
 
         SpoolFile::fromBytes($bytes);
+    }
+
+    public function testKeepsTheJsonErrorAsThePreviousException(): void
+    {
+        try {
+            SpoolFile::fromBytes(self::raw('{'));
+            self::fail('The header was accepted.');
+        } catch (SpoolFileException $e) {
+            self::assertInstanceOf(\JsonException::class, $e->getPrevious());
+            self::assertSame(0, $e->getCode());
+        }
     }
 
     public function testAcceptsAnEmptyLabelList(): void

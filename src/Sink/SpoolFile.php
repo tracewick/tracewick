@@ -76,9 +76,9 @@ final readonly class SpoolFile
         }
 
         try {
-            $header = json_decode(substr($bytes, self::PREAMBLE_BYTES, $headerLength), true, 64, \JSON_THROW_ON_ERROR | \JSON_BIGINT_AS_STRING);
+            $header = json_decode(substr($bytes, self::PREAMBLE_BYTES, $headerLength), true, flags: \JSON_THROW_ON_ERROR | \JSON_BIGINT_AS_STRING);
         } catch (\JsonException $e) {
-            throw new SpoolFileException(\sprintf('The header is not valid JSON: %s', $e->getMessage()), 0, $e);
+            throw new SpoolFileException(\sprintf('The header is not valid JSON: %s', $e->getMessage()), previous: $e);
         }
 
         if (!\is_array($header) || (array_is_list($header) && [] !== $header)) {
@@ -179,11 +179,15 @@ final readonly class SpoolFile
 
         $result = [];
         foreach ($labels as $key => $value) {
+            if (!\is_string($key)) {
+                throw new SpoolFileException(\sprintf('Label key "%d" must not be a number.', $key));
+            }
+
             if (!\is_string($value)) {
                 throw new SpoolFileException(\sprintf('Label "%s" must have a string value.', $key));
             }
 
-            $result[(string) $key] = $value;
+            $result[$key] = $value;
         }
 
         return $result;

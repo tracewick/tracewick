@@ -54,7 +54,7 @@ final readonly class SpoolTransport implements Transport
         }
 
         $directory = $this->config->directory;
-
+        // The second is_dir() covers another process creating the directory at the same time.
         if (!is_dir($directory) && !@mkdir($directory, 0o777, true) && !is_dir($directory)) {
             return Delivery::failed(\sprintf('Cannot create the spool directory "%s".', $directory));
         }
@@ -85,22 +85,18 @@ final readonly class SpoolTransport implements Transport
      */
     private function isFull(string $directory): bool
     {
-        $handle = @opendir($directory);
-        if (false === $handle) {
+        $entries = @scandir($directory, \SCANDIR_SORT_NONE);
+        if (false === $entries) {
             throw new TransportException(\sprintf('Cannot read the spool directory "%s".', $directory));
         }
 
-        try {
-            $files = 0;
-            while (false !== ($entry = readdir($handle))) {
-                if (self::isSpoolFile($entry) && ++$files >= $this->config->maxFiles) {
-                    return true;
-                }
+        $files = 0;
+        foreach ($entries as $entry) {
+            if (self::isSpoolFile($entry) && ++$files >= $this->config->maxFiles) {
+                return true;
             }
-
-            return false;
-        } finally {
-            closedir($handle);
         }
+
+        return false;
     }
 }

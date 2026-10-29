@@ -7,9 +7,9 @@ namespace Tracewick\Tests\Support;
 /**
  * Empty directory under the system temporary directory, removed with its contents on demand.
  */
-final class TemporaryDirectory
+final readonly class TemporaryDirectory
 {
-    public readonly string $path;
+    public string $path;
 
     public function __construct()
     {

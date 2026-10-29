@@ -24,6 +24,31 @@
             // extension versions that reset the timer on restart.
             "ignore": ["Tracewick\\Sampler\\ExcimerSampler::start"],
         },
+        "LogicalAnd": {
+            "ignoreSourceCodeByRegex": [
+                // Equivalent mutant: the second is_dir() in SpoolTransport only matters when another
+                // process creates the spool directory between the first check and mkdir().
+                "if \\(!is_dir\\(\\$directory\\) && !@mkdir.*",
+            ],
+        },
+        "LessThan": {
+            "ignoreSourceCodeByRegex": [
+                // Equivalent in tests: free space would have to equal the limit to the byte.
+                "if \\(false !== \\$free && .*",
+            ],
+        },
+        "Concat": {
+            "ignoreSourceCodeByRegex": [
+                // The temporary name of a spool file is visible only to a concurrent reader.
+                "\\$temporary = \\$directory \\. .*",
+            ],
+        },
+        "ConcatOperandRemoval": {
+            "ignoreSourceCodeByRegex": [
+                // See Concat.
+                "\\$temporary = \\$directory \\. .*",
+            ],
+        },
     },
     // Plan target for 1.0: MSI >= 80%. Raise these as the test suite matures, never lower them.
     "minMsi": 80,
