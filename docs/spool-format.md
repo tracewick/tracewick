@@ -83,17 +83,43 @@ Readers MUST NOT deliver a payload whose format they do not support.
 
 ## Reading
 
-A reader:
+Any number of readers may read one spool directory at the same time, for example an agent that
+restarts while its previous process is still running, or a drain started by cron while the
+previous run is busy. Readers coordinate through the file system only
+([ADR 9](adr/0009-agent-hand-off.md)).
 
-1. Checks the magic, the version and that the header length is at most 1 MiB.
-2. Parses the header and checks the types above.
-3. Checks that the rest of the file is exactly `payload_size` bytes.
-4. Delivers the payload, then deletes the file.
+### Claiming a file
 
-A file that fails steps 1 to 3, or whose format or version the reader does not support, will not
-get better with time: the reader SHOULD move it aside or delete it and count it. When delivery
-fails for a reason that may pass, such as a backend that is down, the reader keeps the file and
-tries again later.
+1. A reader lists the directory and takes spool files in name order, oldest first.
+2. It claims a file by renaming `X.spool` to `.X.spool.claimed-<reader id>` in the same directory,
+   where the reader id is 1 to 64 letters, digits, dots, underscores or dashes and is unique among
+   the readers of the directory (for example host name and process id). `rename()` within one
+   directory is atomic: exactly one reader succeeds, and the others find the file gone and move
+   on to the next one.
+3. Right after claiming, the reader sets the modification time of the claimed file to the current
+   time, so that other readers can tell an active claim from an abandoned one.
+4. It reads the claimed file and validates it:
+   1. the magic, the version and a header length of at most 1 MiB;
+   2. the header keys and their types, as described above;
+   3. that the rest of the file is exactly `payload_size` bytes;
+   4. that it supports the `format`.
+5. It delivers the payload and finishes the claim in one of three ways:
+   - **acknowledge**: the payload was delivered; the reader deletes the claimed file.
+   - **release**: delivery failed for a reason that may pass, such as a backend that is down; the
+     reader renames the file back to `X.spool` and tries again later.
+   - **reject**: the file failed validation or the backend refused it, which will not get better
+     with time; the reader moves it to the subdirectory `rejected/` under its original name and
+     counts it. It MAY delete the oldest files there to keep their number bounded.
+
+### Abandoned files
+
+- A claimed file whose modification time is older than the stale-claim age belongs to a reader that
+  died. Any reader renames it back to `X.spool`. The age is configurable and defaults to 10
+  minutes; it must be longer than a reader takes to deliver one file.
+- A temporary file (`.<name>.tmp`) older than one hour belongs to a writer that crashed. Any reader
+  MAY delete it.
+
+Claimed and temporary files start with a dot, so writers do not count them towards `max_files`.
 
 ## Versioning
 

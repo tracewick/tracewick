@@ -31,6 +31,13 @@
                 "if \\(!is_dir\\(\\$directory\\) && !@mkdir.*",
             ],
         },
+        "FunctionCallRemoval": {
+            "ignoreSourceCodeByRegex": [
+                // PHP clears the stat cache itself when this process renames or touches a file, so
+                // a stale entry only appears when another process changes it between two scans.
+                "clearstatcache\\(.*",
+            ],
+        },
         "LessThan": {
             "ignoreSourceCodeByRegex": [
                 // Equivalent in tests: free space would have to equal the limit to the byte.
