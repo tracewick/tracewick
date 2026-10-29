@@ -14,12 +14,6 @@ use Tracewick\Transport\HttpConfig;
 final readonly class PyroscopeConfig
 {
     /**
-     * Letters, digits, dots, underscores and dashes: names Pyroscope accepts as a service name
-     * without escaping.
-     */
-    private const APPLICATION_NAME_PATTERN = '/^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/D';
-
-    /**
      * @param string               $serverUrl        base URL of the server, such as http://pyroscope:4040
      * @param string               $applicationName  becomes the service_name label of every profile
      * @param ?string              $basicAuthUser    user for HTTP basic authentication, such as the
@@ -42,9 +36,7 @@ final readonly class PyroscopeConfig
         public int $timeoutMs = HttpConfig::DEFAULT_TIMEOUT_MS,
         public CircuitBreakerConfig $circuitBreaker = new CircuitBreakerConfig(),
     ) {
-        if (1 !== preg_match(self::APPLICATION_NAME_PATTERN, $applicationName)) {
-            throw new LogicException(\sprintf('The application name must be 1 to 256 letters, digits, dots, underscores or dashes, starting with a letter or digit, got "%s".', $applicationName));
-        }
+        ApplicationName::assertValid($applicationName);
 
         if ((null === $basicAuthUser) !== (null === $basicAuthPassword)) {
             throw new LogicException('Basic authentication needs both a user and a password.');

@@ -5,6 +5,9 @@
 # Golden pprof files are raw protobuf and must never get line ending conversion.
 *.pb binary
 
+# Spool fixtures are binary files shared with readers in other languages.
+*.spool binary
+
 # Keep the Composer dist archive limited to runtime code and legal files.
 /.editorconfig                     export-ignore
 /.gitattributes                    export-ignore
