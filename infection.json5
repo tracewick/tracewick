@@ -10,7 +10,20 @@
         "github": true
     },
     "mutators": {
-        "@default": true
+        "@default": true,
+        "MethodCallRemoval": {
+            "ignoreSourceCodeByRegex": [
+                // Equivalent mutant: ExcimerTraceConverter cuts every trace at the same depth, so
+                // the limit inside the extension only saves memory and cannot be observed.
+                "\\$this->profiler->setMaxDepth\\(.*",
+            ],
+        },
+        "ReturnRemoval": {
+            // Equivalent mutant with Excimer 1.2: restarting a running profiler keeps sampling,
+            // so the guard against it cannot be observed. It stays as protection against
+            // extension versions that reset the timer on restart.
+            "ignore": ["Tracewick\\Sampler\\ExcimerSampler::start"],
+        },
     },
     // Plan target for 1.0: MSI >= 80%. Raise these as the test suite matures, never lower them.
     "minMsi": 80,
