@@ -1,12 +1,9 @@
 # Changelog
 
-All notable changes to this project are documented in this file.
+All notable changes to this project are documented in this file. It is generated from
+[Conventional Commits](https://www.conventionalcommits.org/) by
+[release-please](https://github.com/googleapis/release-please) when a release is cut; do not edit
+it by hand in feature pull requests.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [Unreleased]
-
-### Added
-
-- Repository foundation: Composer package, quality tooling, CI and community files.
+The project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Until 1.0.0 the
+public API may change in any minor release.
