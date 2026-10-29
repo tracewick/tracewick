@@ -1,0 +1,35 @@
+# OpenTelemetry Collector for the development stand.
+#
+# Receives OTLP over gRPC (4317) and HTTP (4318). Profiles are forwarded to Pyroscope, which
+# ingests OTLP profiles natively; traces only go to the debug exporter for now. Profiles support
+# in the Collector is still experimental and needs the service.profilesSupport feature gate.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+exporters:
+  debug:
+    verbosity: basic
+  otlp_grpc/pyroscope:
+    endpoint: pyroscope:4040
+    tls:
+      insecure: true
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [debug]
+    profiles:
+      receivers: [otlp]
+      exporters: [otlp_grpc/pyroscope, debug]

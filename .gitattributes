@@ -15,8 +15,11 @@
 /CONTRIBUTING.md                   export-ignore
 /Makefile                          export-ignore
 /SECURITY.md                       export-ignore
+/compose.yaml                      export-ignore
 /composer-dependency-analyser.php  export-ignore
+/docker/                           export-ignore
 /docs/                             export-ignore
+/infection.json5                    export-ignore
 /phpstan.neon.dist                 export-ignore
 /phpunit.xml.dist                  export-ignore
 /rector.php                        export-ignore

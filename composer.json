@@ -76,11 +76,17 @@
         "cs:check": "php-cs-fixer check --diff",
         "cs:fix": "php-cs-fixer fix",
         "deps": "composer-dependency-analyser",
+        "infection": [
+            "@test:coverage",
+            "@infection:ci"
+        ],
+        "infection:ci": "infection --coverage=build/coverage --skip-initial-tests --threads=max --show-mutations",
         "normalize:check": "@composer normalize --dry-run --diff",
         "rector:check": "rector process --dry-run",
         "rector:fix": "rector process",
         "stan": "phpstan analyse --memory-limit=1G",
         "test": "phpunit",
+        "test:coverage": "phpunit --coverage-clover=build/coverage/clover.xml --coverage-xml=build/coverage/coverage-xml --log-junit=build/coverage/junit.xml",
         "test:integration": "phpunit --testsuite integration",
         "test:unit": "phpunit --testsuite unit"
     }
