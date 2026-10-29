@@ -65,7 +65,7 @@ final readonly class PprofEncoder implements Encoder
         $locationIds = [];
         $locations = new ProtobufWriter();
 
-        $function = function (string $name, ?string $file, int $startLine) use (&$functionIds, $functions, $strings): int {
+        $function = static function (string $name, ?string $file, int $startLine) use (&$functionIds, $functions, $strings): int {
             $key = $name . "\0" . $file;
             if (!isset($functionIds[$key])) {
                 $id = $functionIds[$key] = \count($functionIds) + 1;
@@ -81,7 +81,7 @@ final readonly class PprofEncoder implements Encoder
             return $functionIds[$key];
         };
 
-        $location = function (int|string $key, int $functionId, int $line) use (&$locationIds, $locations): int {
+        $location = static function (int|string $key, int $functionId, int $line) use (&$locationIds, $locations): int {
             if (!isset($locationIds[$key])) {
                 $id = $locationIds[$key] = \count($locationIds) + 1;
                 $locations->bytes(self::PROFILE_LOCATION, (new ProtobufWriter())

@@ -60,14 +60,14 @@ final class PprofEncoderTest extends TestCase
         self::assertSame(['', 'samples', 'count', 'cpu', 'nanoseconds'], $strings);
         self::assertSame(
             [['samples', 'count'], ['cpu', 'nanoseconds']],
-            array_map(static fn(ProtobufMessage $type): array => self::valueType($strings, $type), $profile->messages(1)),
+            array_map(fn(ProtobufMessage $type): array => $this->valueType($strings, $type), $profile->messages(1)),
         );
         self::assertFalse($profile->has(2));
         self::assertFalse($profile->has(4));
         self::assertFalse($profile->has(5));
         self::assertSame(1_000, $profile->int(9));
         self::assertSame(500, $profile->int(10));
-        self::assertSame(['cpu', 'nanoseconds'], self::valueType($strings, $profile->message(11)));
+        self::assertSame(['cpu', 'nanoseconds'], $this->valueType($strings, $profile->message(11)));
         self::assertSame(10, $profile->int(12));
     }
 
@@ -86,11 +86,11 @@ final class PprofEncoderTest extends TestCase
         $samples = $profile->messages(2);
 
         self::assertCount(2, $samples);
-        self::assertSame([3, 30], self::item($samples, 0)->packed(2));
-        self::assertSame([2, 20], self::item($samples, 1)->packed(2));
+        self::assertSame([3, 30], $this->item($samples, 0)->packed(2));
+        self::assertSame([2, 20], $this->item($samples, 1)->packed(2));
         foreach ($samples as $sample) {
             self::assertSame(['env=prod', 'service=blog'], array_map(
-                static fn(ProtobufMessage $label): string => self::string($strings, $label->int(1)) . '=' . self::string($strings, $label->int(2)),
+                fn(ProtobufMessage $label): string => $this->string($strings, $label->int(1)) . '=' . $this->string($strings, $label->int(2)),
                 $sample->messages(3),
             ));
         }
@@ -103,24 +103,28 @@ final class PprofEncoderTest extends TestCase
             new Frame('work', null, '/app/w.php', 2),
             new Frame('work', null, '/app/other.php', 2),
             new Frame('{closure}', null, '/app/w.php', 9, 7),
-        ], [new Stack([3, 0, 1, 2], 1)])));
+            new Frame('a', null, 'b.php', 1),
+            new Frame('ab', null, '.php', 1),
+        ], [new Stack([3, 0, 1, 2, 4, 5], 1)])));
         $strings = $profile->strings(6);
 
         self::assertSame([
             [1, '{closure:/app/w.php:7}', '{closure:/app/w.php:7}', '/app/w.php', 7],
             [2, 'work', 'work', '/app/w.php', 0],
             [3, 'work', 'work', '/app/other.php', 0],
-        ], array_map(static fn(ProtobufMessage $function): array => [
+            [4, 'a', 'a', 'b.php', 0],
+            [5, 'ab', 'ab', '.php', 0],
+        ], array_map(fn(ProtobufMessage $function): array => [
             $function->int(1),
-            self::string($strings, $function->int(2)),
-            self::string($strings, $function->int(3)),
-            self::string($strings, $function->int(4)),
+            $this->string($strings, $function->int(2)),
+            $this->string($strings, $function->int(3)),
+            $this->string($strings, $function->int(4)),
             $function->int(5),
         ], $profile->messages(5)));
 
         self::assertSame(
-            [[1, 1, 9], [2, 2, 1], [3, 2, 2], [4, 3, 2]],
-            array_map(static fn(ProtobufMessage $location): array => [
+            [[1, 1, 9], [2, 2, 1], [3, 2, 2], [4, 3, 2], [5, 4, 1], [6, 5, 1]],
+            array_map(fn(ProtobufMessage $location): array => [
                 $location->int(1),
                 $location->message(4)->int(1),
                 $location->message(4)->int(2),
@@ -128,7 +132,7 @@ final class PprofEncoderTest extends TestCase
         );
 
         // Locations are listed leaf first.
-        self::assertSame([4, 3, 2, 1], self::item($profile->messages(2), 0)->packed(1));
+        self::assertSame([6, 5, 4, 3, 2, 1], $this->item($profile->messages(2), 0)->packed(1));
     }
 
     public function testUnknownAndTruncatedFrames(): void
@@ -143,7 +147,7 @@ final class PprofEncoderTest extends TestCase
 
         $functionNames = [];
         foreach ($profile->messages(5) as $function) {
-            $functionNames[$function->int(1)] = self::string($strings, $function->int(2));
+            $functionNames[$function->int(1)] = $this->string($strings, $function->int(2));
         }
 
         $locationNames = [];
@@ -158,8 +162,8 @@ final class PprofEncoderTest extends TestCase
             ['[unknown]'],
             ['[unknown]'],
         ], array_map(
-            static fn(ProtobufMessage $sample): array => array_map(
-                static fn(int $id): string => $locationNames[$id] ?? self::fail('Unknown location.'),
+            fn(ProtobufMessage $sample): array => array_map(
+                fn(int $id): string => $locationNames[$id] ?? self::fail('Unknown location.'),
                 $sample->packed(1),
             ),
             $profile->messages(2),
@@ -174,9 +178,9 @@ final class PprofEncoderTest extends TestCase
     /**
      * @param list<string> $strings
      */
-    private static function string(array $strings, int $index): string
+    private function string(array $strings, int $index): string
     {
-        return self::item($strings, $index);
+        return $this->item($strings, $index);
     }
 
     /**
@@ -186,7 +190,7 @@ final class PprofEncoderTest extends TestCase
      *
      * @return T
      */
-    private static function item(array $list, int $index): mixed
+    private function item(array $list, int $index): mixed
     {
         return $list[$index] ?? self::fail(\sprintf('No item %d.', $index));
     }
@@ -196,8 +200,8 @@ final class PprofEncoderTest extends TestCase
      *
      * @return array{string, string}
      */
-    private static function valueType(array $strings, ProtobufMessage $type): array
+    private function valueType(array $strings, ProtobufMessage $type): array
     {
-        return [self::string($strings, $type->int(1)), self::string($strings, $type->int(2))];
+        return [$this->string($strings, $type->int(1)), $this->string($strings, $type->int(2))];
     }
 }

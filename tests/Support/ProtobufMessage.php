@@ -102,7 +102,10 @@ final readonly class ProtobufMessage
         return [] === $values ? null : $values[\count($values) - 1];
     }
 
-    private static function readVarint(string $buffer, int &$offset): int
+    /**
+     * Reads a base 128 varint at the offset and advances the offset past it.
+     */
+    public static function readVarint(string $buffer, int &$offset): int
     {
         $value = 0;
         $shift = 0;
@@ -116,7 +119,10 @@ final readonly class ProtobufMessage
         return $value;
     }
 
-    private static function readBytes(string $buffer, int &$offset): string
+    /**
+     * Reads a length-delimited value at the offset and advances the offset past it.
+     */
+    public static function readBytes(string $buffer, int &$offset): string
     {
         $length = self::readVarint($buffer, $offset);
         Assert::assertLessThanOrEqual(\strlen($buffer), $offset + $length, 'Truncated field.');
