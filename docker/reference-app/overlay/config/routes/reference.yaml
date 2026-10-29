@@ -1,0 +1,5 @@
+# Endpoints added to the Symfony Demo for profiling Tracewick; not part of the upstream demo.
+reference_external:
+    path: /reference/external
+    controller: App\Controller\ReferenceController::external
+    methods: [GET]

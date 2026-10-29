@@ -20,6 +20,7 @@ make test-unit          # fast unit tests
 make test-integration   # needs ext-excimer; skipped without it
 make stand-up           # docker-compose stand: Pyroscope, Grafana, OTel Collector, Toxiproxy
 make stand-ci           # `make ci` inside the stand's PHP container, with ext-excimer
+make app-up             # reference app: Symfony Demo on PHP-FPM (:8081) and RoadRunner (:8082)
 ```
 
 ## Layout

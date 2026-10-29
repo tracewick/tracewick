@@ -1,0 +1,19 @@
+version: "3"
+
+server:
+  command: "php public/index.php"
+
+http:
+  address: 0.0.0.0:8080
+  middleware: ["static"]
+  static:
+    dir: "public"
+    forbid: [".php", ".htaccess"]
+  pool:
+    num_workers: 4
+    supervisor:
+      max_worker_memory: 256
+
+logs:
+  mode: production
+  level: warn

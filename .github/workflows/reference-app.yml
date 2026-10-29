@@ -1,0 +1,51 @@
+name: Reference app
+
+# Builds the reference application (Symfony Demo on PHP-FPM and RoadRunner) and checks that it
+# serves requests through PostgreSQL and Toxiproxy. Runs only when the app or the stand changes.
+
+on:
+  pull_request:
+    paths:
+      - compose.yaml
+      - docker/reference-app/**
+      - docker/toxiproxy/**
+      - Makefile
+      - .github/workflows/reference-app.yml
+  push:
+    branches: [main, develop]
+    paths:
+      - compose.yaml
+      - docker/reference-app/**
+      - docker/toxiproxy/**
+      - Makefile
+      - .github/workflows/reference-app.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reference-app:
+    name: Reference app
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Start the stand and the reference app
+        run: make app-up
+
+      - name: Smoke test
+        run: make app-smoke
+
+      - name: Show service logs
+        if: ${{ failure() }}
+        run: docker compose --profile app logs --no-color
+
+      - name: Stop everything
+        if: ${{ always() }}
+        run: make stand-down
