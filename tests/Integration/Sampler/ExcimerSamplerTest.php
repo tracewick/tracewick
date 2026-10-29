@@ -17,6 +17,7 @@ use Tracewick\Sampler\Sample;
 use Tracewick\Sampler\SampleBatch;
 use Tracewick\Sampler\SamplerConfig;
 use Tracewick\Sampler\SamplerFactory;
+use Tracewick\Tests\Support\SteppingClock;
 
 #[CoversClass(ExcimerSampler::class)]
 #[CoversClass(ExcimerTraceConverter::class)]
@@ -165,6 +166,70 @@ final class ExcimerSamplerTest extends TestCase
         self::assertFalse($sampler->isRunning());
         self::assertFalse($sampler->flush()->isEmpty());
         self::assertSame(0, $sampler->failureCount());
+    }
+
+    public function testCpuModeIgnoresTimeSpentWaiting(): void
+    {
+        $wall = new ExcimerSampler(new SamplerConfig(periodNs: self::PERIOD_NS));
+        $cpu = new ExcimerSampler(new SamplerConfig(periodNs: self::PERIOD_NS, eventType: EventType::Cpu));
+
+        $wall->start();
+        $cpu->start();
+        usleep(100_000);
+        $cpu->stop();
+        $wall->stop();
+
+        self::assertGreaterThan(20, $wall->flush()->eventCount());
+        self::assertLessThan(20, $cpu->flush()->eventCount());
+    }
+
+    public function testRepeatedStartDoesNotResetTheTimer(): void
+    {
+        // A period longer than the interval between start() calls: restarting the timer on every
+        // call would prevent it from ever firing.
+        $sampler = new ExcimerSampler(new SamplerConfig(periodNs: 20_000_000));
+
+        for ($i = 0; $i < 40; ++$i) {
+            $sampler->start();
+            self::busyWait(5_000_000);
+        }
+
+        $sampler->stop();
+
+        self::assertGreaterThan(3, $sampler->flush()->eventCount());
+    }
+
+    public function testStopStopsSampling(): void
+    {
+        $sampler = new ExcimerSampler(new SamplerConfig(periodNs: self::PERIOD_NS));
+
+        $sampler->start();
+        self::busyWait(10_000_000);
+        $sampler->stop();
+        $sampler->flush();
+        self::busyWait(30_000_000);
+
+        self::assertTrue($sampler->flush()->isEmpty());
+    }
+
+    public function testUsesTheGivenClockForTheBatchWindow(): void
+    {
+        $sampler = new ExcimerSampler(new SamplerConfig(periodNs: self::PERIOD_NS), new SteppingClock(1_000, 10));
+
+        // Construction reads 1000 as the origin of Excimer timestamps.
+        $neverStarted = $sampler->flush();
+        self::assertSame(1_010, $neverStarted->startNs);
+        self::assertSame(1_010, $neverStarted->endNs);
+
+        // The window opens at the first start (1020) and survives a stop and a second start.
+        $sampler->start();
+        $sampler->stop();
+        $sampler->start();
+        $sampler->stop();
+        $batch = $sampler->flush();
+
+        self::assertSame(1_020, $batch->startNs);
+        self::assertSame(1_030, $batch->endNs);
     }
 
     private static function busyWait(int $durationNs): void
