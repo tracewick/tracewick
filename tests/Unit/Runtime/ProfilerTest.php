@@ -282,7 +282,7 @@ final class ProfilerTest extends TestCase
 
     public function testDeliversWhenEndingTheResponseFails(): void
     {
-        $profiler = new Profiler($this->sampler, $this->sink, new ProfilerConfig(finishRequest: true), static function (): void {
+        $profiler = new Profiler($this->sampler, $this->sink, new ProfilerConfig(finishRequest: true), static function (): never {
             throw new \RuntimeException('Headers already sent.');
         });
         $this->sampler->willSample('handle');
@@ -296,7 +296,7 @@ final class ProfilerTest extends TestCase
 
     public function testReportsAFailureToRegisterTheShutdown(): void
     {
-        $profiler = new Profiler($this->sampler, $this->sink, registerShutdownFunction: static function (): void {
+        $profiler = new Profiler($this->sampler, $this->sink, registerShutdownFunction: static function (): never {
             throw new \RuntimeException('Not allowed.');
         });
 
