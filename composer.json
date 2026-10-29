@@ -41,7 +41,8 @@
         "shipmonk/composer-dependency-analyser": "^1.8"
     },
     "suggest": {
-        "ext-excimer": "Required to collect profiles (https://pecl.php.net/package/excimer)"
+        "ext-excimer": "Required to collect profiles (https://pecl.php.net/package/excimer)",
+        "ext-pcntl": "Lets tracewick-drain finish the current file on SIGTERM and SIGINT"
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
@@ -55,6 +56,9 @@
             "Tracewick\\Tests\\": "tests/"
         }
     },
+    "bin": [
+        "bin/tracewick-drain"
+    ],
     "config": {
         "allow-plugins": {
             "ergebnis/composer-normalize": true,

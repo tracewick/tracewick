@@ -1,0 +1,25 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use Tracewick\Runtime\DrainCommand;
+
+// The package's own vendor directory in development, the project's when installed as a dependency.
+foreach ([__DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'] as $autoload) {
+    if (is_file($autoload)) {
+        require $autoload;
+
+        break;
+    }
+}
+
+$command = new DrainCommand(STDOUT, STDERR);
+
+if (function_exists('pcntl_async_signals')) {
+    pcntl_async_signals(true);
+    pcntl_signal(SIGTERM, $command->stop(...));
+    pcntl_signal(SIGINT, $command->stop(...));
+}
+
+exit($command->run(array_slice($argv, 1), getenv()));

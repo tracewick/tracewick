@@ -36,6 +36,13 @@
                 "if \\(!is_dir\\(\\$directory\\) && !@mkdir.*",
             ],
         },
+        "TrueValue": {
+            "ignoreSourceCodeByRegex": [
+                // Equivalent in tests: any process uses more than the one byte the test allows, with or
+                // without the memory the allocator reserved.
+                "static fn\\(\\): int => memory_get_usage\\(true\\)",
+            ],
+        },
         "FunctionCallRemoval": {
             "ignoreSourceCodeByRegex": [
                 // PHP clears the stat cache itself when this process renames or touches a file, so
