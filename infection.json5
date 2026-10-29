@@ -1,0 +1,18 @@
+{
+    "$schema": "https://raw.githubusercontent.com/infection/infection/0.35.8/resources/schema.json",
+    "source": {
+        "directories": ["src"]
+    },
+    "timeout": 30,
+    "logs": {
+        "text": "build/infection/infection.log",
+        "summary": "build/infection/summary.log",
+        "github": true
+    },
+    "mutators": {
+        "@default": true
+    },
+    // Plan target for 1.0: MSI >= 80%. Raise these as the test suite matures, never lower them.
+    "minMsi": 80,
+    "minCoveredMsi": 80
+}

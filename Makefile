@@ -2,7 +2,7 @@
 
 COMPOSER ?= composer
 
-.PHONY: help install lint cs-fix stan rector rector-fix deps test test-unit test-integration audit ci
+.PHONY: help install lint cs-fix stan rector rector-fix deps test test-unit test-integration coverage infection audit ci
 
 help: ## Show available targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-18s %s\n", $$1, $$2}'
@@ -39,6 +39,12 @@ test-unit: ## Run the unit test suite
 
 test-integration: ## Run the integration test suite (needs ext-excimer)
 	$(COMPOSER) test:integration
+
+coverage: ## Run all test suites with coverage reports in build/coverage (needs pcov or Xdebug)
+	$(COMPOSER) test:coverage
+
+infection: ## Run mutation testing with Infection (needs pcov or Xdebug and the Infection PHAR)
+	$(COMPOSER) infection
 
 audit: ## Check dependencies for known vulnerabilities
 	$(COMPOSER) audit
