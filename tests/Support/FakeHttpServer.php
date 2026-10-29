@@ -20,9 +20,9 @@ final class FakeHttpServer
     /** @var resource */
     private $stdout;
 
-    private string $logFile;
+    private readonly string $logFile;
 
-    private int $port;
+    private readonly int $port;
 
     /**
      * @param list<array<string, bool|int|string>> $scenario one action per connection, see the script

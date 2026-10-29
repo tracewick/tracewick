@@ -191,13 +191,13 @@ final class HttpTransportTest extends TestCase
 
     public function testFailsWhenTheTlsHandshakeFails(): void
     {
-        // A plain HTTP server cannot complete a TLS handshake.
-        $server = new FakeHttpServer([['raw' => "HTTP/1.1 200 OK\r\n\r\n"]]);
+        // The server closes the connection instead of answering the TLS client hello.
+        $server = new FakeHttpServer([['close' => true]]);
         $url = str_replace('http://', 'https://', $server->url());
 
         $delivery = (new HttpTransport(new HttpConfig($url, 500, 1_000)))->send(new Payload('x', 'text/plain'));
 
         self::assertSame(DeliveryStatus::Failed, $delivery->status);
-        self::assertStringStartsWith('TLS handshake with 127.0.0.1:', $delivery->reason);
+        self::assertMatchesRegularExpression('/^TLS handshake with 127\\.0\\.0\\.1:\\d+ failed$/', $delivery->reason);
     }
 }
