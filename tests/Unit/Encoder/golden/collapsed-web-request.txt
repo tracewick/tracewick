@@ -1,0 +1,5 @@
+{main} 2
+{main};App\Kernel::handle 1
+{main};App\Kernel::handle;App\Controller\PostController::show;App\Repository\PostRepository::find;PDO::query 6
+{main};App\Kernel::handle;App\Controller\PostController::show;Twig\Environment::render 4
+{main};App\Kernel::handle;App\Controller\PostController::show;Twig\Environment::render;{closure:/app/src/Twig/AppExtension.php:17};strlen 1
