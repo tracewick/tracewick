@@ -35,6 +35,7 @@ talks to, so you need only Docker with Compose v2 on your machine:
 
 ```bash
 make stand-up      # start the backends and wait until they are ready
+make stand-smoke   # check that the stand is wired correctly
 make stand-test    # install dependencies and run all test suites with ext-excimer
 make stand-ci      # run everything CI runs on a pull request
 make stand-shell   # open a shell in the PHP container
@@ -42,8 +43,19 @@ make stand-down    # stop everything and remove volumes
 ```
 
 Set `PHP_VERSION` (8.2, 8.3, 8.4 or 8.5; 8.4 by default) to use another PHP version, for example
-`make stand-test PHP_VERSION=8.2`. The PHP container runs as your user, so files it creates in the
-working copy stay yours.
+`make stand-test PHP_VERSION=8.2`. Each PHP version gets its own image (`tracewick-php:<version>`),
+built on first use; after changing anything under `docker/php/`, rebuild it with
+`make stand-build`. The PHP container runs as your user, so files it creates in the working copy
+stay yours.
+
+The stand is for developing and testing Tracewick only. Neither `compose.yaml` nor `docker/` ships
+in the Composer package. Its PHP image deliberately runs with strict development settings
+(`docker/php/conf.d/zz-tracewick.ini`: all errors displayed, assertions on), so that tests fail on
+any notice or deprecation; this says nothing about how applications should configure PHP.
+
+To look at profiles, open Grafana at http://127.0.0.1:3000, choose Explore (or Drilldown →
+Profiles) and the provisioned Pyroscope data source; or use the Pyroscope UI at
+http://127.0.0.1:4040.
 
 | Service        | URL from the host        | URL inside the stand        | Purpose                       |
 |----------------|--------------------------|-----------------------------|-------------------------------|
@@ -75,6 +87,15 @@ curl -X DELETE http://127.0.0.1:8474/proxies/pyroscope/toxics/slow
 ```
 
 Proxies are defined in [`docker/toxiproxy/toxiproxy.json`](docker/toxiproxy/toxiproxy.json).
+
+### Updating the stand
+
+The backend images and the ext-excimer version are pinned, so the stand does not change under
+you; Dependabot proposes backend image updates in `compose.yaml` into `develop`. The PHP base image
+follows its minor version tag (`php:8.4-cli-bookworm`), so a rebuild picks up PHP patch releases.
+ext-excimer (`EXCIMER_VERSION` in `compose.yaml` and `docker/php/Dockerfile`) is updated by hand
+when PECL publishes a release. The `Stand` workflow builds and tests the stand on every pull
+request that touches it, on PHP 8.4, and on all supported PHP versions after the merge.
 
 ## Rules
 
