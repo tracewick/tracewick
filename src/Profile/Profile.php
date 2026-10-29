@@ -64,7 +64,11 @@ final readonly class Profile
                 $ids[] = $frameIds[$frameKey];
             }
 
-            $stackKey = ($sample->truncated ? 't' : 'f') . implode(',', $ids);
+            $stackKey = implode(',', $ids);
+            if ($sample->truncated) {
+                $stackKey .= ',truncated';
+            }
+
             if (isset($stacks[$stackKey])) {
                 $stacks[$stackKey][1] += $sample->count;
             } else {
