@@ -28,7 +28,7 @@ use Tracewick\Transport\Transport;
  *
  * @see https://grafana.com/docs/pyroscope/latest/configure-server/about-server-api/
  */
-final readonly class PyroscopeSink implements Sink
+final readonly class PyroscopeSink implements Sink, SpoolForwarder
 {
     private const SPY_NAME = 'tracewick';
 

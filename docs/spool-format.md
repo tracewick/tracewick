@@ -1,7 +1,7 @@
 # Spool format, version 1
 
 The spool is how Tracewick hands profiles to a separate delivery process, such as
-`tracewick-agent`, Grafana Alloy or a sidecar of your own ([ADR 7](adr/0007-language-neutral-spool-format.md)).
+[`tracewick-drain`](drain.md), `tracewick-agent`, Grafana Alloy or a sidecar of your own ([ADR 7](adr/0007-language-neutral-spool-format.md)).
 The application writes each profile to a local directory within microseconds and goes on; the
 delivery process reads the directory, sends the profiles to a backend and removes them.
 

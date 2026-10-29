@@ -20,6 +20,11 @@ final class ManualClock implements Clock
 
     public function advanceMs(int $milliseconds): void
     {
-        $this->nowNs += $milliseconds * 1_000_000;
+        $this->advanceNs($milliseconds * 1_000_000);
+    }
+
+    public function advanceNs(int $nanoseconds): void
+    {
+        $this->nowNs += $nanoseconds;
     }
 }
