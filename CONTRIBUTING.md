@@ -40,14 +40,26 @@ make ci     # run every check CI runs on a pull request
 - **Tests** accompany every change. Never skip, disable or delete a test to make CI pass.
 - **Language.** Code, comments, commit messages, issues and documentation are written in English.
 
+## Branching model
+
+Tracewick follows [git flow](https://nvie.com/posts/a-successful-git-branching-model/):
+
+- `main` holds released code only; every commit on it is a tagged release.
+- `develop` is the integration branch. Feature pull requests target `develop`.
+- `feature/<short-name>` branches start from `develop` and merge back into it.
+- `release/<version>` branches start from `develop`, receive only stabilization fixes, and merge
+  into both `main` (tagged) and `develop`.
+- `hotfix/<version>` branches start from `main`, fix a released version, and merge into both
+  `main` (tagged) and `develop`.
+
 ## Commits and pull requests
 
 - Commit messages and PR titles follow [Conventional Commits](https://www.conventionalcommits.org/),
   for example `feat(encoder): add pprof encoder` or `fix(sampler): keep event type on reset`.
 - Keep pull requests focused: one logical change per PR.
 - Update `CHANGELOG.md` under `Unreleased` when users will notice the change.
-- Pull requests run checks on a single PHP version; the full PHP 8.2–8.5 matrix runs on `main`
-  and nightly.
+- Pull requests run checks on a single PHP version; the full PHP 8.2–8.5 matrix runs on `main`,
+  `develop` and nightly.
 
 ## License
 

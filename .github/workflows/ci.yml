@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, develop]
   schedule:
     # Nightly run of the full matrix.
     - cron: '17 3 * * *'
@@ -72,7 +72,7 @@ jobs:
 
   matrix:
     name: Tests (PHP ${{ matrix.php }}, ${{ matrix.dependencies }})
-    # The full matrix only runs on main, nightly and on demand.
+    # The full matrix only runs on main, develop, nightly and on demand.
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15

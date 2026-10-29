@@ -53,4 +53,5 @@ This structure is the target; most layers do not exist yet.
 - Everything in the repository is written in English: code, comments, commit messages, PR texts,
   and documentation.
 - Commit messages and PR titles follow Conventional Commits.
-- Work through pull requests; never push to `main`.
+- Follow git flow (see CONTRIBUTING.md): branch `feature/*` from `develop` and open pull requests
+  into `develop`. Never push to `main` or `develop` directly.
