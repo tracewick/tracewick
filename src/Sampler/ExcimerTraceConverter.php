@@ -36,7 +36,7 @@ final readonly class ExcimerTraceConverter
             }
 
             $sample = $this->convertEntry($entry->getTrace(), $entry->getEventCount(), $entry->getTimestamp());
-            if (null !== $sample) {
+            if ($sample instanceof Sample) {
                 $samples[] = $sample;
             }
         }
@@ -57,6 +57,13 @@ final readonly class ExcimerTraceConverter
             return null;
         }
 
+        // Excimer may append a marker frame when it cuts a stack at the depth limit; whatever
+        // lies beyond the limit is dropped so that the limit holds for every consumer.
+        $truncated = \count($trace) >= $this->maxDepth;
+        if (\count($trace) > $this->maxDepth) {
+            $trace = \array_slice($trace, 0, $this->maxDepth);
+        }
+
         $frames = [];
         foreach ($trace as $rawFrame) {
             if (\is_array($rawFrame)) {
@@ -68,7 +75,7 @@ final readonly class ExcimerTraceConverter
             array_reverse($frames),
             $count,
             $this->originNs + (int) round($timestamp * 1_000_000_000),
-            \count($trace) >= $this->maxDepth,
+            $truncated,
         );
     }
 
@@ -78,15 +85,15 @@ final readonly class ExcimerTraceConverter
     private function convertFrame(array $frame): Frame
     {
         return new Frame(
-            self::stringOrNull($frame['function'] ?? null),
-            self::stringOrNull($frame['class'] ?? null),
-            self::stringOrNull($frame['file'] ?? null),
+            $this->stringOrNull($frame['function'] ?? null),
+            $this->stringOrNull($frame['class'] ?? null),
+            $this->stringOrNull($frame['file'] ?? null),
             \is_int($frame['line'] ?? null) ? $frame['line'] : 0,
             \is_int($frame['closure_line'] ?? null) ? $frame['closure_line'] : null,
         );
     }
 
-    private static function stringOrNull(mixed $value): ?string
+    private function stringOrNull(mixed $value): ?string
     {
         return \is_string($value) && '' !== $value ? $value : null;
     }

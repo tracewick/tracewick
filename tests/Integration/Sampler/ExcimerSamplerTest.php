@@ -31,6 +31,13 @@ final class ExcimerSamplerTest extends TestCase
 {
     private const PERIOD_NS = 1_000_000;
 
+    /**
+     * Excimer timestamps an event when its timer fires, but PHP records it only at the next
+     * interrupt check. An event that fired just before a flush can therefore land in the next
+     * batch with a timestamp slightly before that batch opened.
+     */
+    private const DELIVERY_SLACK_NS = 10 * self::PERIOD_NS;
+
     public function testFactoryCreatesExcimerSamplerWhenExtensionIsLoaded(): void
     {
         self::assertInstanceOf(ExcimerSampler::class, (new SamplerFactory([]))->create());
@@ -59,7 +66,7 @@ final class ExcimerSamplerTest extends TestCase
 
         $names = [];
         foreach ($batch->samples as $sample) {
-            self::assertGreaterThanOrEqual($batch->startNs - self::PERIOD_NS, $sample->timestampNs);
+            self::assertGreaterThanOrEqual($batch->startNs - self::DELIVERY_SLACK_NS, $sample->timestampNs);
             self::assertLessThanOrEqual($batch->endNs, $sample->timestampNs);
             foreach ($sample->frames as $frame) {
                 $names[$frame->name()] = true;
@@ -96,7 +103,10 @@ final class ExcimerSamplerTest extends TestCase
         self::assertFalse($batch->isEmpty());
         $truncated = 0;
         foreach ($batch->samples as $sample) {
-            self::assertLessThanOrEqual(3, \count($sample->frames));
+            self::assertLessThanOrEqual(3, \count($sample->frames), implode(' > ', array_map(
+                static fn(Frame $frame): string => $frame->name(),
+                $sample->frames,
+            )));
             $truncated += $sample->truncated ? 1 : 0;
         }
 
@@ -119,7 +129,7 @@ final class ExcimerSamplerTest extends TestCase
         self::assertFalse($second->isEmpty());
         self::assertSame($first->endNs, $second->startNs);
         foreach ($second->samples as $sample) {
-            self::assertGreaterThanOrEqual($first->endNs - self::PERIOD_NS, $sample->timestampNs);
+            self::assertGreaterThanOrEqual($first->endNs - self::DELIVERY_SLACK_NS, $sample->timestampNs);
         }
     }
 

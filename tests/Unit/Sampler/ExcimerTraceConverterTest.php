@@ -102,6 +102,17 @@ final class ExcimerTraceConverterTest extends TestCase
         self::assertTrue($full->truncated);
     }
 
+    public function testDropsFramesBeyondTheDepthLimit(): void
+    {
+        $converter = new ExcimerTraceConverter(self::ORIGIN_NS, 2);
+
+        $sample = $converter->convertEntry([['function' => 'leaf'], ['function' => 'caller'], ['function' => 'marker']], 1, 0.0);
+
+        self::assertNotNull($sample);
+        self::assertEquals([new Frame('caller'), new Frame('leaf')], $sample->frames);
+        self::assertTrue($sample->truncated);
+    }
+
     private function converter(): ExcimerTraceConverter
     {
         return new ExcimerTraceConverter(self::ORIGIN_NS, 256);
