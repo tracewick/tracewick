@@ -169,14 +169,13 @@ final class DirectorySpoolSource implements SpoolSource
         }
 
         $rejected = $this->path(self::REJECTED_DIRECTORY);
-        // The second is_dir() covers another reader creating the directory at the same time.
-        if (!is_dir($rejected) && !@mkdir($rejected, 0o777) && !is_dir($rejected)) {
-            return false;
+        // When mkdir() fails, rename() fails too, unless another reader has just created the
+        // directory.
+        if (!is_dir($rejected)) {
+            @mkdir($rejected, 0o777);
         }
 
-        $target = $rejected . '/' . $file->name;
-
-        return @rename($file->handle, $target);
+        return @rename($file->handle, $rejected . '/' . $file->name);
     }
 
     /**

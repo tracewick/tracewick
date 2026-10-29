@@ -29,14 +29,6 @@
                 // Equivalent mutant: the second is_dir() in SpoolTransport only matters when another
                 // process creates the spool directory between the first check and mkdir().
                 "if \\(!is_dir\\(\\$directory\\) && !@mkdir.*",
-                // Same for the rejected directory of DirectorySpoolSource.
-                "if \\(!is_dir\\(\\$rejected\\) && !@mkdir.*",
-            ],
-        },
-        "LogicalNot": {
-            "ignoreSourceCodeByRegex": [
-                // See LogicalAnd: mkdir() of the rejected directory only fails on a race or I/O error.
-                "if \\(!is_dir\\(\\$rejected\\) && !@mkdir.*",
             ],
         },
         "FunctionCallRemoval": {
