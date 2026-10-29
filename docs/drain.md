@@ -70,7 +70,7 @@ the effect of memory leaks in long-running PHP processes.
 
 On SIGTERM or SIGINT the drain finishes the current file and exits. This needs ext-pcntl; without
 it the signal ends the process at once, and the file it was sending returns to the spool after 10
-minutes.
+minutes. If Pyroscope had already accepted that file, it is then delivered a second time.
 
 ## Running it
 
