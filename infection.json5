@@ -29,6 +29,21 @@
                 // Equivalent mutant: the second is_dir() in SpoolTransport only matters when another
                 // process creates the spool directory between the first check and mkdir().
                 "if \\(!is_dir\\(\\$directory\\) && !@mkdir.*",
+                // Same for the rejected directory of DirectorySpoolSource.
+                "\\|\\| \\(!is_dir\\(\\$rejected\\) && !@mkdir.*",
+            ],
+        },
+        "LogicalNot": {
+            "ignoreSourceCodeByRegex": [
+                // See LogicalAnd: mkdir() of the rejected directory only fails on a race or I/O error.
+                "\\|\\| \\(!is_dir\\(\\$rejected\\) && !@mkdir.*",
+            ],
+        },
+        "FunctionCallRemoval": {
+            "ignoreSourceCodeByRegex": [
+                // PHP clears the stat cache itself when this process renames or touches a file, so
+                // a stale entry only appears when another process changes it between two scans.
+                "clearstatcache\\(.*",
             ],
         },
         "LessThan": {

@@ -38,6 +38,9 @@ final class DirectorySpoolSource implements SpoolSource
         private readonly Clock $clock = new SystemClock(),
     ) {}
 
+    /**
+     * @phpstan-impure
+     */
     public function claim(): ?ClaimedSpoolFile
     {
         try {
@@ -51,7 +54,7 @@ final class DirectorySpoolSource implements SpoolSource
 
                 while (null !== ($name = array_shift($this->queue))) {
                     $file = $this->tryClaim($name);
-                    if (null !== $file) {
+                    if ($file instanceof ClaimedSpoolFile) {
                         return $file;
                     }
                 }
@@ -76,16 +79,9 @@ final class DirectorySpoolSource implements SpoolSource
     public function reject(ClaimedSpoolFile $file): void
     {
         try {
-            $rejected = $this->path(self::REJECTED_DIRECTORY);
-            if (0 === $this->config->maxRejectedFiles
-                || (!is_dir($rejected) && !@mkdir($rejected, 0o777) && !is_dir($rejected))
-                || !@rename($file->handle, $rejected . '/' . $file->name)) {
+            if (!$this->moveToRejected($file)) {
                 @unlink($file->handle);
-
-                return;
             }
-
-            $this->trimRejected($rejected);
         } catch (\Throwable) {
             @unlink($file->handle);
         }
@@ -162,15 +158,25 @@ final class DirectorySpoolSource implements SpoolSource
     }
 
     /**
-     * Deletes the oldest rejected files beyond the configured number.
+     * Moves a file to the rejected directory and deletes the oldest rejected files beyond the
+     * configured number. Returns false when the file could not be kept.
      */
-    private function trimRejected(string $rejected): void
+    private function moveToRejected(ClaimedSpoolFile $file): bool
     {
-        $entries = @scandir($rejected);
-        $files = array_values(array_filter(false === $entries ? [] : $entries, SpoolTransport::isSpoolFile(...)));
-        foreach (\array_slice($files, 0, max(0, \count($files) - $this->config->maxRejectedFiles)) as $file) {
-            @unlink($rejected . '/' . $file);
+        $rejected = $this->path(self::REJECTED_DIRECTORY);
+        if (0 === $this->config->maxRejectedFiles
+            || (!is_dir($rejected) && !@mkdir($rejected, 0o777) && !is_dir($rejected))
+            || !@rename($file->handle, $rejected . '/' . $file->name)) {
+            return false;
         }
+
+        $entries = @scandir($rejected);
+        $files = array_filter(false === $entries ? [] : $entries, SpoolTransport::isSpoolFile(...));
+        foreach (\array_slice($files, 0, max(0, \count($files) - $this->config->maxRejectedFiles)) as $old) {
+            @unlink($rejected . '/' . $old);
+        }
+
+        return true;
     }
 
     private function path(string $entry): string

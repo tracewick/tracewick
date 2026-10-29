@@ -20,6 +20,8 @@ interface SpoolSource
 {
     /**
      * Claims the oldest available file, or returns null when there is none.
+     *
+     * @phpstan-impure
      */
     public function claim(): ?ClaimedSpoolFile;
 

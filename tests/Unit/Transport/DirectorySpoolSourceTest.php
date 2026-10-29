@@ -146,6 +146,63 @@ final class DirectorySpoolSourceTest extends TestCase
         self::assertSame(self::FIRST, $source->claim()?->name);
     }
 
+    public function testOrdersReturnedClaimsWithTheOtherFiles(): void
+    {
+        $this->write(self::FIRST, 'first');
+        $this->write('.' . self::THIRD . '.claimed-reader-dead', 'third', time() - 7_200);
+        $this->write(self::SECOND, 'second');
+        $source = $this->source();
+
+        $names = [$source->claim()?->name, $source->claim()?->name, $source->claim()?->name];
+
+        self::assertSame([self::FIRST, self::SECOND, self::THIRD], $names);
+    }
+
+    public function testWorksThroughOneScanBeforeLookingAgain(): void
+    {
+        $this->write(self::SECOND, 'second');
+        $this->write(self::THIRD, 'third');
+        $source = $this->source();
+        self::assertSame(self::SECOND, $source->claim()?->name);
+
+        $this->write(self::FIRST, 'written later');
+
+        self::assertSame(self::THIRD, $source->claim()?->name);
+        self::assertSame(self::FIRST, $source->claim()?->name);
+    }
+
+    public function testCreatesTheRejectedDirectoryWithFullPermissionsLeftToTheUmask(): void
+    {
+        $this->write(self::FIRST, 'first');
+        $source = $this->source();
+        $file = $source->claim();
+        self::assertNotNull($file);
+        $umask = umask(0);
+
+        try {
+            $source->reject($file);
+        } finally {
+            umask($umask);
+        }
+
+        self::assertSame(0o777, fileperms($this->spool->path . '/rejected') & 0o777);
+    }
+
+    public function testKeepsRejectedFilesUpToTheLimitAndOtherFilesThere(): void
+    {
+        mkdir($this->spool->path . '/rejected');
+        $this->write('rejected/README', 'notes');
+        $source = $this->source(maxRejectedFiles: 3);
+        foreach ([self::FIRST, self::SECOND] as $name) {
+            $this->write($name, $name);
+            $file = $source->claim();
+            self::assertNotNull($file);
+            $source->reject($file);
+        }
+
+        self::assertSame([self::FIRST, self::SECOND, 'README'], $this->spool->entries('/rejected'));
+    }
+
     public function testAcknowledgeDeletesTheFile(): void
     {
         $this->write(self::FIRST, 'first');
@@ -241,7 +298,8 @@ final class DirectorySpoolSourceTest extends TestCase
     {
         $this->write(self::FIRST, 'first');
         self::assertNotNull($this->source('reader-busy')->claim());
-        $this->clock->advanceMs(599_000);
+        // Exactly the stale-claim age: not abandoned yet.
+        $this->clock->advanceMs(600_000);
 
         self::assertNull($this->source('reader-other')->claim());
         self::assertSame(['.' . self::FIRST . '.claimed-reader-busy'], $this->spool->entries());

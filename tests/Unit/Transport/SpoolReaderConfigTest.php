@@ -31,6 +31,27 @@ final class SpoolReaderConfigTest extends TestCase
         self::assertStringEndsWith('-' . getmypid(), $readerId);
     }
 
+    /**
+     * @return iterable<string, array{string, int, string}>
+     */
+    public static function readerIds(): iterable
+    {
+        yield 'plain host' => ['web-1', 42, 'web-1-42'];
+        yield 'characters a file name should not carry' => ['web 1/eu:west', 7, 'web-1-eu-west-7'];
+        yield 'empty host' => ['', 7, '-7'];
+        yield 'long host keeps the process id' => [str_repeat('h', 70), 12345, str_repeat('h', 58) . '-12345'];
+        yield 'exactly fits' => [str_repeat('h', 61), 12, str_repeat('h', 61) . '-12'];
+    }
+
+    #[DataProvider('readerIds')]
+    public function testBuildsReaderIds(string $host, int $pid, string $expected): void
+    {
+        $readerId = SpoolReaderConfig::readerIdFor($host, $pid);
+
+        self::assertSame($expected, $readerId);
+        self::assertSame($readerId, (new SpoolReaderConfig('spool', $readerId))->readerId);
+    }
+
     public function testKeepsAGivenReaderId(): void
     {
         self::assertSame('agent-1.eu_west', (new SpoolReaderConfig('spool', 'agent-1.eu_west'))->readerId);

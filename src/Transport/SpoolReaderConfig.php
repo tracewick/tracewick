@@ -47,7 +47,7 @@ final readonly class SpoolReaderConfig
             throw new LogicException('The spool directory must be a non-empty path.');
         }
 
-        $readerId ??= self::defaultReaderId();
+        $readerId ??= self::readerIdFor((string) gethostname(), (int) getmypid());
         if (1 !== preg_match(self::READER_ID_PATTERN, $readerId)) {
             throw new LogicException(\sprintf('The reader id must be 1 to 64 letters, digits, dots, underscores or dashes, got "%s".', $readerId));
         }
@@ -67,10 +67,14 @@ final readonly class SpoolReaderConfig
         }
     }
 
-    private static function defaultReaderId(): string
+    /**
+     * Builds a reader id from a host name and a process id, replacing characters a file name
+     * should not carry and shortening long host names so that the process id is kept.
+     */
+    public static function readerIdFor(string $host, int $pid): string
     {
-        $host = preg_replace('/[^A-Za-z0-9._-]+/', '-', (string) gethostname());
+        $suffix = '-' . $pid;
 
-        return substr(\sprintf('%s-%d', '' === $host || null === $host ? 'reader' : $host, (int) getmypid()), -64);
+        return substr((string) preg_replace('/[^A-Za-z0-9._-]+/', '-', $host), 0, 64 - \strlen($suffix)) . $suffix;
     }
 }
