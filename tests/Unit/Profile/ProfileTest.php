@@ -98,14 +98,16 @@ final class ProfileTest extends TestCase
     public function testKeepsTruncatedStacksApart(): void
     {
         $frame = new Frame('deep');
+        $other = new Frame('other');
 
         $profile = Profile::fromBatch(new SampleBatch(EventType::Wall, self::PERIOD_NS, 0, 100, [
             new Sample([$frame], 1, 10),
             new Sample([$frame], 1, 20, true),
             new Sample([$frame], 1, 30, true),
+            new Sample([$other], 4, 40, true),
         ]));
 
-        self::assertEquals([new Stack([0], 1), new Stack([0], 2, true)], $profile->stacks);
+        self::assertEquals([new Stack([0], 1), new Stack([0], 2, true), new Stack([1], 4, true)], $profile->stacks);
     }
 
     public function testKeepsSamplesWithoutFrames(): void
