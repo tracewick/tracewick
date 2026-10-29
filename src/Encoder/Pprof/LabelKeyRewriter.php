@@ -39,7 +39,7 @@ final class LabelKeyRewriter
                 $strings[] = $field['value'];
             } elseif (self::PROFILE_SAMPLE === $field['field'] && \is_string($field['value'])) {
                 foreach (self::labelKeys($field['value']) as $key) {
-                    $keys[$key] = true;
+                    $keys[$key] = $key;
                 }
             }
         }
@@ -48,7 +48,7 @@ final class LabelKeyRewriter
         $moved = [];
         $added = [];
         $indexes = array_flip($strings);
-        foreach (array_keys($keys) as $key) {
+        foreach ($keys as $key) {
             // Index 0 is the empty string, which pprof uses for a missing key.
             $name = $strings[$key] ?? '';
             if ('' === $name) {
@@ -94,24 +94,18 @@ final class LabelKeyRewriter
     {
         $keys = [];
         foreach (ProtobufReader::fields($sample) as $field) {
-            if (self::SAMPLE_LABEL === $field['field'] && \is_string($field['value'])) {
-                $keys[] = self::labelKey($field['value']);
+            if (self::SAMPLE_LABEL !== $field['field'] || !\is_string($field['value'])) {
+                continue;
+            }
+
+            foreach (ProtobufReader::fields($field['value']) as $labelField) {
+                if (self::LABEL_KEY === $labelField['field'] && \is_int($labelField['value'])) {
+                    $keys[] = $labelField['value'];
+                }
             }
         }
 
         return $keys;
-    }
-
-    private static function labelKey(string $label): int
-    {
-        $key = 0;
-        foreach (ProtobufReader::fields($label) as $field) {
-            if (self::LABEL_KEY === $field['field'] && \is_int($field['value'])) {
-                $key = $field['value'];
-            }
-        }
-
-        return $key;
     }
 
     /**

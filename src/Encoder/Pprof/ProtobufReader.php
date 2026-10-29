@@ -61,13 +61,14 @@ final class ProtobufReader
     private static function varint(string $message, int &$offset): int
     {
         $value = 0;
-        for ($shift = 0; $shift < 64; $shift += 7) {
+        // A 64-bit value takes at most ten bytes of seven bits each.
+        for ($i = 0; $i < 10; ++$i) {
             if ($offset >= \strlen($message)) {
                 throw new ProtobufException('The message ends inside a varint.');
             }
 
             $byte = \ord($message[$offset++]);
-            $value |= ($byte & 0x7F) << $shift;
+            $value |= ($byte & 0x7F) << 7 * $i;
             if ($byte < 0x80) {
                 return $value;
             }

@@ -34,13 +34,13 @@ final class LabelKeyRewriterTest extends TestCase
 {
     public function testRenamesLabelKeysOfEverySample(): void
     {
-        $pprof = $this->pprof(['http.route' => '/posts/{id}', 'env' => 'prod']);
+        $pprof = $this->pprof(['http.route' => '/posts/{id}', 'env' => 'prod', 'deployment.environment' => 'eu']);
 
         $rewritten = LabelKeyRewriter::rewrite($pprof, $this->underscores(...));
 
         self::assertSame([
-            ['env' => 'prod', 'http_route' => '/posts/{id}'],
-            ['env' => 'prod', 'http_route' => '/posts/{id}'],
+            ['deployment_environment' => 'eu', 'env' => 'prod', 'http_route' => '/posts/{id}'],
+            ['deployment_environment' => 'eu', 'env' => 'prod', 'http_route' => '/posts/{id}'],
         ], $this->labels($rewritten));
     }
 
@@ -52,7 +52,8 @@ final class LabelKeyRewriterTest extends TestCase
 
         $message = ProtobufMessage::decode($rewritten);
         $strings = $message->strings(6);
-        self::assertSame('http.route', $strings[$message->messages(5)[0]->int(2)] ?? null);
+        $function = $message->messages(5)[0] ?? self::fail('No function.');
+        self::assertSame('http.route', $strings[$function->int(2)] ?? null);
         self::assertSame([['http_route' => '/'], ['http_route' => '/']], $this->labels($rewritten));
     }
 
@@ -75,6 +76,24 @@ final class LabelKeyRewriterTest extends TestCase
         self::assertSame([...ProtobufMessage::decode($pprof)->strings(6), 'same'], ProtobufMessage::decode($rewritten)->strings(6));
     }
 
+    public function testKeepsAValueThatEqualsARenamedKey(): void
+    {
+        $pprof = $this->pprof(['a.b' => 'a.b']);
+
+        $rewritten = LabelKeyRewriter::rewrite($pprof, $this->underscores(...));
+
+        self::assertSame([['a_b' => 'a.b'], ['a_b' => 'a.b']], $this->labels($rewritten));
+    }
+
+    public function testLooksForLabelsOnlyInSamples(): void
+    {
+        // A location whose field 3 looks like a label with key "a.b".
+        $lookalike = (new ProtobufWriter())->bytes(3, (new ProtobufWriter())->varint(1, 1)->toString())->toString();
+        $pprof = (new ProtobufWriter())->bytes(4, $lookalike)->bytes(6, '')->bytes(6, 'a.b')->toString();
+
+        self::assertSame($pprof, LabelKeyRewriter::rewrite($pprof, $this->underscores(...)));
+    }
+
     public function testReturnsTheInputWhenNothingIsRenamed(): void
     {
         $pprof = $this->pprof(['env' => 'prod']);
@@ -93,17 +112,23 @@ final class LabelKeyRewriterTest extends TestCase
         self::assertSame($this->sampleLocations($before), $this->sampleLocations($after));
     }
 
-    public function testIgnoresLabelsWithoutAKeyOrWithAnUnknownKey(): void
+    public function testSkipsLabelsWithoutAKeyOrWithAnUnknownKey(): void
     {
-        $label = (new ProtobufWriter())->varint(2, 1)->toString();
+        $keyless = (new ProtobufWriter())->varint(2, 1)->toString();
         $unknown = (new ProtobufWriter())->varint(1, 99)->varint(2, 1)->toString();
+        $known = (new ProtobufWriter())->varint(1, 2)->varint(2, 1)->toString();
         $pprof = (new ProtobufWriter())
-            ->bytes(2, (new ProtobufWriter())->bytes(3, $label)->bytes(3, $unknown)->toString())
+            ->bytes(2, (new ProtobufWriter())->bytes(3, $keyless)->bytes(3, $unknown)->bytes(3, $known)->toString())
             ->bytes(6, '')
             ->bytes(6, 'value')
+            ->bytes(6, 'key')
             ->toString();
 
-        self::assertSame($pprof, LabelKeyRewriter::rewrite($pprof, static fn(string $key): string => $key . '!'));
+        $rewritten = ProtobufMessage::decode(LabelKeyRewriter::rewrite($pprof, static fn(string $key): string => $key . '!'));
+
+        self::assertSame(['', 'value', 'key', 'key!'], $rewritten->strings(6));
+        $labels = ($rewritten->messages(2)[0] ?? self::fail('No sample.'))->messages(3);
+        self::assertSame([0, 99, 3], array_map(static fn(ProtobufMessage $label): int => $label->int(1), $labels));
     }
 
     public function testRejectsInvalidProtobuf(): void

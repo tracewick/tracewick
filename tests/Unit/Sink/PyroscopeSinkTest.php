@@ -221,7 +221,7 @@ final class PyroscopeSinkTest extends TestCase
         ], $payload->parameters);
         $pprof = ProtobufMessage::decode($payload->body);
         $strings = $pprof->strings(6);
-        $label = $pprof->messages(2)[0]->messages(3)[0];
+        $label = ($pprof->messages(2)[0] ?? self::fail('No sample.'))->messages(3)[0] ?? self::fail('No label.');
         self::assertSame(['http_route', '/posts/{id}'], [$strings[$label->int(1)] ?? '', $strings[$label->int(2)] ?? '']);
     }
 
@@ -237,7 +237,7 @@ final class PyroscopeSinkTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{SpoolFile, string}>
+     * @return iterable<string, array{SpoolFile, non-empty-string}>
      */
     public static function unsendableFiles(): iterable
     {
@@ -246,9 +246,12 @@ final class PyroscopeSinkTest extends TestCase
         yield 'period zero' => [new SpoolFile('shop', EventType::Wall, 0, 1, 2, [], 'pprof', $pprof), 'The spool file has an invalid sampling period or time window.'];
         yield 'end before start' => [new SpoolFile('shop', EventType::Wall, 10, 2, 1, [], 'pprof', $pprof), 'The spool file has an invalid sampling period or time window.'];
         yield 'invalid application name' => [new SpoolFile('my shop', EventType::Wall, 10, 1, 2, [], 'pprof', $pprof), 'The application name must be'];
-        yield 'invalid pprof' => [new SpoolFile('shop', EventType::Wall, 10, 1, 2, [], 'pprof', "\x12\x05abc"), 'A field of 5 bytes runs past the end of the message.'];
+        yield 'invalid pprof' => [new SpoolFile('shop', EventType::Wall, 10, 1, 2, ['http.route' => '/'], 'pprof', "\x12\x05abc"), 'A field of 5 bytes runs past the end of the message.'];
     }
 
+    /**
+     * @param non-empty-string $reason
+     */
     #[DataProvider('unsendableFiles')]
     public function testRejectsAFilePyroscopeCannotAccept(SpoolFile $file, string $reason): void
     {
@@ -260,6 +263,29 @@ final class PyroscopeSinkTest extends TestCase
         self::assertSame(DeliveryStatus::Rejected, $delivery->status);
         self::assertStringStartsWith($reason, $delivery->reason);
         self::assertSame([], $transport->sent);
+    }
+
+    public function testSendsThePayloadUnparsedWhenNoKeyNeedsRenaming(): void
+    {
+        $transport = new ScriptedTransport(Delivery::delivered());
+        $sink = new PyroscopeSink(new PyroscopeConfig('http://pyroscope:4040', 'drain'), $transport);
+
+        // Not valid protobuf: proves that the payload is not parsed.
+        $delivery = $sink->forward(new SpoolFile('shop', EventType::Wall, 10, 1, 2, ['env' => 'prod'], 'pprof', "\x12\x05abc"));
+
+        self::assertTrue($delivery->isDelivered());
+        self::assertSame("\x12\x05abc", $transport->payload()->body);
+    }
+
+    public function testAcceptsTheShortestPeriodAndAnInstantWindow(): void
+    {
+        $transport = new ScriptedTransport(Delivery::delivered());
+        $sink = new PyroscopeSink(new PyroscopeConfig('http://pyroscope:4040', 'drain'), $transport);
+
+        $delivery = $sink->forward(new SpoolFile('shop', EventType::Cpu, 1, self::START_NS, self::START_NS, [], 'pprof', "\x0a\x00"));
+
+        self::assertTrue($delivery->isDelivered());
+        self::assertSame('1000000000', $transport->payload()->parameters['sampleRate'] ?? null);
     }
 
     public function testNeverThrowsWhenForwarding(): void

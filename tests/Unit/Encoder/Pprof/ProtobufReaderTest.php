@@ -42,9 +42,10 @@ final class ProtobufReaderTest extends TestCase
 
         $fields = ProtobufReader::fields($message);
 
-        self::assertSame([536_870_911, \PHP_INT_MAX], [$fields[0]['field'], $fields[0]['value']]);
-        self::assertSame(-1, $fields[1]['value']);
-        self::assertSame('', $fields[2]['value']);
+        self::assertSame(
+            [[536_870_911, \PHP_INT_MAX], [5, -1], [6, '']],
+            array_map(static fn(array $field): array => [$field['field'], $field['value']], $fields),
+        );
         self::assertSame($message, implode('', array_column($fields, 'raw')));
     }
 

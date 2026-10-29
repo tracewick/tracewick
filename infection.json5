@@ -23,6 +23,11 @@
             // so the guard against it cannot be observed. It stays as protection against
             // extension versions that reset the timer on restart.
             "ignore": ["Tracewick\\Sampler\\ExcimerSampler::start"],
+            "ignoreSourceCodeByRegex": [
+                // Fast path of LabelKeyRewriter: rebuilding a profile without renamed keys yields
+                // the same bytes, only slower.
+                "return \\$pprof;",
+            ],
         },
         "LogicalAnd": {
             "ignoreSourceCodeByRegex": [

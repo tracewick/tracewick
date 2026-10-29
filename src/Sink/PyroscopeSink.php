@@ -62,8 +62,9 @@ final readonly class PyroscopeSink implements Sink
      *
      * The application name comes from the file, so that one sink can forward the spool of several
      * applications; the configured name is not used. Label keys inside the pprof payload are
-     * renamed by the same rule as in {@see send()}. A file that Pyroscope could never accept is
-     * reported as rejected.
+     * renamed by the same rule as in {@see send()}; when no key needs it, the payload is sent as
+     * it is, without being parsed. A file that Pyroscope could never accept is reported as
+     * rejected.
      */
     public function forward(SpoolFile $file): Delivery
     {
@@ -78,7 +79,9 @@ final readonly class PyroscopeSink implements Sink
 
             try {
                 ApplicationName::assertValid($file->application);
-                $body = LabelKeyRewriter::rewrite($file->payload, self::labelKey(...));
+                // The header lists the labels of every sample, so the payload is parsed only when
+                // a key actually needs renaming.
+                $body = $this->hasDottedKey($file->labels) ? LabelKeyRewriter::rewrite($file->payload, $this->labelKey(...)) : $file->payload;
             } catch (LogicException|ProtobufException $e) {
                 return Delivery::rejected($e->getMessage());
             }
@@ -106,16 +109,30 @@ final readonly class PyroscopeSink implements Sink
     {
         $mapped = [];
         foreach ($labels as $key => $value) {
-            $mapped[self::labelKey($key)] = $value;
+            $mapped[$this->labelKey($key)] = $value;
         }
 
         return new Labels($mapped);
     }
 
     /**
+     * @param array<string, string> $labels
+     */
+    private function hasDottedKey(array $labels): bool
+    {
+        foreach (array_keys($labels) as $key) {
+            if (str_contains($key, '.')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Pyroscope silently drops label keys that contain dots.
      */
-    private static function labelKey(string $key): string
+    private function labelKey(string $key): string
     {
         return str_replace('.', '_', $key);
     }

@@ -77,7 +77,7 @@ writer.
 
 | `format` | Payload                                                                          |
 |----------|----------------------------------------------------------------------------------|
-| `pprof`  | Uncompressed [profile.proto](https://github.com/google/pprof/blob/main/proto/profile.proto). Every sample carries the profile labels as string labels. |
+| `pprof`  | Uncompressed [profile.proto](https://github.com/google/pprof/blob/main/proto/profile.proto). Every sample carries exactly the profile labels as string labels and no others, so a reader can decide from the header alone whether label keys need renaming. |
 
 Readers MUST NOT deliver a payload whose format they do not support.
 
