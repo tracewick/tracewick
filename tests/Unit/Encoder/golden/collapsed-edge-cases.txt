@@ -1,0 +1,4 @@
+App\Tree::recurse;App\Tree::recurse 1
+[truncated];App\Tree::recurse;App\Tree::recurse;App\Tree::recurse 5
+[unknown] 2
+{main};App\Odd::weird:name with breaks 1

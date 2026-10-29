@@ -1,0 +1,5 @@
+{main} 20000000
+{main};App\Kernel::handle 10000000
+{main};App\Kernel::handle;App\Controller\PostController::show;App\Repository\PostRepository::find;PDO::query 60000000
+{main};App\Kernel::handle;App\Controller\PostController::show;Twig\Environment::render 40000000
+{main};App\Kernel::handle;App\Controller\PostController::show;Twig\Environment::render;{closure:/app/src/Twig/AppExtension.php:17};strlen 10000000
