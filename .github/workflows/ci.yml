@@ -70,6 +70,22 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: composer test:coverage
 
+      - uses: actions/setup-go@v6
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        with:
+          go-version: stable
+          cache: false
+
+      - name: Validate pprof golden files with go tool pprof
+        # The golden tests pin the encoder output; this checks that the reference parser reads it.
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: |
+          for file in tests/Unit/Encoder/golden/*.pb; do
+            echo "::group::$file"
+            go tool pprof -raw "$file"
+            echo '::endgroup::'
+          done
+
       - name: Upload coverage to Codecov
         if: ${{ !cancelled() && steps.tests.outcome == 'success' }}
         uses: codecov/codecov-action@v5
