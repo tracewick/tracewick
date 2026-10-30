@@ -38,10 +38,6 @@ final readonly class FileCircuitBreakerStore implements CircuitBreakerStore
 
     public function save(CircuitBreakerState $state): void
     {
-        $line = \sprintf("%d %s\n", $state->consecutiveFailures, $state->openUntilNs ?? '-');
-        $temporary = \sprintf('%s.%d.tmp', $this->path, getmypid());
-        if (false === @file_put_contents($temporary, $line) || !@rename($temporary, $this->path)) {
-            @unlink($temporary);
-        }
+        AtomicFile::write($this->path, \sprintf("%d %s\n", $state->consecutiveFailures, $state->openUntilNs ?? '-'));
     }
 }

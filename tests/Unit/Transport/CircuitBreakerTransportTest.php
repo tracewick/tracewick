@@ -8,9 +8,13 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Clock\SystemClock;
+use Tracewick\Diagnostics\DiagnosticLogger;
 use Tracewick\Tests\Support\ManualClock;
 use Tracewick\Tests\Support\RecordingCircuitBreakerStore;
+use Tracewick\Tests\Support\RecordingLogger;
 use Tracewick\Tests\Support\ScriptedTransport;
+use Tracewick\Tests\Support\TemporaryDirectory;
+use Tracewick\Transport\AtomicFile;
 use Tracewick\Transport\CircuitBreakerConfig;
 use Tracewick\Transport\CircuitBreakerState;
 use Tracewick\Transport\CircuitBreakerTransport;
@@ -27,6 +31,8 @@ use Tracewick\Transport\Transport;
 #[UsesClass(SystemClock::class)]
 #[UsesClass(CircuitBreakerState::class)]
 #[UsesClass(InMemoryCircuitBreakerStore::class)]
+#[UsesClass(DiagnosticLogger::class)]
+#[UsesClass(AtomicFile::class)]
 final class CircuitBreakerTransportTest extends TestCase
 {
     private ManualClock $clock;
@@ -276,6 +282,36 @@ final class CircuitBreakerTransportTest extends TestCase
             [new CircuitBreakerState(3, $this->clock->nowNs() + 1_000_000_000), new CircuitBreakerState()],
             $store->saved,
         );
+    }
+
+    public function testLogsWhenTheCircuitOpensAndCloses(): void
+    {
+        $directory = new TemporaryDirectory();
+        $logger = new RecordingLogger();
+        $inner = new ScriptedTransport(Delivery::failed('1'), Delivery::failed('2'), Delivery::failed('trial'), Delivery::rejected('reachable'), Delivery::delivered());
+        $breaker = new CircuitBreakerTransport($inner, new CircuitBreakerConfig(2, 1_500), $this->clock, new InMemoryCircuitBreakerStore(), new DiagnosticLogger($logger, $directory->path, clock: $this->clock));
+
+        try {
+            $this->send($breaker);
+            self::assertSame([], $logger->records);
+            $this->send($breaker);
+            $this->clock->advanceMs(1_500);
+            $this->send($breaker);
+            $this->clock->advanceMs(1_500);
+            $this->send($breaker);
+            $this->send($breaker);
+        } finally {
+            $directory->remove();
+        }
+
+        self::assertSame(
+            [
+                'warning: Tracewick stopped sending profiles for {seconds} s after {failures} failed deliveries in a row: {reason}',
+                'info: Tracewick resumed sending profiles after a successful trial delivery.',
+            ],
+            $logger->lines(),
+        );
+        self::assertSame([['seconds' => 1, 'failures' => 2, 'reason' => '2'], []], array_column($logger->records, 'context'));
     }
 
     private function breaker(Transport $inner, CircuitBreakerConfig $config = new CircuitBreakerConfig(3, 1_000), ?RecordingCircuitBreakerStore $store = null): CircuitBreakerTransport

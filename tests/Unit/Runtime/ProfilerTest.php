@@ -9,10 +9,12 @@ use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Clock\SystemClock;
+use Tracewick\Diagnostics\DiagnosticLogger;
 use Tracewick\Exception\LogicException;
 use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
 use Tracewick\Profile\Stack;
+use Tracewick\Runtime\Diagnostics;
 use Tracewick\Runtime\Profiler;
 use Tracewick\Runtime\ProfilerConfig;
 use Tracewick\Sampler\ExcimerSampler;
@@ -23,8 +25,12 @@ use Tracewick\Sampler\Sample;
 use Tracewick\Sampler\SampleBatch;
 use Tracewick\Sampler\SamplerConfig;
 use Tracewick\Sampler\SamplerFactory;
+use Tracewick\Tests\Support\ManualClock;
+use Tracewick\Tests\Support\RecordingLogger;
 use Tracewick\Tests\Support\RecordingSink;
 use Tracewick\Tests\Support\ScriptedSampler;
+use Tracewick\Tests\Support\TemporaryDirectory;
+use Tracewick\Transport\AtomicFile;
 use Tracewick\Transport\Delivery;
 
 #[CoversClass(Profiler::class)]
@@ -42,9 +48,16 @@ use Tracewick\Transport\Delivery;
 #[UsesClass(ExcimerTraceConverter::class)]
 #[UsesClass(SystemClock::class)]
 #[UsesClass(Delivery::class)]
+#[UsesClass(Diagnostics::class)]
+#[UsesClass(DiagnosticLogger::class)]
+#[UsesClass(AtomicFile::class)]
 final class ProfilerTest extends TestCase
 {
     private ScriptedSampler $sampler;
+
+    private RecordingLogger $logger;
+
+    private TemporaryDirectory $logDirectory;
 
     private RecordingSink $sink;
 
@@ -58,6 +71,13 @@ final class ProfilerTest extends TestCase
     {
         $this->sampler = new ScriptedSampler();
         $this->sink = new RecordingSink();
+        $this->logger = new RecordingLogger();
+        $this->logDirectory = new TemporaryDirectory();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->logDirectory->remove();
     }
 
     public function testBuffersAProfileUntilTheFlush(): void
@@ -169,7 +189,7 @@ final class ProfilerTest extends TestCase
         $profiler->stop();
 
         self::assertSame(0, $profiler->bufferedProfiles());
-        self::assertSame(0, $profiler->droppedProfiles());
+        self::assertEquals(new Diagnostics(), $profiler->diagnostics());
     }
 
     public function testDropsProfilesThatDoNotFitIntoTheBuffer(): void
@@ -183,11 +203,57 @@ final class ProfilerTest extends TestCase
         }
 
         self::assertSame(2, $profiler->bufferedProfiles());
-        self::assertSame(1, $profiler->droppedProfiles());
+        self::assertSame(1, $profiler->diagnostics()->droppedProfiles);
 
         $profiler->flush();
 
         self::assertSame(['first', 'second'], $this->sink->functions());
+    }
+
+    public function testCountsAndReportsWhatHappensToEachProfile(): void
+    {
+        $profiler = $this->profiler(new ProfilerConfig(maxBufferedProfiles: 4));
+        $this->sink->deliveries = [Delivery::delivered(), Delivery::rejected('Bad request.'), Delivery::failed('Timeout.'), Delivery::skipped('Circuit breaker is open.')];
+        for ($i = 0; $i < 6; ++$i) {
+            $this->sampler->willSample('handle');
+        }
+
+        for ($i = 0; $i < 6; ++$i) {
+            $profiler->start();
+            $profiler->stop();
+        }
+
+        $profiler->start();
+        $profiler->stop();
+        $profiler->flush();
+
+        self::assertEquals(new Diagnostics(collectedProfiles: 6, droppedProfiles: 2, deliveredProfiles: 1, rejectedProfiles: 1, failedProfiles: 1, skippedProfiles: 1), $profiler->diagnostics());
+        self::assertSame(
+            [
+                'notice: Tracewick dropped a profile because {count} profiles already wait for the flush.',
+                'warning: The profile backend rejected a profile: {reason}',
+                'warning: Tracewick could not deliver a profile: {reason}',
+                'notice: Tracewick skipped a profile: {reason}',
+            ],
+            $this->logger->lines(),
+        );
+        self::assertSame(
+            [['count' => 4], ['reason' => 'Bad request.'], ['reason' => 'Timeout.'], ['reason' => 'Circuit breaker is open.']],
+            array_column($this->logger->records, 'context'),
+        );
+    }
+
+    public function testCountsAndReportsTheErrorsItSwallows(): void
+    {
+        $profiler = $this->profiler();
+
+        $profiler->start(['bad key' => 'x']);
+
+        $error = $profiler->lastFailure();
+        self::assertInstanceOf(LogicException::class, $error);
+        self::assertSame(1, $profiler->diagnostics()->swallowedErrors);
+        self::assertSame(['warning: Tracewick ignored an error: {error}'], $this->logger->lines());
+        self::assertSame([['error' => $error->getMessage(), 'exception' => $error]], array_column($this->logger->records, 'context'));
     }
 
     public function testFlushesEveryProfileEvenWhenTheSinkThrows(): void
@@ -419,6 +485,7 @@ final class ProfilerTest extends TestCase
                 $this->shutdownFunctions[] = $callback;
             },
             $random,
+            new DiagnosticLogger($this->logger, $this->logDirectory->path, clock: new ManualClock()),
         );
     }
 }

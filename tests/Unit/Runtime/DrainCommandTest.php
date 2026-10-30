@@ -9,6 +9,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Clock\SystemClock;
+use Tracewick\Diagnostics\DiagnosticLogger;
 use Tracewick\Encoder\PprofEncoder;
 use Tracewick\Runtime\DrainCommand;
 use Tracewick\Runtime\DrainOutcome;
@@ -25,6 +26,7 @@ use Tracewick\Sink\SpoolForwarder;
 use Tracewick\Tests\Support\ManualClock;
 use Tracewick\Tests\Support\ScriptedForwarder;
 use Tracewick\Tests\Support\TemporaryDirectory;
+use Tracewick\Transport\AtomicFile;
 use Tracewick\Transport\CircuitBreakerConfig;
 use Tracewick\Transport\CircuitBreakerState;
 use Tracewick\Transport\CircuitBreakerTransport;
@@ -59,6 +61,8 @@ use Tracewick\Transport\SpoolTransport;
 #[UsesClass(CircuitBreakerTransport::class)]
 #[UsesClass(CircuitBreakerState::class)]
 #[UsesClass(FileCircuitBreakerStore::class)]
+#[UsesClass(DiagnosticLogger::class)]
+#[UsesClass(AtomicFile::class)]
 #[UsesClass(PprofEncoder::class)]
 final class DrainCommandTest extends TestCase
 {
