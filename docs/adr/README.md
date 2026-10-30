@@ -14,3 +14,4 @@ See [ADR 1](0001-record-architecture-decisions.md) for how and why we record dec
 | [7](0007-language-neutral-spool-format.md)      | Language-neutral spool format for the agent | Accepted |
 | [8](0008-own-http-transport.md)                 | Own HTTP transport instead of PSR-18     | Accepted |
 | [9](0009-agent-hand-off.md)                     | Handing profiles to a local agent        | Accepted |
+| [10](0010-deferred-delivery.md)                 | Deferred delivery in the Runtime         | Accepted |
