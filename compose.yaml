@@ -152,6 +152,9 @@ services:
   app-nginx:
     build:
       context: docker/reference-app
+      # The nginx image copies the public files of the app stage, which installs Tracewick.
+      additional_contexts:
+        tracewick: .
       target: nginx
     image: tracewick-reference-nginx
     profiles: [app]
