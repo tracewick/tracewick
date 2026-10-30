@@ -85,9 +85,10 @@ one: the [Symfony Demo](https://github.com/symfony/demo) blog with PostgreSQL, s
 | RoadRunner           | http://127.0.0.1:8082   | Long-running workers: flushing, memory over time      |
 
 ```bash
-make app-up      # start the stand plus the reference app, load the demo fixtures
-make app-smoke   # check both variants
-make stand-down  # stop everything
+make app-up        # start the stand plus the reference app, load the demo fixtures
+make app-smoke     # check both variants
+make app-profiles  # send requests and check that their profiles reach Pyroscope
+make stand-down    # stop everything
 ```
 
 Besides the demo pages (for example `/en/blog/`), `/reference/external` reads from PostgreSQL and
@@ -96,6 +97,22 @@ Toxiproxy (`toxiproxy:18080`), so wall-time profiles show both database and netw
 Toxiproxy latency toxic on the `http-mock` proxy makes that wait longer. The app runs on PHP 8.4
 (the Symfony Demo requires it), with ext-excimer installed. The demo's code is downloaded at build
 time; only the files under `docker/reference-app/` belong to this repository.
+
+Both variants are profiled by Tracewick, built from the working tree into the images, so
+`make app-build` picks up changes to `src/`. `TracewickSubscriber` (in
+`docker/reference-app/overlay/src/EventSubscriber/`) wires the library by hand: it starts a profile
+on every main request, labels it with the Symfony route (`route`), the HTTP method (`method`) and
+the variant (`runtime`: `fpm` or `roadrunner`), and delivers it on `kernel.terminate`, after the
+response has gone out. The two variants deliver differently:
+
+| Variant    | Sink              | Path to Pyroscope                                                   |
+|------------|-------------------|---------------------------------------------------------------------|
+| PHP-FPM    | `SpoolSink`       | Spool volume, then the `app-drain` service running `tracewick-drain` |
+| RoadRunner | `PyroscopeSink`   | Straight from the worker, after each response                       |
+
+The profiles appear in Grafana as the `symfony-demo` service, under Drilldown, then Profiles, or in
+Explore with the Pyroscope data source. Group
+or filter by `route` to compare endpoints, or by `runtime` to compare the variants.
 
 ### Toxiproxy and chaos tests
 
