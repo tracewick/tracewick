@@ -339,6 +339,22 @@ final class ProfilerTest extends TestCase
         self::assertNull($profiler->lastFailure());
     }
 
+    public function testDrawsAUniformNumberBelowOneByDefault(): void
+    {
+        mt_srand(7);
+        $draw = mt_rand() / (mt_getrandmax() + 1);
+        self::assertGreaterThan(0.0, $draw);
+
+        try {
+            // The unit of work is profiled only when the draw is below the rate, so a rate equal
+            // to the draw and one just above it pin the draw down exactly.
+            self::assertFalse($this->startWithSeededDraw($draw));
+            self::assertTrue($this->startWithSeededDraw($draw * (1 + 1e-12)));
+        } finally {
+            mt_srand();
+        }
+    }
+
     public function testDecidesForEveryUnitOfWork(): void
     {
         $draws = [0.9, 0.1];
@@ -367,6 +383,15 @@ final class ProfilerTest extends TestCase
 
         self::assertFalse($profiler->isRunning());
         self::assertNull($profiler->lastFailure());
+    }
+
+    private function startWithSeededDraw(float $rate): bool
+    {
+        mt_srand(7);
+        $profiler = new Profiler(new ScriptedSampler(), $this->sink, new ProfilerConfig(sampleRate: $rate));
+        $profiler->start();
+
+        return $profiler->isRunning();
     }
 
     /**

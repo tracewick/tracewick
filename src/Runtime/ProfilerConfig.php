@@ -35,7 +35,7 @@ final readonly class ProfilerConfig
         public float $sampleRate = 1.0,
         public bool $finishRequest = false,
     ) {
-        if (!($sampleRate >= 0.0 && $sampleRate <= 1.0)) {
+        if (is_nan($sampleRate) || $sampleRate < 0.0 || $sampleRate > 1.0) {
             throw new LogicException(\sprintf('The sample rate must be between 0 and 1, got %s.', $sampleRate));
         }
 
