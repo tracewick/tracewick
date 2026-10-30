@@ -61,6 +61,13 @@ local file write of a few microseconds, and a separate process sends the files o
 A `PyroscopeSink` sends over the network from the PHP process itself. Its timeouts and circuit
 breaker bound the time spent, but that time is still taken from the worker that did the work.
 
+The circuit breaker stops sending after a few failed deliveries in a row, 3 by default, and tries
+again after 30 seconds. Its state is shared by all processes of the host through a small file in
+the system temporary directory, one per server and tenant, so when Pyroscope goes down the
+PHP-FPM workers stop sending together instead of each paying for its own timeouts. Set
+`stateDirectory` in `CircuitBreakerConfig` to keep the file elsewhere. If the file cannot be
+written, every process falls back to its own count.
+
 ## PHP-FPM
 
 ```php

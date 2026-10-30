@@ -26,10 +26,12 @@ use Tracewick\Tests\Support\ManualClock;
 use Tracewick\Tests\Support\ScriptedForwarder;
 use Tracewick\Tests\Support\TemporaryDirectory;
 use Tracewick\Transport\CircuitBreakerConfig;
+use Tracewick\Transport\CircuitBreakerState;
 use Tracewick\Transport\CircuitBreakerTransport;
 use Tracewick\Transport\ClaimedSpoolFile;
 use Tracewick\Transport\Delivery;
 use Tracewick\Transport\DirectorySpoolSource;
+use Tracewick\Transport\FileCircuitBreakerStore;
 use Tracewick\Transport\HttpConfig;
 use Tracewick\Transport\HttpTransport;
 use Tracewick\Transport\SpoolReaderConfig;
@@ -55,6 +57,8 @@ use Tracewick\Transport\SpoolTransport;
 #[UsesClass(HttpTransport::class)]
 #[UsesClass(CircuitBreakerConfig::class)]
 #[UsesClass(CircuitBreakerTransport::class)]
+#[UsesClass(CircuitBreakerState::class)]
+#[UsesClass(FileCircuitBreakerStore::class)]
 #[UsesClass(PprofEncoder::class)]
 final class DrainCommandTest extends TestCase
 {
