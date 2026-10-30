@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tracewick\Sink;
 
+use Tracewick\Clock\SystemClock;
 use Tracewick\Encoder\Pprof\LabelKeyRewriter;
 use Tracewick\Encoder\Pprof\ProtobufException;
 use Tracewick\Encoder\PprofEncoder;
@@ -24,7 +25,9 @@ use Tracewick\Transport\Transport;
  * label keys become underscores, because Pyroscope silently drops keys that contain dots. The
  * profile type (wall or CPU) comes from the pprof sample types.
  *
- * By default payloads go through an {@see HttpTransport} behind a {@see CircuitBreakerTransport}.
+ * By default payloads go through an {@see HttpTransport} behind a {@see CircuitBreakerTransport},
+ * whose state the processes of a host share per server and tenant, so that all PHP-FPM workers
+ * stop sending when the server keeps failing.
  *
  * @see https://grafana.com/docs/pyroscope/latest/configure-server/about-server-api/
  */
@@ -38,7 +41,7 @@ final readonly class PyroscopeSink implements Sink, SpoolForwarder
 
     public function __construct(private PyroscopeConfig $config, ?Transport $transport = null)
     {
-        $this->transport = $transport ?? new CircuitBreakerTransport(new HttpTransport($config->httpConfig()), $config->circuitBreaker);
+        $this->transport = $transport ?? $this->defaultTransport($config);
         $this->encoder = new PprofEncoder();
     }
 
@@ -90,6 +93,18 @@ final readonly class PyroscopeSink implements Sink, SpoolForwarder
         } catch (\Throwable $e) {
             return Delivery::failed(\sprintf('Cannot send the profile to Pyroscope: %s', $e->getMessage()));
         }
+    }
+
+    private function defaultTransport(PyroscopeConfig $config): Transport
+    {
+        $http = $config->httpConfig();
+
+        return new CircuitBreakerTransport(
+            new HttpTransport($http),
+            $config->circuitBreaker,
+            new SystemClock(),
+            $config->circuitBreaker->sharedStore($http->url . "\n" . $config->tenantId),
+        );
     }
 
     private function payload(string $applicationName, string $body, int $startNs, int $endNs, int $periodNs): Payload

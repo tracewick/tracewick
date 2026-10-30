@@ -17,25 +17,30 @@ use Tracewick\Clock\SystemClock;
  * again. A rejected payload proves the destination is reachable, so it counts as a success; a
  * payload the inner transport skipped does not count either way.
  *
- * The state lives in the process. Long-running workers keep it between profiles; short-lived
- * PHP-FPM requests start closed each time.
+ * The state lives in a {@see CircuitBreakerStore}. The default keeps it in the process, which
+ * suits long-running workers; a {@see FileCircuitBreakerStore} shares it between the short-lived
+ * PHP-FPM requests of a host. A process that takes the trial delivery pushes the end of the open
+ * period forward first, so that the other processes keep skipping while the trial runs.
  */
-final class CircuitBreakerTransport implements Transport
+final readonly class CircuitBreakerTransport implements Transport
 {
-    private int $consecutiveFailures = 0;
-
-    private ?int $openUntilNs = null;
-
     public function __construct(
-        private readonly Transport $inner,
-        private readonly CircuitBreakerConfig $config = new CircuitBreakerConfig(),
-        private readonly Clock $clock = new SystemClock(),
+        private Transport $inner,
+        private CircuitBreakerConfig $config = new CircuitBreakerConfig(),
+        private Clock $clock = new SystemClock(),
+        private CircuitBreakerStore $store = new InMemoryCircuitBreakerStore(),
     ) {}
 
     public function send(Payload $payload): Delivery
     {
-        if (null !== $this->openUntilNs && $this->clock->nowNs() < $this->openUntilNs) {
-            return Delivery::skipped('Circuit breaker is open after repeated failures.');
+        $state = $this->store->load();
+        if (null !== $state->openUntilNs) {
+            $nowNs = $this->clock->nowNs();
+            if ($nowNs < $state->openUntilNs) {
+                return Delivery::skipped('Circuit breaker is open after repeated failures.');
+            }
+
+            $this->store->save(new CircuitBreakerState($state->consecutiveFailures, $this->openUntilNs($nowNs)));
         }
 
         $delivery = $this->inner->send($payload);
@@ -46,23 +51,30 @@ final class CircuitBreakerTransport implements Transport
         }
 
         if (DeliveryStatus::Failed !== $delivery->status) {
-            $this->consecutiveFailures = 0;
-            $this->openUntilNs = null;
+            if (!$state->isClosed()) {
+                $this->store->save(new CircuitBreakerState());
+            }
 
             return $delivery;
         }
 
-        ++$this->consecutiveFailures;
+        $failures = min($state->consecutiveFailures + 1, $this->config->failureThreshold);
         // A failed trial reopens the circuit at once; otherwise wait for the threshold.
-        if (null !== $this->openUntilNs || $this->consecutiveFailures >= $this->config->failureThreshold) {
-            $this->openUntilNs = $this->clock->nowNs() + $this->config->openDurationMs * 1_000_000;
-        }
+        $open = null !== $state->openUntilNs || $failures >= $this->config->failureThreshold;
+        $this->store->save(new CircuitBreakerState($failures, $open ? $this->openUntilNs($this->clock->nowNs()) : null));
 
         return $delivery;
     }
 
     public function isOpen(): bool
     {
-        return null !== $this->openUntilNs && $this->clock->nowNs() < $this->openUntilNs;
+        $openUntilNs = $this->store->load()->openUntilNs;
+
+        return null !== $openUntilNs && $this->clock->nowNs() < $openUntilNs;
+    }
+
+    private function openUntilNs(int $nowNs): int
+    {
+        return $nowNs + $this->config->openDurationMs * 1_000_000;
     }
 }

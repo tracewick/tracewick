@@ -20,8 +20,10 @@ use Tracewick\Sink\ApplicationName;
 use Tracewick\Sink\PyroscopeConfig;
 use Tracewick\Sink\PyroscopeSink;
 use Tracewick\Transport\CircuitBreakerConfig;
+use Tracewick\Transport\CircuitBreakerState;
 use Tracewick\Transport\CircuitBreakerTransport;
 use Tracewick\Transport\Delivery;
+use Tracewick\Transport\FileCircuitBreakerStore;
 use Tracewick\Transport\HttpConfig;
 use Tracewick\Transport\HttpTransport;
 use Tracewick\Transport\Payload;
@@ -36,6 +38,8 @@ use Tracewick\Transport\Payload;
 #[UsesClass(HttpTransport::class)]
 #[UsesClass(CircuitBreakerConfig::class)]
 #[UsesClass(CircuitBreakerTransport::class)]
+#[UsesClass(CircuitBreakerState::class)]
+#[UsesClass(FileCircuitBreakerStore::class)]
 #[UsesClass(Delivery::class)]
 #[UsesClass(Payload::class)]
 #[UsesClass(SystemClock::class)]

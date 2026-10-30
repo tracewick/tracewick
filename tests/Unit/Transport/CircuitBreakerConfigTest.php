@@ -6,11 +6,17 @@ namespace Tracewick\Tests\Unit\Transport;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Exception\LogicException;
+use Tracewick\Tests\Support\TemporaryDirectory;
 use Tracewick\Transport\CircuitBreakerConfig;
+use Tracewick\Transport\CircuitBreakerState;
+use Tracewick\Transport\FileCircuitBreakerStore;
 
 #[CoversClass(CircuitBreakerConfig::class)]
+#[UsesClass(FileCircuitBreakerStore::class)]
+#[UsesClass(CircuitBreakerState::class)]
 final class CircuitBreakerConfigTest extends TestCase
 {
     public function testDefaults(): void
@@ -19,6 +25,34 @@ final class CircuitBreakerConfigTest extends TestCase
 
         self::assertSame(3, $config->failureThreshold);
         self::assertSame(30_000, $config->openDurationMs);
+        self::assertNull($config->stateDirectory);
+    }
+
+    public function testSharesTheStateInTheConfiguredDirectory(): void
+    {
+        $directory = new TemporaryDirectory();
+
+        try {
+            (new CircuitBreakerConfig(stateDirectory: $directory->path))->sharedStore('http://pyroscope')->save(new CircuitBreakerState(1));
+
+            self::assertSame(['tracewick-circuit-' . md5('http://pyroscope')], $directory->entries());
+        } finally {
+            $directory->remove();
+        }
+    }
+
+    public function testSharesTheStateInTheTemporaryDirectoryByDefault(): void
+    {
+        $destination = 'http://pyroscope/' . bin2hex(random_bytes(8));
+        $path = sys_get_temp_dir() . '/tracewick-circuit-' . md5($destination);
+
+        try {
+            (new CircuitBreakerConfig())->sharedStore($destination)->save(new CircuitBreakerState(1));
+
+            self::assertFileExists($path);
+        } finally {
+            @unlink($path);
+        }
     }
 
     public function testAcceptsTheBounds(): void

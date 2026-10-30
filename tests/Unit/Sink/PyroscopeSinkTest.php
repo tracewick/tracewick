@@ -26,10 +26,13 @@ use Tracewick\Sink\PyroscopeSink;
 use Tracewick\Sink\SpoolFile;
 use Tracewick\Tests\Support\ProtobufMessage;
 use Tracewick\Tests\Support\ScriptedTransport;
+use Tracewick\Tests\Support\TemporaryDirectory;
 use Tracewick\Transport\CircuitBreakerConfig;
+use Tracewick\Transport\CircuitBreakerState;
 use Tracewick\Transport\CircuitBreakerTransport;
 use Tracewick\Transport\Delivery;
 use Tracewick\Transport\DeliveryStatus;
+use Tracewick\Transport\FileCircuitBreakerStore;
 use Tracewick\Transport\HttpConfig;
 use Tracewick\Transport\HttpTransport;
 use Tracewick\Transport\Payload;
@@ -41,6 +44,8 @@ use Tracewick\Transport\Payload;
 #[UsesClass(HttpTransport::class)]
 #[UsesClass(CircuitBreakerConfig::class)]
 #[UsesClass(CircuitBreakerTransport::class)]
+#[UsesClass(CircuitBreakerState::class)]
+#[UsesClass(FileCircuitBreakerStore::class)]
 #[UsesClass(Delivery::class)]
 #[UsesClass(Payload::class)]
 #[UsesClass(SystemClock::class)]
@@ -182,22 +187,28 @@ final class PyroscopeSinkTest extends TestCase
         self::assertSame('Cannot send the profile to Pyroscope: boom', $delivery->reason);
     }
 
-    public function testSendsOverHttpBehindTheCircuitBreakerByDefault(): void
+    public function testSendsOverHttpBehindACircuitBreakerSharedByTheProcessesOfTheHost(): void
     {
         $server = stream_socket_server('tcp://127.0.0.1:0');
         self::assertIsResource($server);
         $address = (string) stream_socket_get_name($server, false);
         fclose($server);
+        $directory = new TemporaryDirectory();
 
-        $sink = new PyroscopeSink(new PyroscopeConfig('http://' . $address, 'blog', circuitBreaker: new CircuitBreakerConfig(1, 60_000)));
-        $profile = $this->profile(10_000_000, self::START_NS + 200_000_000);
+        try {
+            $circuitBreaker = new CircuitBreakerConfig(1, 60_000, $directory->path);
+            $profile = $this->profile(10_000_000, self::START_NS + 200_000_000);
 
-        $first = $sink->send($profile);
-        $second = $sink->send($profile);
+            $first = (new PyroscopeSink(new PyroscopeConfig('http://' . $address, 'blog', tenantId: 'team-a', circuitBreaker: $circuitBreaker)))->send($profile);
+            $second = (new PyroscopeSink(new PyroscopeConfig('http://' . $address . '/', 'shop', tenantId: 'team-a', circuitBreaker: $circuitBreaker)))->send($profile);
 
-        self::assertSame(DeliveryStatus::Failed, $first->status);
-        self::assertStringStartsWith('Cannot connect to ' . $address, $first->reason);
-        self::assertSame(DeliveryStatus::Skipped, $second->status);
+            self::assertSame(DeliveryStatus::Failed, $first->status);
+            self::assertStringStartsWith('Cannot connect to ' . $address, $first->reason);
+            self::assertSame(DeliveryStatus::Skipped, $second->status);
+            self::assertSame(['tracewick-circuit-' . md5('http://' . $address . "/ingest\nteam-a")], $directory->entries());
+        } finally {
+            $directory->remove();
+        }
     }
 
     public function testForwardsASpoolFileUnderItsOwnApplicationName(): void

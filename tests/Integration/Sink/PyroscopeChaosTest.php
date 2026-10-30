@@ -19,11 +19,14 @@ use Tracewick\Sampler\Frame;
 use Tracewick\Sink\ApplicationName;
 use Tracewick\Sink\PyroscopeConfig;
 use Tracewick\Sink\PyroscopeSink;
+use Tracewick\Tests\Support\TemporaryDirectory;
 use Tracewick\Tests\Support\Toxiproxy;
 use Tracewick\Transport\CircuitBreakerConfig;
+use Tracewick\Transport\CircuitBreakerState;
 use Tracewick\Transport\CircuitBreakerTransport;
 use Tracewick\Transport\Delivery;
 use Tracewick\Transport\DeliveryStatus;
+use Tracewick\Transport\FileCircuitBreakerStore;
 use Tracewick\Transport\HttpConfig;
 use Tracewick\Transport\HttpTransport;
 use Tracewick\Transport\Payload;
@@ -41,6 +44,8 @@ use Tracewick\Transport\TransportException;
 #[UsesClass(TransportException::class)]
 #[UsesClass(CircuitBreakerConfig::class)]
 #[UsesClass(CircuitBreakerTransport::class)]
+#[UsesClass(CircuitBreakerState::class)]
+#[UsesClass(FileCircuitBreakerStore::class)]
 #[UsesClass(Delivery::class)]
 #[UsesClass(Payload::class)]
 #[UsesClass(SystemClock::class)]
@@ -61,6 +66,8 @@ final class PyroscopeChaosTest extends TestCase
 
     private Toxiproxy $toxiproxy;
 
+    private TemporaryDirectory $stateDirectory;
+
     protected function setUp(): void
     {
         $serverUrl = getenv('PYROSCOPE_TOXIC_URL');
@@ -72,10 +79,16 @@ final class PyroscopeChaosTest extends TestCase
         $this->serverUrl = $serverUrl;
         $this->toxiproxy = new Toxiproxy($apiUrl);
         $this->toxiproxy->reset();
+        // A fresh circuit for every test, so that failures of one test do not open it for the next.
+        $this->stateDirectory = new TemporaryDirectory();
     }
 
     protected function tearDown(): void
     {
+        if (isset($this->stateDirectory)) {
+            $this->stateDirectory->remove();
+        }
+
         if (isset($this->toxiproxy)) {
             $this->toxiproxy->reset();
         }
@@ -159,7 +172,7 @@ final class PyroscopeChaosTest extends TestCase
             'tracewick-chaos',
             connectTimeoutMs: 200,
             timeoutMs: self::TIMEOUT_MS,
-            circuitBreaker: $circuitBreaker,
+            circuitBreaker: new CircuitBreakerConfig($circuitBreaker->failureThreshold, $circuitBreaker->openDurationMs, $this->stateDirectory->path),
         ));
     }
 
