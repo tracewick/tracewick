@@ -8,6 +8,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Clock\SystemClock;
+use Tracewick\Diagnostics\DiagnosticLogger;
 use Tracewick\Encoder\Pprof\ProtobufWriter;
 use Tracewick\Encoder\Pprof\StringTable;
 use Tracewick\Encoder\PprofEncoder;
@@ -19,6 +20,7 @@ use Tracewick\Sampler\Frame;
 use Tracewick\Sink\ApplicationName;
 use Tracewick\Sink\PyroscopeConfig;
 use Tracewick\Sink\PyroscopeSink;
+use Tracewick\Transport\AtomicFile;
 use Tracewick\Transport\CircuitBreakerConfig;
 use Tracewick\Transport\CircuitBreakerState;
 use Tracewick\Transport\CircuitBreakerTransport;
@@ -40,6 +42,8 @@ use Tracewick\Transport\Payload;
 #[UsesClass(CircuitBreakerTransport::class)]
 #[UsesClass(CircuitBreakerState::class)]
 #[UsesClass(FileCircuitBreakerStore::class)]
+#[UsesClass(DiagnosticLogger::class)]
+#[UsesClass(AtomicFile::class)]
 #[UsesClass(Delivery::class)]
 #[UsesClass(Payload::class)]
 #[UsesClass(SystemClock::class)]

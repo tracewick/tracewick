@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Tracewick\Sink;
 
+use Psr\Log\LoggerInterface;
 use Tracewick\Clock\SystemClock;
+use Tracewick\Diagnostics\DiagnosticLogger;
 use Tracewick\Encoder\Pprof\LabelKeyRewriter;
 use Tracewick\Encoder\Pprof\ProtobufException;
 use Tracewick\Encoder\PprofEncoder;
@@ -39,9 +41,13 @@ final readonly class PyroscopeSink implements Sink, SpoolForwarder
 
     private PprofEncoder $encoder;
 
-    public function __construct(private PyroscopeConfig $config, ?Transport $transport = null)
+    /**
+     * @param ?Transport       $transport replaces the default HTTP transport and circuit breaker
+     * @param ?LoggerInterface $logger    receives the opening and closing of the circuit breaker
+     */
+    public function __construct(private PyroscopeConfig $config, ?Transport $transport = null, ?LoggerInterface $logger = null)
     {
-        $this->transport = $transport ?? $this->defaultTransport($config);
+        $this->transport = $transport ?? $this->defaultTransport($config, $logger);
         $this->encoder = new PprofEncoder();
     }
 
@@ -95,7 +101,7 @@ final readonly class PyroscopeSink implements Sink, SpoolForwarder
         }
     }
 
-    private function defaultTransport(PyroscopeConfig $config): Transport
+    private function defaultTransport(PyroscopeConfig $config, ?LoggerInterface $logger): Transport
     {
         $http = $config->httpConfig();
 
@@ -104,6 +110,7 @@ final readonly class PyroscopeSink implements Sink, SpoolForwarder
             $config->circuitBreaker,
             new SystemClock(),
             $config->circuitBreaker->sharedStore($http->url . "\n" . $config->tenantId),
+            new DiagnosticLogger($logger, $config->circuitBreaker->stateDirectory),
         );
     }
 

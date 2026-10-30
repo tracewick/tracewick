@@ -4,12 +4,17 @@ declare(strict_types=1);
 
 namespace Tracewick\Runtime;
 
+use Psr\Log\LoggerInterface;
+use Psr\Log\LogLevel;
+use Tracewick\Diagnostics\DiagnosticLogger;
 use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
 use Tracewick\Sampler\Sampler;
 use Tracewick\Sampler\SamplerConfig;
 use Tracewick\Sampler\SamplerFactory;
 use Tracewick\Sink\Sink;
+use Tracewick\Transport\Delivery;
+use Tracewick\Transport\DeliveryStatus;
 
 /**
  * Profiles units of work, such as requests or jobs, and delivers the profiles after the work is done.
@@ -24,7 +29,8 @@ use Tracewick\Sink\Sink;
  * at random, and the profiler stays idle for the others.
  *
  * Every method is safe to call at run time: none of them throws, and a failure only costs the
- * profile it concerns (ADR 5). With a {@see \Tracewick\Sink\SpoolSink} a flush is a local file
+ * profile it concerns (ADR 5). {@see diagnostics()} counts what happened, and a
+ * {@see DiagnosticLogger} reports problems to the application's logger. With a {@see \Tracewick\Sink\SpoolSink} a flush is a local file
  * write; with a sink that sends over the network the work of the flush depends on the backend.
  */
 final class Profiler
@@ -38,7 +44,19 @@ final class Profiler
 
     private bool $shutdownRegistered = false;
 
+    private int $collectedProfiles = 0;
+
     private int $droppedProfiles = 0;
+
+    private int $deliveredProfiles = 0;
+
+    private int $rejectedProfiles = 0;
+
+    private int $failedProfiles = 0;
+
+    private int $skippedProfiles = 0;
+
+    private int $swallowedErrors = 0;
 
     private ?\Throwable $lastFailure = null;
 
@@ -63,6 +81,7 @@ final class Profiler
         ?\Closure $finishRequest = null,
         ?\Closure $registerShutdownFunction = null,
         ?\Closure $random = null,
+        private readonly DiagnosticLogger $logger = new DiagnosticLogger(),
     ) {
         $this->labels = $config->labels;
         $this->finishRequest = $finishRequest ?? static function (): void {
@@ -81,10 +100,16 @@ final class Profiler
      *
      * Without ext-excimer, or with `TRACEWICK_ENABLED=0`, the profiler collects nothing and sends
      * nothing.
+     *
+     * @param ?LoggerInterface $logger receives problems of the profiler, at most once a minute each
      */
-    public static function create(Sink $sink, ProfilerConfig $config = new ProfilerConfig(), SamplerConfig $samplerConfig = new SamplerConfig()): self
-    {
-        return new self((new SamplerFactory())->create($samplerConfig), $sink, $config);
+    public static function create(
+        Sink $sink,
+        ProfilerConfig $config = new ProfilerConfig(),
+        SamplerConfig $samplerConfig = new SamplerConfig(),
+        ?LoggerInterface $logger = null,
+    ): self {
+        return new self((new SamplerFactory())->create($samplerConfig), $sink, $config, logger: new DiagnosticLogger($logger));
     }
 
     /**
@@ -110,7 +135,7 @@ final class Profiler
             $this->sampler->flush();
             $this->sampler->start();
         } catch (\Throwable $e) {
-            $this->lastFailure = $e;
+            $this->swallow($e);
         }
     }
 
@@ -124,7 +149,7 @@ final class Profiler
                 $this->labels = $this->labels->with($key, $value);
             }
         } catch (\Throwable $e) {
-            $this->lastFailure = $e;
+            $this->swallow($e);
         }
     }
 
@@ -146,13 +171,15 @@ final class Profiler
                 return;
             }
 
+            ++$this->collectedProfiles;
             if (\count($this->buffer) < $this->config->maxBufferedProfiles) {
                 $this->buffer[] = $profile;
             } else {
                 ++$this->droppedProfiles;
+                $this->logger->log(LogLevel::NOTICE, 'Tracewick dropped a profile because {count} profiles already wait for the flush.', ['count' => \count($this->buffer)]);
             }
         } catch (\Throwable $e) {
-            $this->lastFailure = $e;
+            $this->swallow($e);
         }
     }
 
@@ -166,9 +193,9 @@ final class Profiler
         $this->buffer = [];
         foreach ($profiles as $profile) {
             try {
-                $this->sink->send($profile);
+                $this->record($this->sink->send($profile));
             } catch (\Throwable $e) {
-                $this->lastFailure = $e;
+                $this->swallow($e);
             }
         }
     }
@@ -184,7 +211,7 @@ final class Profiler
                 ($this->registerShutdownFunction)($this->shutdown(...));
             }
         } catch (\Throwable $e) {
-            $this->lastFailure = $e;
+            $this->swallow($e);
         }
     }
 
@@ -204,7 +231,7 @@ final class Profiler
             try {
                 ($this->finishRequest)();
             } catch (\Throwable $e) {
-                $this->lastFailure = $e;
+                $this->swallow($e);
             }
         }
 
@@ -224,12 +251,17 @@ final class Profiler
         return \count($this->buffer);
     }
 
-    /**
-     * Number of profiles dropped because the buffer was full.
-     */
-    public function droppedProfiles(): int
+    public function diagnostics(): Diagnostics
     {
-        return $this->droppedProfiles;
+        return new Diagnostics(
+            $this->collectedProfiles,
+            $this->droppedProfiles,
+            $this->deliveredProfiles,
+            $this->rejectedProfiles,
+            $this->failedProfiles,
+            $this->skippedProfiles,
+            $this->swallowedErrors,
+        );
     }
 
     /**
@@ -249,5 +281,41 @@ final class Profiler
         $rate = $this->config->sampleRate;
 
         return $rate >= 1.0 || ($rate > 0.0 && ($this->random)() < $rate);
+    }
+
+    private function record(Delivery $delivery): void
+    {
+        $context = ['reason' => $delivery->reason];
+        switch ($delivery->status) {
+            case DeliveryStatus::Delivered:
+                ++$this->deliveredProfiles;
+
+                break;
+
+            case DeliveryStatus::Rejected:
+                ++$this->rejectedProfiles;
+                $this->logger->log(LogLevel::WARNING, 'The profile backend rejected a profile: {reason}', $context);
+
+                break;
+
+            case DeliveryStatus::Failed:
+                ++$this->failedProfiles;
+                $this->logger->log(LogLevel::WARNING, 'Tracewick could not deliver a profile: {reason}', $context);
+
+                break;
+
+            case DeliveryStatus::Skipped:
+                ++$this->skippedProfiles;
+                $this->logger->log(LogLevel::NOTICE, 'Tracewick skipped a profile: {reason}', $context);
+
+                break;
+        }
+    }
+
+    private function swallow(\Throwable $error): void
+    {
+        ++$this->swallowedErrors;
+        $this->lastFailure = $error;
+        $this->logger->log(LogLevel::WARNING, 'Tracewick ignored an error: {error}', ['error' => $error->getMessage(), 'exception' => $error]);
     }
 }

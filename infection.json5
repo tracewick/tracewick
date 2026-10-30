@@ -36,6 +36,12 @@
                 "if \\(!is_dir\\(\\$directory\\) && !@mkdir.*",
             ],
         },
+        "CastInt": {
+            "ignoreSourceCodeByRegex": [
+                // Equivalent mutant: PHP subtracts a numeric string as the integer it holds.
+                ".*\\$nowNs - \\(int\\) \\$matches\\['writtenNs'\\].*",
+            ],
+        },
         "TrueValue": {
             "ignoreSourceCodeByRegex": [
                 // Equivalent in tests: any process uses more than the one byte the test allows, with or

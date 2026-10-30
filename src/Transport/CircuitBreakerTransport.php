@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Tracewick\Transport;
 
+use Psr\Log\LogLevel;
 use Tracewick\Clock\Clock;
 use Tracewick\Clock\SystemClock;
+use Tracewick\Diagnostics\DiagnosticLogger;
 
 /**
  * Stops sending to a destination that keeps failing, so that an outage costs a few timeouts
@@ -21,6 +23,9 @@ use Tracewick\Clock\SystemClock;
  * suits long-running workers; a {@see FileCircuitBreakerStore} shares it between the short-lived
  * PHP-FPM requests of a host. A process that takes the trial delivery pushes the end of the open
  * period forward first, so that the other processes keep skipping while the trial runs.
+ *
+ * Opening and closing the circuit are logged by the process that does it, so a host logs each
+ * change once rather than once per worker.
  */
 final readonly class CircuitBreakerTransport implements Transport
 {
@@ -29,6 +34,7 @@ final readonly class CircuitBreakerTransport implements Transport
         private CircuitBreakerConfig $config = new CircuitBreakerConfig(),
         private Clock $clock = new SystemClock(),
         private CircuitBreakerStore $store = new InMemoryCircuitBreakerStore(),
+        private DiagnosticLogger $logger = new DiagnosticLogger(),
     ) {}
 
     public function send(Payload $payload): Delivery
@@ -55,6 +61,10 @@ final readonly class CircuitBreakerTransport implements Transport
                 $this->store->save(new CircuitBreakerState());
             }
 
+            if (null !== $state->openUntilNs) {
+                $this->logger->log(LogLevel::INFO, 'Tracewick resumed sending profiles after a successful trial delivery.');
+            }
+
             return $delivery;
         }
 
@@ -62,6 +72,13 @@ final readonly class CircuitBreakerTransport implements Transport
         // A failed trial reopens the circuit at once; otherwise wait for the threshold.
         $open = null !== $state->openUntilNs || $failures >= $this->config->failureThreshold;
         $this->store->save(new CircuitBreakerState($failures, $open ? $this->openUntilNs($this->clock->nowNs()) : null));
+        if ($open && null === $state->openUntilNs) {
+            $this->logger->log(
+                LogLevel::WARNING,
+                'Tracewick stopped sending profiles for {pauseMs} ms after {failures} failed deliveries in a row: {reason}',
+                ['pauseMs' => $this->config->openDurationMs, 'failures' => $failures, 'reason' => $delivery->reason],
+            );
+        }
 
         return $delivery;
     }

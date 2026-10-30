@@ -10,12 +10,14 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Exception\LogicException;
 use Tracewick\Tests\Support\TemporaryDirectory;
+use Tracewick\Transport\AtomicFile;
 use Tracewick\Transport\CircuitBreakerConfig;
 use Tracewick\Transport\CircuitBreakerState;
 use Tracewick\Transport\FileCircuitBreakerStore;
 
 #[CoversClass(CircuitBreakerConfig::class)]
 #[UsesClass(FileCircuitBreakerStore::class)]
+#[UsesClass(AtomicFile::class)]
 #[UsesClass(CircuitBreakerState::class)]
 final class CircuitBreakerConfigTest extends TestCase
 {

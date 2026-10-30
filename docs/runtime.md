@@ -31,10 +31,10 @@ $profiler = Profiler::create(
 | `registerShutdown()`     | Makes PHP call `stop()` and `flush()` when it shuts down                     |
 
 None of these methods throws. An invalid label is ignored, a failure costs only the profile it
-concerns, and `lastFailure()` returns the last error swallowed, for diagnostics.
+concerns, and `lastFailure()` returns the last error swallowed. See [Diagnostics](#diagnostics).
 
 The buffer holds `maxBufferedProfiles` profiles, 16 by default. A profile that does not fit is
-dropped and counted in `droppedProfiles()`; it is never sent from inside the work.
+dropped and counted; it is never sent from inside the work.
 
 ## Profiling a share of requests
 
@@ -109,3 +109,35 @@ $profiler->registerShutdown();
 ```
 
 The same as PHP-FPM: the profile covers the command and is flushed when the script ends.
+
+## Diagnostics
+
+`diagnostics()` counts what the profiler has done: profiles collected, dropped from a full buffer,
+delivered, rejected by the backend, failed, skipped (an open circuit breaker or a full spool), and
+errors swallowed. Under PHP-FPM a profiler lives for one request, so the numbers cover that
+request; in a long-running worker they add up, and can be exported to the metrics of the
+application. Host-wide metrics will come from `tracewick-agent`.
+
+Give a PSR-3 logger to see problems as they happen:
+
+```php
+$sink = new PyroscopeSink($pyroscopeConfig, logger: $logger);
+$profiler = Profiler::create($sink, $config, logger: $logger);
+```
+
+| Level   | Message                                                                     |
+|---------|-----------------------------------------------------------------------------|
+| warning | A profile could not be delivered, or the backend rejected it                |
+| warning | The circuit breaker opened; logged once per host, by the process that opened it |
+| warning | An error was swallowed; the exception is in the context                     |
+| notice  | A profile was dropped from a full buffer, or the sink skipped it             |
+| info    | The circuit breaker closed again                                            |
+
+Tracewick never logs above warning: a profiler that cannot deliver is not an error of the
+application. Filter by level or by channel in the logger.
+
+Each message is written at most once a minute per host, and the next copy carries the number of
+copies suppressed in between as `suppressed`. The minute is kept in a small file per message in
+the system temporary directory, because PHP-FPM requests share no memory; the file is only touched
+when there is something to log.
+

@@ -19,6 +19,9 @@ final class RecordingSink implements Sink
     /** @var list<callable(): void> */
     public array $onSend = [];
 
+    /** @var list<Delivery> answers to the next calls; delivered once they run out */
+    public array $deliveries = [];
+
     /**
      * @param list<int> $failOn zero-based calls that throw instead of returning
      */
@@ -36,7 +39,7 @@ final class RecordingSink implements Sink
             throw new \RuntimeException(\sprintf('Send %d failed.', $call));
         }
 
-        return Delivery::delivered();
+        return array_shift($this->deliveries) ?? Delivery::delivered();
     }
 
     /**

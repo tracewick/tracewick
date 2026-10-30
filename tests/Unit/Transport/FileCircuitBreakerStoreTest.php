@@ -9,11 +9,13 @@ use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Tests\Support\TemporaryDirectory;
+use Tracewick\Transport\AtomicFile;
 use Tracewick\Transport\CircuitBreakerState;
 use Tracewick\Transport\FileCircuitBreakerStore;
 
 #[CoversClass(FileCircuitBreakerStore::class)]
 #[UsesClass(CircuitBreakerState::class)]
+#[UsesClass(AtomicFile::class)]
 final class FileCircuitBreakerStoreTest extends TestCase
 {
     private TemporaryDirectory $directory;

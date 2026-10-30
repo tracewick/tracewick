@@ -9,6 +9,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Clock\SystemClock;
+use Tracewick\Diagnostics\DiagnosticLogger;
 use Tracewick\Encoder\Pprof\LabelKeyRewriter;
 use Tracewick\Encoder\Pprof\ProtobufException;
 use Tracewick\Encoder\Pprof\ProtobufReader;
@@ -25,8 +26,10 @@ use Tracewick\Sink\PyroscopeConfig;
 use Tracewick\Sink\PyroscopeSink;
 use Tracewick\Sink\SpoolFile;
 use Tracewick\Tests\Support\ProtobufMessage;
+use Tracewick\Tests\Support\RecordingLogger;
 use Tracewick\Tests\Support\ScriptedTransport;
 use Tracewick\Tests\Support\TemporaryDirectory;
+use Tracewick\Transport\AtomicFile;
 use Tracewick\Transport\CircuitBreakerConfig;
 use Tracewick\Transport\CircuitBreakerState;
 use Tracewick\Transport\CircuitBreakerTransport;
@@ -46,6 +49,8 @@ use Tracewick\Transport\Payload;
 #[UsesClass(CircuitBreakerTransport::class)]
 #[UsesClass(CircuitBreakerState::class)]
 #[UsesClass(FileCircuitBreakerStore::class)]
+#[UsesClass(DiagnosticLogger::class)]
+#[UsesClass(AtomicFile::class)]
 #[UsesClass(Delivery::class)]
 #[UsesClass(Payload::class)]
 #[UsesClass(SystemClock::class)]
@@ -199,13 +204,16 @@ final class PyroscopeSinkTest extends TestCase
             $circuitBreaker = new CircuitBreakerConfig(1, 60_000, $directory->path);
             $profile = $this->profile(10_000_000, self::START_NS + 200_000_000);
 
-            $first = (new PyroscopeSink(new PyroscopeConfig('http://' . $address, 'blog', tenantId: 'team-a', circuitBreaker: $circuitBreaker)))->send($profile);
+            $logger = new RecordingLogger();
+            $first = (new PyroscopeSink(new PyroscopeConfig('http://' . $address, 'blog', tenantId: 'team-a', circuitBreaker: $circuitBreaker), logger: $logger))->send($profile);
             $second = (new PyroscopeSink(new PyroscopeConfig('http://' . $address . '/', 'shop', tenantId: 'team-a', circuitBreaker: $circuitBreaker)))->send($profile);
 
             self::assertSame(DeliveryStatus::Failed, $first->status);
             self::assertStringStartsWith('Cannot connect to ' . $address, $first->reason);
             self::assertSame(DeliveryStatus::Skipped, $second->status);
-            self::assertSame(['tracewick-circuit-' . md5('http://' . $address . "/ingest\nteam-a")], $directory->entries());
+            self::assertContains('tracewick-circuit-' . md5('http://' . $address . "/ingest\nteam-a"), $directory->entries());
+            self::assertCount(2, $directory->entries());
+            self::assertSame(['warning: Tracewick stopped sending profiles for {pauseMs} ms after {failures} failed deliveries in a row: {reason}'], $logger->lines());
         } finally {
             $directory->remove();
         }
