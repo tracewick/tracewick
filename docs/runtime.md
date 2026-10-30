@@ -36,6 +36,22 @@ concerns, and `lastFailure()` returns the last error swallowed, for diagnostics.
 The buffer holds `maxBufferedProfiles` profiles, 16 by default. A profile that does not fit is
 dropped and counted in `droppedProfiles()`; it is never sent from inside the work.
 
+## Profiling a share of requests
+
+Every profiled request pays for sampling and for building and storing its profile. On a busy
+service a share of the requests gives the same flame graphs at a fraction of that cost:
+
+```php
+new ProfilerConfig(new Labels(['env' => 'prod']), sampleRate: 0.1); // one request in ten
+```
+
+`start()` decides at random for each unit of work. For the others it does nothing: the sampler
+does not run, and `label()` and `stop()` have no effect. The default rate is 1, every unit of
+work; 0 turns profiling off without removing the calls.
+
+The profiles show only the requests that were profiled, so absolute totals in Pyroscope shrink
+by the rate. Shares within a flame graph, which is what profiling is read for, stay the same.
+
 ## Which sink
 
 Delivery happens in `flush()`, after the work, but in the same process. With a `SpoolSink` it is a

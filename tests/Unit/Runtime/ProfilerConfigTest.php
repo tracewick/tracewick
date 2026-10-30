@@ -22,6 +22,7 @@ final class ProfilerConfigTest extends TestCase
 
         self::assertTrue($config->labels->isEmpty());
         self::assertSame(ProfilerConfig::DEFAULT_MAX_BUFFERED_PROFILES, $config->maxBufferedProfiles);
+        self::assertSame(1.0, $config->sampleRate);
         self::assertFalse($config->finishRequest);
     }
 
@@ -40,5 +41,24 @@ final class ProfilerConfigTest extends TestCase
         $this->expectExceptionMessage(\sprintf('The number of buffered profiles must be between 1 and 1000, got %d.', $size));
 
         new ProfilerConfig(maxBufferedProfiles: $size);
+    }
+
+    #[TestWith([0.0])]
+    #[TestWith([0.25])]
+    #[TestWith([1.0])]
+    public function testAcceptsSampleRatesFromZeroToOne(float $rate): void
+    {
+        self::assertSame($rate, (new ProfilerConfig(sampleRate: $rate))->sampleRate);
+    }
+
+    #[TestWith([-0.01, '-0.01'])]
+    #[TestWith([1.01, '1.01'])]
+    #[TestWith([\NAN, 'NAN'])]
+    public function testRejectsSampleRatesOutsideZeroToOne(float $rate, string $shown): void
+    {
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage(\sprintf('The sample rate must be between 0 and 1, got %s.', $shown));
+
+        new ProfilerConfig(sampleRate: $rate);
     }
 }
