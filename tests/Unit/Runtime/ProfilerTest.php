@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tracewick\Tests\Unit\Runtime;
 
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Clock\SystemClock;
@@ -305,6 +306,73 @@ final class ProfilerTest extends TestCase
         self::assertSame('Not allowed.', $profiler->lastFailure()?->getMessage());
     }
 
+    #[TestWith([0.0, 0.5, false])]
+    #[TestWith([0.25, 0.25, false])]
+    #[TestWith([0.25, 0.24, true])]
+    #[TestWith([0.99, 0.98, true])]
+    public function testProfilesTheShareOfUnitsOfWorkGivenByTheSampleRate(float $rate, float $random, bool $profiled): void
+    {
+        $profiler = $this->profiler(new ProfilerConfig(sampleRate: $rate), static fn(): float => $random);
+        $this->sampler->willSample('handle');
+
+        $profiler->start(['route' => 'home']);
+        self::assertSame($profiled, $profiler->isRunning());
+        $profiler->label('route', 'other');
+        $profiler->stop();
+        $profiler->flush();
+
+        self::assertSame($profiled ? ['handle'] : [], $this->sink->functions());
+        self::assertSame($profiled ? ['flush', 'start', 'stop', 'flush'] : [], $this->sampler->calls);
+    }
+
+    #[TestWith([0.0])]
+    #[TestWith([1.0])]
+    public function testDrawsNoRandomNumberForAnAllOrNothingRate(float $rate): void
+    {
+        $profiler = $this->profiler(new ProfilerConfig(sampleRate: $rate), static function (): never {
+            throw new \RuntimeException('No random number expected.');
+        });
+
+        $profiler->start();
+
+        self::assertSame(1.0 === $rate, $profiler->isRunning());
+        self::assertNull($profiler->lastFailure());
+    }
+
+    public function testDrawsAUniformNumberBelowOneByDefault(): void
+    {
+        mt_srand(7);
+        $draw = mt_rand() / (mt_getrandmax() + 1);
+        self::assertGreaterThan(0.0, $draw);
+
+        try {
+            // The unit of work is profiled only when the draw is below the rate, so a rate equal
+            // to the draw and one just above it pin the draw down exactly.
+            self::assertFalse($this->startWithSeededDraw($draw));
+            self::assertTrue($this->startWithSeededDraw($draw * (1 + 1e-12)));
+        } finally {
+            mt_srand();
+        }
+    }
+
+    public function testDecidesForEveryUnitOfWork(): void
+    {
+        $draws = [0.9, 0.1];
+        $profiler = $this->profiler(new ProfilerConfig(sampleRate: 0.5), static function () use (&$draws): float {
+            return array_shift($draws) ?? self::fail('Too many random numbers drawn.');
+        });
+        $this->sampler->willSample('second');
+
+        $profiler->start(['route' => 'first']);
+        $profiler->stop();
+        $profiler->start(['route' => 'second']);
+        $profiler->stop();
+        $profiler->flush();
+
+        self::assertSame(['second'], $this->sink->functions());
+        self::assertSame(['route' => 'second'], $this->labelsOf(0));
+    }
+
     public function testCreatesAProfilerWithTheAvailableSampler(): void
     {
         $profiler = Profiler::create($this->sink);
@@ -317,6 +385,15 @@ final class ProfilerTest extends TestCase
         self::assertNull($profiler->lastFailure());
     }
 
+    private function startWithSeededDraw(float $rate): bool
+    {
+        mt_srand(7);
+        $profiler = new Profiler(new ScriptedSampler(), $this->sink, new ProfilerConfig(sampleRate: $rate));
+        $profiler->start();
+
+        return $profiler->isRunning();
+    }
+
     /**
      * @return array<string, string>
      */
@@ -325,7 +402,10 @@ final class ProfilerTest extends TestCase
         return ($this->sink->sent[$profile] ?? self::fail(\sprintf('Profile %d was not sent.', $profile)))->labels->toArray();
     }
 
-    private function profiler(ProfilerConfig $config = new ProfilerConfig()): Profiler
+    /**
+     * @param ?\Closure(): float $random
+     */
+    private function profiler(ProfilerConfig $config = new ProfilerConfig(), ?\Closure $random = null): Profiler
     {
         return new Profiler(
             $this->sampler,
@@ -338,6 +418,7 @@ final class ProfilerTest extends TestCase
             function (callable $callback): void {
                 $this->shutdownFunctions[] = $callback;
             },
+            $random,
         );
     }
 }

@@ -20,6 +20,9 @@ use Tracewick\Sink\Sink;
  * when PHP shuts down, which is all a PHP-FPM application needs. Long-running workers call
  * {@see flush()} after each unit of work.
  *
+ * With a sample rate below 1 only that share of units of work is profiled: {@see start()} decides
+ * at random, and the profiler stays idle for the others.
+ *
  * Every method is safe to call at run time: none of them throws, and a failure only costs the
  * profile it concerns (ADR 5). With a {@see \Tracewick\Sink\SpoolSink} a flush is a local file
  * write; with a sink that sends over the network the work of the flush depends on the backend.
@@ -45,9 +48,13 @@ final class Profiler
     /** @var \Closure(callable(): void): void */
     private readonly \Closure $registerShutdownFunction;
 
+    /** @var \Closure(): float */
+    private readonly \Closure $random;
+
     /**
      * @param ?\Closure(): void                 $finishRequest            ends the response to the client; `fastcgi_finish_request()` by default
      * @param ?\Closure(callable(): void): void $registerShutdownFunction `register_shutdown_function()` by default
+     * @param ?\Closure(): float                $random                   a random number from 0 inclusive to 1 exclusive
      */
     public function __construct(
         private readonly Sampler $sampler,
@@ -55,6 +62,7 @@ final class Profiler
         private readonly ProfilerConfig $config = new ProfilerConfig(),
         ?\Closure $finishRequest = null,
         ?\Closure $registerShutdownFunction = null,
+        ?\Closure $random = null,
     ) {
         $this->labels = $config->labels;
         $this->finishRequest = $finishRequest ?? static function (): void {
@@ -65,6 +73,7 @@ final class Profiler
         $this->registerShutdownFunction = $registerShutdownFunction ?? static function (callable $callback): void {
             register_shutdown_function($callback);
         };
+        $this->random = $random ?? static fn(): float => mt_rand() / (mt_getrandmax() + 1);
     }
 
     /**
@@ -79,14 +88,15 @@ final class Profiler
     }
 
     /**
-     * Starts a profile. Calling it while a profile is running has no effect.
+     * Starts a profile, unless the sample rate leaves this unit of work out. Calling it while a
+     * profile is running has no effect.
      *
      * @param array<string, string> $labels labels of this profile only, such as the route
      */
     public function start(array $labels = []): void
     {
         try {
-            if ($this->started) {
+            if ($this->started || !$this->sampled()) {
                 return;
             }
 
@@ -228,5 +238,16 @@ final class Profiler
     public function lastFailure(): ?\Throwable
     {
         return $this->lastFailure;
+    }
+
+    /**
+     * Whether the next unit of work is profiled. The random number is only drawn for a rate
+     * between 0 and 1.
+     */
+    private function sampled(): bool
+    {
+        $rate = $this->config->sampleRate;
+
+        return $rate >= 1.0 || ($rate > 0.0 && ($this->random)() < $rate);
     }
 }
