@@ -50,7 +50,8 @@ does not run, and `label()` and `stop()` have no effect. The default rate is 1, 
 work; 0 turns profiling off without removing the calls.
 
 The profiles show only the requests that were profiled, so absolute totals in Pyroscope shrink
-by the rate. Shares within a flame graph, which is what profiling is read for, stay the same.
+by the rate. Shares within a flame graph, which is what profiling is read for, stay the same. Why the decision is
+random rather than every N-th request is explained in [ADR 11](adr/0011-random-request-sampling.md).
 
 ## Which sink
 

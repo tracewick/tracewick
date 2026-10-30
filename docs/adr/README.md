@@ -15,3 +15,4 @@ See [ADR 1](0001-record-architecture-decisions.md) for how and why we record dec
 | [8](0008-own-http-transport.md)                 | Own HTTP transport instead of PSR-18     | Accepted |
 | [9](0009-agent-hand-off.md)                     | Handing profiles to a local agent        | Accepted |
 | [10](0010-deferred-delivery.md)                 | Deferred delivery in the Runtime         | Accepted |
+| [11](0011-random-request-sampling.md)           | Random request sampling                  | Accepted |
