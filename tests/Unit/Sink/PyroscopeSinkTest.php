@@ -213,7 +213,7 @@ final class PyroscopeSinkTest extends TestCase
             self::assertSame(DeliveryStatus::Skipped, $second->status);
             self::assertContains('tracewick-circuit-' . md5('http://' . $address . "/ingest\nteam-a"), $directory->entries());
             self::assertCount(2, $directory->entries());
-            self::assertSame(['warning: Tracewick stopped sending profiles for {seconds} s after {failures} failed deliveries in a row: {reason}'], $logger->lines());
+            self::assertSame(['warning: Tracewick stopped sending profiles for {pauseMs} ms after {failures} failed deliveries in a row: {reason}'], $logger->lines());
         } finally {
             $directory->remove();
         }

@@ -141,10 +141,10 @@ final class DiagnosticLoggerTest extends TestCase
     {
         $logger = new class extends AbstractLogger {
             /**
-     * @param mixed        $level
-     * @param array<mixed> $context
-     */
-    public function log($level, string|\Stringable $message, array $context = []): void
+             * @param mixed        $level
+             * @param array<mixed> $context
+             */
+            public function log($level, string|\Stringable $message, array $context = []): void
             {
                 throw new \RuntimeException('The log is full.');
             }

@@ -47,7 +47,7 @@ final readonly class DiagnosticLogger
      */
     public function log(string $level, string $message, array $context = []): void
     {
-        if (null === $this->logger) {
+        if (!$this->logger instanceof LoggerInterface) {
             return;
         }
 
@@ -57,7 +57,7 @@ final readonly class DiagnosticLogger
                 return;
             }
 
-            if ($suppressed > 0) {
+            if (0 !== $suppressed) {
                 $context['suppressed'] = $suppressed;
             }
 

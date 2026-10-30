@@ -288,12 +288,13 @@ final class CircuitBreakerTransportTest extends TestCase
     {
         $directory = new TemporaryDirectory();
         $logger = new RecordingLogger();
-        $inner = new ScriptedTransport(Delivery::failed('1'), Delivery::failed('2'), Delivery::failed('trial'), Delivery::rejected('reachable'), Delivery::delivered());
+        $inner = new ScriptedTransport(Delivery::delivered(), Delivery::failed('1'), Delivery::failed('2'), Delivery::failed('trial'), Delivery::rejected('reachable'), Delivery::delivered());
         $breaker = new CircuitBreakerTransport($inner, new CircuitBreakerConfig(2, 1_500), $this->clock, new InMemoryCircuitBreakerStore(), new DiagnosticLogger($logger, $directory->path, clock: $this->clock));
 
         try {
             $this->send($breaker);
-            self::assertSame([], $logger->records);
+            $this->send($breaker);
+            self::assertSame([], $logger->lines());
             $this->send($breaker);
             $this->clock->advanceMs(1_500);
             $this->send($breaker);
@@ -306,12 +307,12 @@ final class CircuitBreakerTransportTest extends TestCase
 
         self::assertSame(
             [
-                'warning: Tracewick stopped sending profiles for {seconds} s after {failures} failed deliveries in a row: {reason}',
+                'warning: Tracewick stopped sending profiles for {pauseMs} ms after {failures} failed deliveries in a row: {reason}',
                 'info: Tracewick resumed sending profiles after a successful trial delivery.',
             ],
             $logger->lines(),
         );
-        self::assertSame([['seconds' => 1, 'failures' => 2, 'reason' => '2'], []], array_column($logger->records, 'context'));
+        self::assertSame([['pauseMs' => 1_500, 'failures' => 2, 'reason' => '2'], []], array_column($logger->records, 'context'));
     }
 
     private function breaker(Transport $inner, CircuitBreakerConfig $config = new CircuitBreakerConfig(3, 1_000), ?RecordingCircuitBreakerStore $store = null): CircuitBreakerTransport

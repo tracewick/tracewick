@@ -75,8 +75,8 @@ final readonly class CircuitBreakerTransport implements Transport
         if ($open && null === $state->openUntilNs) {
             $this->logger->log(
                 LogLevel::WARNING,
-                'Tracewick stopped sending profiles for {seconds} s after {failures} failed deliveries in a row: {reason}',
-                ['seconds' => intdiv($this->config->openDurationMs, 1_000), 'failures' => $failures, 'reason' => $delivery->reason],
+                'Tracewick stopped sending profiles for {pauseMs} ms after {failures} failed deliveries in a row: {reason}',
+                ['pauseMs' => $this->config->openDurationMs, 'failures' => $failures, 'reason' => $delivery->reason],
             );
         }
 
