@@ -29,11 +29,11 @@ final readonly class FileCircuitBreakerStore implements CircuitBreakerStore
     public function load(): CircuitBreakerState
     {
         $line = @file_get_contents($this->path);
-        if (false === $line || 1 !== preg_match('/^(\d{1,9}) (\d{1,19}|-)\n$/D', $line, $matches)) {
+        if (false === $line || 1 !== preg_match('/^(?<failures>\d{1,9}) (?<openUntil>\d{1,19}|-)\n$/D', $line, $matches)) {
             return new CircuitBreakerState();
         }
 
-        return new CircuitBreakerState((int) $matches[1], '-' === $matches[2] ? null : (int) $matches[2]);
+        return new CircuitBreakerState((int) $matches['failures'], '-' === $matches['openUntil'] ? null : (int) $matches['openUntil']);
     }
 
     public function save(CircuitBreakerState $state): void

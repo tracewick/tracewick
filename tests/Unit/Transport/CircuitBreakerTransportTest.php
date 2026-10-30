@@ -255,7 +255,7 @@ final class CircuitBreakerTransportTest extends TestCase
         $store = new RecordingCircuitBreakerStore(new CircuitBreakerState(3, $this->clock->nowNs()));
         $other = $this->breaker(new ScriptedTransport(), store: $store);
         $statusSeenByOther = null;
-        $inner = new class(function () use ($other, &$statusSeenByOther): void {
+        $inner = new class (function () use ($other, &$statusSeenByOther): void {
             $statusSeenByOther = $this->send($other)->status;
         }) implements Transport {
             /** @param \Closure(): void $whileSending */
@@ -280,11 +280,7 @@ final class CircuitBreakerTransportTest extends TestCase
 
     private function breaker(Transport $inner, CircuitBreakerConfig $config = new CircuitBreakerConfig(3, 1_000), ?RecordingCircuitBreakerStore $store = null): CircuitBreakerTransport
     {
-        if (null === $store) {
-            return new CircuitBreakerTransport($inner, $config, $this->clock);
-        }
-
-        return new CircuitBreakerTransport($inner, $config, $this->clock, $store);
+        return new CircuitBreakerTransport($inner, $config, $this->clock, $store ?? new InMemoryCircuitBreakerStore());
     }
 
     private function send(CircuitBreakerTransport $breaker): Delivery
