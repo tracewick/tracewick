@@ -111,8 +111,8 @@ response has gone out. The two variants deliver differently:
 | RoadRunner | `PyroscopeSink`   | Straight from the worker, after each response                       |
 
 The profiles appear in Grafana as the `symfony-demo` service, under Drilldown, then Profiles, or in
-Explore with the Pyroscope data source. Group
-or filter by `route` to compare endpoints, or by `runtime` to compare the variants.
+Explore with the Pyroscope data source. Group or filter by `route` to compare endpoints, or by
+`runtime` to compare the variants.
 
 ### Toxiproxy and chaos tests
 
