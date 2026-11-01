@@ -87,7 +87,6 @@ final class SamplerFactoryTest extends TestCase
     public function testDisableFileWinsOverEnabledEnv(): void
     {
         $factory = new SamplerFactory(
-            environment: null,
             extensionLoaded: true,
             server: [
                 SamplerFactory::ENV_DISABLE_FILE => '/run/tracewick.off',
@@ -103,7 +102,6 @@ final class SamplerFactoryTest extends TestCase
     {
         $stats = 0;
         $factory = new SamplerFactory(
-            environment: null,
             server: [SamplerFactory::ENV_DISABLE_FILE => '/run/tracewick.off'],
             fileExists: static function () use (&$stats): bool {
                 ++$stats;
@@ -120,7 +118,6 @@ final class SamplerFactoryTest extends TestCase
     public function testServerEnabledWinsOverEnvAndGetenv(): void
     {
         $factory = new SamplerFactory(
-            environment: null,
             server: [SamplerFactory::ENV_ENABLED => '0'],
             env: [SamplerFactory::ENV_ENABLED => '1'],
             getenv: static fn(string $name): string|false => SamplerFactory::ENV_ENABLED === $name ? '1' : false,
@@ -132,7 +129,6 @@ final class SamplerFactoryTest extends TestCase
     public function testEnvWinsOverGetenv(): void
     {
         $factory = new SamplerFactory(
-            environment: null,
             server: [],
             env: [SamplerFactory::ENV_ENABLED => '0'],
             getenv: static fn(string $name): string|false => SamplerFactory::ENV_ENABLED === $name ? '1' : false,
@@ -144,7 +140,6 @@ final class SamplerFactoryTest extends TestCase
     public function testIniIsCheckedLast(): void
     {
         $factory = new SamplerFactory(
-            environment: null,
             server: [],
             env: [],
             getenv: static fn(string $name): false => false,

@@ -116,7 +116,7 @@ final class SamplerFactory
             return self::$disableFileExists[$path];
         }
 
-        $exists = null !== $this->fileExists
+        $exists = $this->fileExists instanceof \Closure
             ? ($this->fileExists)($path)
             : is_file($path);
         self::$disableFileExists[$path] = $exists;
@@ -148,7 +148,7 @@ final class SamplerFactory
             return $env[$name];
         }
 
-        $value = null !== $this->getenv ? ($this->getenv)($name) : getenv($name);
+        $value = $this->getenv instanceof \Closure ? ($this->getenv)($name) : getenv($name);
         if (!\is_string($value)) {
             return null;
         }
@@ -158,7 +158,7 @@ final class SamplerFactory
 
     private function readIni(string $name): string|false
     {
-        $value = null !== $this->iniGet ? ($this->iniGet)($name) : \ini_get($name);
+        $value = $this->iniGet instanceof \Closure ? ($this->iniGet)($name) : \ini_get($name);
 
         return \is_string($value) ? $value : false;
     }

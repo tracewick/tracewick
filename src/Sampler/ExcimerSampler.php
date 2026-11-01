@@ -194,7 +194,7 @@ final class ExcimerSampler implements Sampler
             return;
         }
 
-        if (null !== $this->segmentListener) {
+        if ($this->segmentListener instanceof \Closure) {
             try {
                 ($this->segmentListener)();
             } catch (\Throwable $e) {
