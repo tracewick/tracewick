@@ -23,10 +23,15 @@ make stand-ci           # `make ci` inside the stand's PHP container, with ext-e
 make app-up             # reference app: Symfony Demo on PHP-FPM (:8081) and RoadRunner (:8082)
 ```
 
-`make ci` is required before you push, but it is **not** the full GitHub Actions matrix. CI also
-runs Codecov (coverage gate), Infection (MSI), and `go tool pprof` validation of pprof goldens.
-Those live in `.github/workflows/`; run them locally when you change encoders, coverage-sensitive
-code, or CI config.
+**Before every commit**, run locally what CI would catch on this change: at least
+`composer cs:check`, `composer rector:check`, `composer stan`, and the relevant tests
+(`make test-unit`; integration / `make stand-ci` when Excimer paths change). Prefer `make ci`.
+Do not push blind and fix style/stan/rector on GitHub.
+
+`make ci` is still **not** the full GitHub Actions matrix. CI also runs Codecov (coverage gate),
+Infection (MSI), and `go tool pprof` validation of pprof goldens. Those live in
+`.github/workflows/`; run them locally when you change encoders, coverage-sensitive code, or CI
+config.
 
 ## Layout
 
@@ -69,7 +74,8 @@ Cross-cutting helpers (`Clock`, `Diagnostics`, `Exception`) sit beside these lay
   by release-please; never edit it in a feature branch.
 - Follow git flow (see CONTRIBUTING.md): branch `feature/*` from `develop` and open pull requests
   into `develop`. Never push to `main` or `develop` directly.
-- After pushing a PR, check `gh pr checks` until required Checks finish. Tick the PR checklist item
-  for `make ci` only when those checks are green; leave it unchecked while red or pending, and fix
-  failures before claiming CI is done.
+- After opening or pushing a PR, babysit it: leave the `make ci` checklist item unchecked, poll
+  `gh pr checks` and Codecov until `Checks` and `codecov/patch` (when present) are green, fix real
+  failures and coverage gaps yourself, then tick the checklist. Do not ask the maintainer to watch
+  CI; only report when the PR is review-ready or when a secret/decision blocks you.
 - Write ADRs in plain language: Context, Decision, Consequences. Prefer short sentences over rhetoric.

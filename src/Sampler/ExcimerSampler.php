@@ -13,6 +13,9 @@ use Tracewick\Clock\SystemClock;
  * The constructor requires the extension; use {@see SamplerFactory} to fall back to a
  * {@see NullSampler} when it is missing. After construction no method throws: failures are counted
  * and the last one is kept for diagnostics.
+ *
+ * Samples are aggregated by stack as the native flush callback drains the Excimer log, so memory
+ * stays proportional to unique stacks rather than to the number of timer hits.
  */
 final class ExcimerSampler implements Sampler
 {
@@ -21,6 +24,8 @@ final class ExcimerSampler implements Sampler
     private readonly \ExcimerProfiler $profiler;
 
     private readonly ExcimerTraceConverter $converter;
+
+    private readonly StackAggregator $aggregator;
 
     private bool $running = false;
 
@@ -34,11 +39,15 @@ final class ExcimerSampler implements Sampler
 
     private ?\Throwable $lastFailure = null;
 
+    /** @var ?\Closure(): void */
+    private ?\Closure $segmentListener = null;
+
     public function __construct(
         private readonly SamplerConfig $config,
         ?Clock $clock = null,
     ) {
         $this->clock = $clock ?? new SystemClock();
+        $this->aggregator = new StackAggregator($config->maxUniqueStacks);
 
         $this->profiler = new \ExcimerProfiler();
         $originNs = $this->clock->nowNs();
@@ -49,8 +58,19 @@ final class ExcimerSampler implements Sampler
             EventType::Cpu => EXCIMER_CPU,
         });
         $this->profiler->setMaxDepth($config->maxDepth);
+        $this->profiler->setFlushCallback($this->onNativeFlush(...), $config->maxSamples);
 
         $this->converter = new ExcimerTraceConverter($originNs, $config->maxDepth);
+    }
+
+    /**
+     * Invoked after each native Excimer flush has been ingested, for timed profile rotation.
+     *
+     * @param ?\Closure(): void $listener
+     */
+    public function setSegmentListener(?\Closure $listener): void
+    {
+        $this->segmentListener = $listener;
     }
 
     public function start(): void
@@ -84,9 +104,8 @@ final class ExcimerSampler implements Sampler
 
     public function flush(): SampleBatch
     {
-        $samples = [];
         try {
-            $samples = $this->converter->convertLog($this->profiler->flush());
+            $this->converter->ingestLog($this->profiler->flush(), $this->aggregator);
         } catch (\Throwable $e) {
             $this->recordFailure($e);
         }
@@ -97,8 +116,9 @@ final class ExcimerSampler implements Sampler
             $this->config->periodNs,
             $this->windowStartNs ?? $nowNs,
             $nowNs,
-            $samples,
+            $this->aggregator->toSamples($this->windowStartNs ?? $nowNs),
         );
+        $this->aggregator->reset();
         $this->windowStartNs = $this->running ? $nowNs : null;
 
         return $batch;
@@ -120,6 +140,25 @@ final class ExcimerSampler implements Sampler
     public function lastFailure(): ?\Throwable
     {
         return $this->lastFailure;
+    }
+
+    private function onNativeFlush(\ExcimerLog $log): void
+    {
+        try {
+            $this->converter->ingestLog($log, $this->aggregator);
+        } catch (\Throwable $e) {
+            $this->recordFailure($e);
+
+            return;
+        }
+
+        if ($this->segmentListener instanceof \Closure) {
+            try {
+                ($this->segmentListener)();
+            } catch (\Throwable $e) {
+                $this->recordFailure($e);
+            }
+        }
     }
 
     private function recordFailure(\Throwable $e): void

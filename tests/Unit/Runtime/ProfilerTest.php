@@ -26,6 +26,7 @@ use Tracewick\Sampler\Sample;
 use Tracewick\Sampler\SampleBatch;
 use Tracewick\Sampler\SamplerConfig;
 use Tracewick\Sampler\SamplerFactory;
+use Tracewick\Sampler\StackAggregator;
 use Tracewick\Tests\Support\ManualClock;
 use Tracewick\Tests\Support\RecordingLogger;
 use Tracewick\Tests\Support\RecordingSink;
@@ -48,6 +49,7 @@ use Tracewick\Transport\Delivery;
 #[UsesClass(NullSamplerReason::class)]
 #[UsesClass(ExcimerSampler::class)]
 #[UsesClass(ExcimerTraceConverter::class)]
+#[UsesClass(StackAggregator::class)]
 #[UsesClass(SystemClock::class)]
 #[UsesClass(Delivery::class)]
 #[UsesClass(Diagnostics::class)]
@@ -433,6 +435,65 @@ final class ProfilerTest extends TestCase
             'Tracewick profiling is inactive: ExcimerProfiler failed to initialize.: Cannot create timer.',
             $logged,
         );
+    }
+
+    public function testRotatesAProfileWhenTheDurationLimitElapses(): void
+    {
+        $clock = new ManualClock(0);
+        $profiler = new Profiler(
+            $this->sampler,
+            $this->sink,
+            new ProfilerConfig(maxProfileDurationSeconds: 1),
+            function (): void {
+                $this->events[] = 'finish request';
+            },
+            /** @param callable(): void $callback */
+            function (callable $callback): void {
+                $this->shutdownFunctions[] = $callback;
+            },
+            null,
+            new DiagnosticLogger($this->logger, $this->logDirectory->path, clock: new ManualClock()),
+            $clock,
+        );
+        $this->sampler->willSample('first')->willSample('second');
+
+        $profiler->start(['route' => 'import']);
+        $clock->advanceNs(1_000_000_000);
+        $profiler->pulse();
+        self::assertTrue($profiler->isRunning());
+        self::assertSame(1, $profiler->bufferedProfiles());
+
+        $profiler->stop();
+        $profiler->flush();
+
+        self::assertSame(['first', 'second'], $this->sink->functions());
+        self::assertSame(['route' => 'import'], $this->labelsOf(0));
+        self::assertSame(['route' => 'import'], $this->labelsOf(1));
+    }
+
+    public function testPulseIsANoOpBeforeTheDurationLimit(): void
+    {
+        $clock = new ManualClock(0);
+        $profiler = new Profiler(
+            $this->sampler,
+            $this->sink,
+            new ProfilerConfig(maxProfileDurationSeconds: 10),
+            null,
+            null,
+            null,
+            new DiagnosticLogger($this->logger, $this->logDirectory->path, clock: new ManualClock()),
+            $clock,
+        );
+        $this->sampler->willSample('handle');
+
+        $profiler->pulse();
+        $profiler->start(['route' => 'import']);
+        $clock->advanceNs(1_000_000_000);
+        $profiler->pulse();
+
+        self::assertTrue($profiler->isRunning());
+        self::assertSame(0, $profiler->bufferedProfiles());
+        self::assertSame(['flush', 'start'], $this->sampler->calls);
     }
 
     public function testStopsAndFlushesAtShutdown(): void

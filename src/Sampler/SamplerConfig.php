@@ -40,15 +40,39 @@ final readonly class SamplerConfig
     public const MAX_DEPTH_LIMIT = 4096;
 
     /**
-     * @param int       $periodNs  time between two samples, in nanoseconds
-     * @param EventType $eventType whether the period is measured in wall-clock or CPU time
-     * @param int       $maxDepth  maximum number of frames recorded per sample, counted from the
-     *                             innermost frame; callers beyond it are dropped
+     * Native Excimer log flush threshold: enough headroom for a busy request, small enough that
+     * the C log cannot grow without bound before PHP aggregates it.
+     */
+    public const DEFAULT_MAX_SAMPLES = 10_000;
+
+    public const MIN_MAX_SAMPLES = 1;
+
+    public const MAX_MAX_SAMPLES = 1_000_000;
+
+    /**
+     * Distinct stacks kept in one profile window before further hits go to `[overflow]`.
+     */
+    public const DEFAULT_MAX_UNIQUE_STACKS = 4_096;
+
+    public const MIN_MAX_UNIQUE_STACKS = 1;
+
+    public const MAX_MAX_UNIQUE_STACKS = 100_000;
+
+    /**
+     * @param int       $periodNs         time between two samples, in nanoseconds
+     * @param EventType $eventType        whether the period is measured in wall-clock or CPU time
+     * @param int       $maxDepth         maximum number of frames recorded per sample, counted from the
+     *                                    innermost frame; callers beyond it are dropped
+     * @param int       $maxSamples       Excimer flush-callback threshold; the C log is drained into
+     *                                    the aggregator at least this often
+     * @param int       $maxUniqueStacks  distinct stacks kept per profile window before overflow
      */
     public function __construct(
         public int $periodNs = self::DEFAULT_PERIOD_NS,
         public EventType $eventType = EventType::Wall,
         public int $maxDepth = self::DEFAULT_MAX_DEPTH,
+        public int $maxSamples = self::DEFAULT_MAX_SAMPLES,
+        public int $maxUniqueStacks = self::DEFAULT_MAX_UNIQUE_STACKS,
     ) {
         if ($periodNs < self::MIN_PERIOD_NS || $periodNs > self::MAX_PERIOD_NS) {
             throw new LogicException(\sprintf(
@@ -64,6 +88,24 @@ final readonly class SamplerConfig
                 'Maximum stack depth must be between 1 and %d, got %d.',
                 self::MAX_DEPTH_LIMIT,
                 $maxDepth,
+            ));
+        }
+
+        if ($maxSamples < self::MIN_MAX_SAMPLES || $maxSamples > self::MAX_MAX_SAMPLES) {
+            throw new LogicException(\sprintf(
+                'Maximum samples before a native flush must be between %d and %d, got %d.',
+                self::MIN_MAX_SAMPLES,
+                self::MAX_MAX_SAMPLES,
+                $maxSamples,
+            ));
+        }
+
+        if ($maxUniqueStacks < self::MIN_MAX_UNIQUE_STACKS || $maxUniqueStacks > self::MAX_MAX_UNIQUE_STACKS) {
+            throw new LogicException(\sprintf(
+                'Maximum unique stacks must be between %d and %d, got %d.',
+                self::MIN_MAX_UNIQUE_STACKS,
+                self::MAX_MAX_UNIQUE_STACKS,
+                $maxUniqueStacks,
             ));
         }
     }
