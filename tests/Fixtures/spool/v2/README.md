@@ -1,11 +1,14 @@
-# Spool format fixtures, version 2
+# Spool format fixtures (version 2)
 
-Valid spool v2 files written by `SpoolSink` (compact-stacks payload). Regenerate with
-`TRACEWICK_UPDATE_GOLDEN=1 composer test:unit` and review the diff.
+The only supported on-disk spool format: `version = 2`, `format = compact-stacks`.
+Regenerate valid files with `TRACEWICK_UPDATE_GOLDEN=1 composer test:unit` (see `SpoolSinkTest`)
+and invalid/corruption cases via `SpoolFixturesTest`.
 
-| File                | Contents                                                                 |
-|---------------------|--------------------------------------------------------------------------|
-| `web-request.spool` | Same profile as v1 `web-request.spool`, format `compact-stacks`          |
-| `edge-cases.spool`  | Same profile as v1 `edge-cases.spool`, format `compact-stacks`           |
+| File                     | Contents                                                                 |
+|--------------------------|--------------------------------------------------------------------------|
+| `web-request.spool`      | Valid wall-time profile, label `service=blog`                            |
+| `edge-cases.spool`       | Valid CPU profile, empty labels                                          |
+| `unknown-header-key.spool` | Valid file plus ignored header key `x_future`                          |
+| `*.spool` (others)       | Invalid / corrupt; readers MUST reject and MUST NOT deliver             |
 
-v1 fixtures remain under [`../v1`](../v1) for dual-read coverage.
+A reader must deliver the three valid fixtures and reject the rest.

@@ -15,29 +15,25 @@ wrong shape.
 
 ## Decision
 
-- **Spool v2** keeps the same outer file layout (magic `TWSP`, versioned JSON header, payload) and
-  bumps `version` / `format` so readers can tell v1 from v2. The language-neutral contract stays
-  in `docs/spool-format.md` (v2 section to be written with the implementation).
+- **Spool v2** keeps the same outer file layout (magic `TWSP`, versioned JSON header, payload) with
+  `version = 2` and `format = compact-stacks`. The language-neutral contract is
+  `docs/spool-format.md`.
 - **v2 payload** is a compact, language-neutral encoding of **stack → weight** (collapsed stacks
-  plus a string table for frame names/paths). It is not pprof. Exact field layout is specified
-  with the writer PR; this ADR only locks the role of the payload.
+  plus a string table for frame names/paths). It is not pprof. Exact field layout is in the
+  spool-format doc and fixtures.
 - **pprof is produced in the delivery process** (drain or agent), after optional merge by
   aggregation key. Backends still see pprof ([ADR 4](0004-pprof-as-primary-format.md)); only the
   on-disk hand-off changes.
-- **v1 is not the final high-load public contract.** Writers move to v2 for production spooling.
-  Readers (drain, fixtures, a future agent) MUST keep reading v1 for at least one minor release
-  after v2 ships (dual-read), then v1 may be deprecated.
+- **v1 (pprof-on-disk) is not supported.** Tracewick has no public release and no installed
+  readers yet; keeping a dual-read / deprecation window would only add code. Writers and readers
+  speak v2 only. Old `version = 1` bytes are rejected.
 - Collapsed / Speedscope encoders in the library remain for local debugging; they are not the
-  spool v2 wire format unless the v2 spec explicitly reuses their bytes (it should not depend on
-  PHP `serialize`).
-
-Implementation (writer, dual-read, fixtures) is **not** in the tree yet.
+  spool wire format.
 
 ## Consequences
 
 - FPM flush avoids protobuf; drain pays encode cost once per aggregated window.
-- Two payload formats to test and fixture; migration must not drop v1 files mid-upgrade.
-- Go and PHP readers share one v2 spec and the same fixtures directory layout under
-  `tests/Fixtures/spool/`.
-- Soft admission, sharding, and lower `max_files` defaults belong with the writer work, not this
-  ADR; they assume aggregation + compact files make huge backlogs unnecessary.
+- One on-disk payload format to test and fixture under `tests/Fixtures/spool/v2/`.
+- Go and PHP readers share one v2 spec.
+- Soft admission, sharding, and lower `max_files` defaults belong with the writer work; they
+  assume aggregation + compact files make huge backlogs unnecessary.

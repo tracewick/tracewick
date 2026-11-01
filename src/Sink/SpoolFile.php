@@ -9,7 +9,7 @@ use Tracewick\Sampler\EventType;
 /**
  * One file of the spool format: a JSON header describing the profile and the payload.
  *
- * Version 1 carries a pprof payload. Version 2 carries a compact stack→weight payload
+ * The only supported on-disk format is version 2 with a compact stack→weight payload
  * ([ADR 13](../../docs/adr/0013-spool-v2-compact-payload.md)). {@see toBytes()} produces the
  * exact bytes a writer puts in the spool directory; {@see fromBytes()} reads them back.
  *
@@ -19,14 +19,10 @@ final readonly class SpoolFile
 {
     public const MAGIC = 'TWSP';
 
-    public const VERSION_1 = 1;
-
     public const VERSION_2 = 2;
 
-    /** @deprecated use VERSION_1 */
-    public const VERSION = self::VERSION_1;
-
-    public const FORMAT_PPROF = 'pprof';
+    /** @deprecated use VERSION_2 */
+    public const VERSION = self::VERSION_2;
 
     public const FORMAT_COMPACT_STACKS = 'compact-stacks';
 
@@ -42,9 +38,9 @@ final readonly class SpoolFile
      * @param int                   $startNs     Unix time in nanoseconds at which the profile window opened
      * @param int                   $endNs       Unix time in nanoseconds at which the profile window closed
      * @param array<string, string> $labels      labels of the whole profile
-     * @param string                $format      format of the payload, such as {@see FORMAT_PPROF}
+     * @param string                $format      format of the payload ({@see FORMAT_COMPACT_STACKS})
      * @param string                $payload     the encoded profile
-     * @param int                   $version     spool file version ({@see VERSION_1} or {@see VERSION_2})
+     * @param int                   $version     spool file version ({@see VERSION_2})
      */
     public function __construct(
         public string $application,
@@ -53,15 +49,23 @@ final readonly class SpoolFile
         public int $startNs,
         public int $endNs,
         public array $labels,
-        public string $format,
-        public string $payload,
-        public int $version = self::VERSION_1,
-    ) {}
+        public string $format = self::FORMAT_COMPACT_STACKS,
+        public string $payload = '',
+        public int $version = self::VERSION_2,
+    ) {
+        if (self::VERSION_2 !== $this->version) {
+            throw new SpoolFileException(\sprintf('Spool format version %d is not supported.', $this->version));
+        }
+
+        if (self::FORMAT_COMPACT_STACKS !== $this->format) {
+            throw new SpoolFileException(\sprintf('Payload format "%s" is not supported.', $this->format));
+        }
+    }
 
     /**
      * Reads a spool file.
      *
-     * @throws SpoolFileException when the bytes are not a valid version 1 or 2 spool file
+     * @throws SpoolFileException when the bytes are not a valid version 2 spool file
      */
     public static function fromBytes(string $bytes): self
     {
@@ -70,7 +74,7 @@ final readonly class SpoolFile
         }
 
         $version = \ord($bytes[4]);
-        if (self::VERSION_1 !== $version && self::VERSION_2 !== $version) {
+        if (self::VERSION_2 !== $version) {
             throw new SpoolFileException(\sprintf('Spool format version %d is not supported.', $version));
         }
 

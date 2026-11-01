@@ -11,7 +11,6 @@ use PHPUnit\Framework\TestCase;
 use Tracewick\Clock\SystemClock;
 use Tracewick\Diagnostics\DiagnosticLogger;
 use Tracewick\Encoder\CompactStacksCodec;
-use Tracewick\Encoder\Pprof\LabelKeyRewriter;
 use Tracewick\Encoder\Pprof\ProtobufException;
 use Tracewick\Encoder\Pprof\ProtobufReader;
 use Tracewick\Encoder\Pprof\ProtobufWriter;
@@ -70,7 +69,6 @@ use Tracewick\Transport\SystemDnsResolver;
 #[UsesClass(ProtobufWriter::class)]
 #[UsesClass(ProtobufReader::class)]
 #[UsesClass(ProtobufException::class)]
-#[UsesClass(LabelKeyRewriter::class)]
 #[UsesClass(SpoolFile::class)]
 #[UsesClass(StringTable::class)]
 #[UsesClass(Profile::class)]
@@ -256,35 +254,13 @@ final class PyroscopeSinkTest extends TestCase
         self::assertSame(['http_route', '/posts/{id}'], [$strings[$label->int(1)] ?? '', $strings[$label->int(2)] ?? '']);
     }
 
-    public function testForwardsAPayloadWithoutDottedKeysUnchanged(): void
-    {
-        $transport = new ScriptedTransport(Delivery::delivered());
-        $sink = new PyroscopeSink(new PyroscopeConfig('http://pyroscope:4040', 'drain'), $transport);
-        $file = $this->spoolFile($this->profile(10_000_000, self::START_NS + 200_000_000)->withLabels(new Labels(['env' => 'prod'])));
-
-        $sink->forward($file);
-
-        self::assertSame($file->payload, $transport->payload()->body);
-    }
-
     public function testForwardsACompactStacksPayloadAsPprof(): void
     {
         $transport = new ScriptedTransport(Delivery::delivered());
         $sink = new PyroscopeSink(new PyroscopeConfig('http://pyroscope:4040', 'drain'), $transport);
         $profile = $this->profile(10_000_000, self::START_NS + 200_000_000)->withLabels(new Labels(['http.route' => '/posts/{id}']));
-        $file = new SpoolFile(
-            'shop',
-            $profile->eventType,
-            $profile->periodNs,
-            $profile->startNs,
-            $profile->endNs,
-            $profile->labels->toArray(),
-            SpoolFile::FORMAT_COMPACT_STACKS,
-            (new CompactStacksCodec())->encode($profile),
-            SpoolFile::VERSION_2,
-        );
 
-        $delivery = $sink->forward($file);
+        $delivery = $sink->forward($this->spoolFile($profile));
 
         self::assertTrue($delivery->isDelivered());
         self::assertSame('application/x-protobuf', $transport->payload()->contentType);
@@ -297,12 +273,11 @@ final class PyroscopeSinkTest extends TestCase
      */
     public static function unsendableFiles(): iterable
     {
-        $pprof = "\x0a\x00";
-        yield 'unknown format' => [new SpoolFile('shop', EventType::Wall, 10, 1, 2, [], 'x-unknown', $pprof), 'Payload format "x-unknown" cannot be sent to Pyroscope.'];
-        yield 'period zero' => [new SpoolFile('shop', EventType::Wall, 0, 1, 2, [], 'pprof', $pprof), 'The spool file has an invalid sampling period or time window.'];
-        yield 'end before start' => [new SpoolFile('shop', EventType::Wall, 10, 2, 1, [], 'pprof', $pprof), 'The spool file has an invalid sampling period or time window.'];
-        yield 'invalid application name' => [new SpoolFile('my shop', EventType::Wall, 10, 1, 2, [], 'pprof', $pprof), 'The application name must be'];
-        yield 'invalid pprof' => [new SpoolFile('shop', EventType::Wall, 10, 1, 2, ['http.route' => '/'], 'pprof', "\x12\x05abc"), 'A field of 5 bytes runs past the end of the message.'];
+        $compact = (new CompactStacksCodec())->encode(new Profile(EventType::Wall, 10, 1, 2, [new Frame('work')], [new Stack([0], 1)]));
+        yield 'period zero' => [new SpoolFile('shop', EventType::Wall, 0, 1, 2, [], SpoolFile::FORMAT_COMPACT_STACKS, $compact), 'The spool file has an invalid sampling period or time window.'];
+        yield 'end before start' => [new SpoolFile('shop', EventType::Wall, 10, 2, 1, [], SpoolFile::FORMAT_COMPACT_STACKS, $compact), 'The spool file has an invalid sampling period or time window.'];
+        yield 'invalid application name' => [new SpoolFile('my shop', EventType::Wall, 10, 1, 2, [], SpoolFile::FORMAT_COMPACT_STACKS, $compact), 'The application name must be'];
+        yield 'invalid compact payload' => [new SpoolFile('shop', EventType::Wall, 10, 1, 2, [], SpoolFile::FORMAT_COMPACT_STACKS, "\x02"), 'Compact stacks schema version 2 is not supported.'];
     }
 
     /**
@@ -321,24 +296,13 @@ final class PyroscopeSinkTest extends TestCase
         self::assertSame([], $transport->sent);
     }
 
-    public function testSendsThePayloadUnparsedWhenNoKeyNeedsRenaming(): void
-    {
-        $transport = new ScriptedTransport(Delivery::delivered());
-        $sink = new PyroscopeSink(new PyroscopeConfig('http://pyroscope:4040', 'drain'), $transport);
-
-        // Not valid protobuf: proves that the payload is not parsed.
-        $delivery = $sink->forward(new SpoolFile('shop', EventType::Wall, 10, 1, 2, ['env' => 'prod'], 'pprof', "\x12\x05abc"));
-
-        self::assertTrue($delivery->isDelivered());
-        self::assertSame("\x12\x05abc", $transport->payload()->body);
-    }
-
     public function testAcceptsTheShortestPeriodAndAnInstantWindow(): void
     {
         $transport = new ScriptedTransport(Delivery::delivered());
         $sink = new PyroscopeSink(new PyroscopeConfig('http://pyroscope:4040', 'drain'), $transport);
+        $profile = new Profile(EventType::Cpu, 1, self::START_NS, self::START_NS, [new Frame('work')], [new Stack([0], 1)]);
 
-        $delivery = $sink->forward(new SpoolFile('shop', EventType::Cpu, 1, self::START_NS, self::START_NS, [], 'pprof', "\x0a\x00"));
+        $delivery = $sink->forward($this->spoolFile($profile));
 
         self::assertTrue($delivery->isDelivered());
         self::assertSame('1000000000', $transport->payload()->parameters['sampleRate'] ?? null);
@@ -357,7 +321,17 @@ final class PyroscopeSinkTest extends TestCase
 
     private function spoolFile(Profile $profile): SpoolFile
     {
-        return new SpoolFile('shop', $profile->eventType, $profile->periodNs, $profile->startNs, $profile->endNs, $profile->labels->toArray(), 'pprof', (new PprofEncoder())->encode($profile));
+        return new SpoolFile(
+            'shop',
+            $profile->eventType,
+            $profile->periodNs,
+            $profile->startNs,
+            $profile->endNs,
+            $profile->labels->toArray(),
+            SpoolFile::FORMAT_COMPACT_STACKS,
+            (new CompactStacksCodec())->encode($profile),
+            SpoolFile::VERSION_2,
+        );
     }
 
     private function profile(int $periodNs, int $endNs): Profile

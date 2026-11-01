@@ -8,20 +8,31 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Clock\SystemClock;
-use Tracewick\Encoder\Pprof\LabelKeyRewriter;
-use Tracewick\Encoder\Pprof\ProtobufReader;
+use Tracewick\Encoder\CompactStacksCodec;
+use Tracewick\Encoder\Pprof\ProtobufWriter;
+use Tracewick\Encoder\Pprof\StringTable;
 use Tracewick\Encoder\PprofEncoder;
+use Tracewick\Encoder\ProfileParts;
+use Tracewick\Profile\Labels;
+use Tracewick\Profile\Profile;
+use Tracewick\Profile\ProfileMerger;
+use Tracewick\Profile\Stack;
 use Tracewick\Runtime\DrainOutcome;
 use Tracewick\Runtime\DrainResult;
 use Tracewick\Runtime\SpoolAggregationWindow;
 use Tracewick\Runtime\SpoolDrainer;
+use Tracewick\Sampler\Frame;
 use Tracewick\Sink\ApplicationName;
 use Tracewick\Sink\PyroscopeConfig;
 use Tracewick\Sink\PyroscopeSink;
+use Tracewick\Sink\SpoolAggregationKey;
 use Tracewick\Sink\SpoolFile;
 use Tracewick\Sink\SpoolFileException;
+use Tracewick\Sink\SpoolFileName;
+use Tracewick\Tests\Support\ManualClock;
 use Tracewick\Tests\Support\ScriptedTransport;
 use Tracewick\Tests\Support\TemporaryDirectory;
+use Tracewick\Transport\CachingDnsResolver;
 use Tracewick\Transport\CircuitBreakerConfig;
 use Tracewick\Transport\ClaimedSpoolFile;
 use Tracewick\Transport\Delivery;
@@ -30,9 +41,10 @@ use Tracewick\Transport\HttpConfig;
 use Tracewick\Transport\Payload;
 use Tracewick\Transport\SpoolReaderConfig;
 use Tracewick\Transport\SpoolTransport;
+use Tracewick\Transport\SystemDnsResolver;
 
 /**
- * Drains a copy of the spool fixtures in tests/Fixtures/spool/v1 into Pyroscope and checks the
+ * Drains a copy of the spool fixtures in tests/Fixtures/spool/v2 into Pyroscope and checks the
  * results their README requires of every reader.
  */
 #[CoversClass(SpoolDrainer::class)]
@@ -52,13 +64,25 @@ use Tracewick\Transport\SpoolTransport;
 #[UsesClass(HttpConfig::class)]
 #[UsesClass(CircuitBreakerConfig::class)]
 #[UsesClass(PprofEncoder::class)]
-#[UsesClass(LabelKeyRewriter::class)]
-#[UsesClass(ProtobufReader::class)]
+#[UsesClass(ProtobufWriter::class)]
+#[UsesClass(StringTable::class)]
+#[UsesClass(CompactStacksCodec::class)]
+#[UsesClass(ProfileParts::class)]
+#[UsesClass(Profile::class)]
+#[UsesClass(ProfileMerger::class)]
+#[UsesClass(Stack::class)]
+#[UsesClass(Labels::class)]
+#[UsesClass(Frame::class)]
+#[UsesClass(SpoolAggregationKey::class)]
+#[UsesClass(SpoolFileName::class)]
+#[UsesClass(CachingDnsResolver::class)]
+#[UsesClass(SystemDnsResolver::class)]
 #[UsesClass(Delivery::class)]
 #[UsesClass(Payload::class)]
+#[UsesClass(ManualClock::class)]
 final class SpoolDrainerFixturesTest extends TestCase
 {
-    private const FIXTURES = __DIR__ . '/../../Fixtures/spool/v1';
+    private const FIXTURES = __DIR__ . '/../../Fixtures/spool/v2';
 
     private TemporaryDirectory $spool;
 
@@ -79,16 +103,20 @@ final class SpoolDrainerFixturesTest extends TestCase
 
     public function testDeliversTheValidFixturesAndRejectsTheRest(): void
     {
-        $transport = new ScriptedTransport(Delivery::delivered(), Delivery::delivered(), Delivery::delivered());
+        $transport = new ScriptedTransport(Delivery::delivered(), Delivery::delivered());
         $sink = new PyroscopeSink(new PyroscopeConfig('http://pyroscope:4040', 'drain'), $transport);
         $source = new DirectorySpoolSource(new SpoolReaderConfig($this->spool->path, 'drainer'));
+        // Past the fixture profile windows so aggregation buckets are closed.
+        $clock = new ManualClock(1_798_000_000_000_000_000 + 60_000_000_000);
 
-        $result = (new SpoolDrainer($source, $sink))->drain();
+        $result = (new SpoolDrainer($source, $sink, new SpoolAggregationWindow(10), $clock))->drain();
 
         self::assertSame(DrainOutcome::Empty, $result->outcome);
+        // web-request + unknown-header-key share an aggregation key and merge; edge-cases is alone.
         self::assertSame(3, $result->delivered);
-        self::assertSame(8, $result->rejected);
-        self::assertSame(['blog', 'blog', 'blog'], array_map(static fn(Payload $payload): ?string => $payload->parameters['name'] ?? null, $transport->sent));
+        self::assertSame(9, $result->rejected);
+        self::assertCount(2, $transport->sent);
+        self::assertSame(['blog', 'blog'], array_map(static fn(Payload $payload): ?string => $payload->parameters['name'] ?? null, $transport->sent));
         self::assertSame(['rejected'], $this->spool->entries());
         self::assertSame([
             'bad-magic.spool',
@@ -99,6 +127,7 @@ final class SpoolDrainerFixturesTest extends TestCase
             'truncated-payload.spool',
             'unknown-format.spool',
             'unsupported-version.spool',
+            'version-1.spool',
         ], $this->spool->entries('/rejected'));
     }
 }

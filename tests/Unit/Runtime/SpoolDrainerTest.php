@@ -97,7 +97,7 @@ final class SpoolDrainerTest extends TestCase
 
         self::assertSame(DrainOutcome::Empty, $result->outcome);
         self::assertSame(2, $result->delivered);
-        self::assertSame(['first', 'second'], $forwarder->payloads());
+        self::assertSame(['first', 'second'], $this->forwardedIds($forwarder));
         self::assertSame([], $this->spool->entries());
     }
 
@@ -113,7 +113,7 @@ final class SpoolDrainerTest extends TestCase
         self::assertSame(1, $result->delivered);
         self::assertSame(1, $result->rejected);
         self::assertSame(self::FIRST . ': The file does not start with the spool magic bytes.', $result->lastRejection);
-        self::assertSame(['second'], $forwarder->payloads());
+        self::assertSame(['second'], $this->forwardedIds($forwarder));
         self::assertSame([self::FIRST], $this->spool->entries('/rejected'));
     }
 
@@ -161,7 +161,7 @@ final class SpoolDrainerTest extends TestCase
         self::assertSame(DrainOutcome::Failed, $result->outcome);
         self::assertSame(1, $result->delivered);
         self::assertSame('Connection refused.', $result->failure);
-        self::assertSame(['first', 'second'], $forwarder->payloads());
+        self::assertSame(['first', 'second'], $this->forwardedIds($forwarder));
         self::assertSame([self::SECOND, self::THIRD], $this->spool->entries());
     }
 
@@ -273,7 +273,12 @@ final class SpoolDrainerTest extends TestCase
             public function reject(ClaimedSpoolFile $file): void {}
         };
 
-        $result = (new SpoolDrainer($source, new ScriptedForwarder(Delivery::delivered())))->drain();
+        $result = (new SpoolDrainer(
+            $source,
+            new ScriptedForwarder(Delivery::delivered()),
+            new SpoolAggregationWindow(10),
+            new ManualClock(20_000_000_000),
+        ))->drain();
 
         self::assertSame(DrainOutcome::Empty, $result->outcome);
         self::assertSame(1, $result->delivered);
@@ -521,23 +526,28 @@ final class SpoolDrainerTest extends TestCase
 
     private function drainer(
         ScriptedForwarder $forwarder,
-        SpoolAggregationWindow $window = new SpoolAggregationWindow(),
+        SpoolAggregationWindow $window = new SpoolAggregationWindow(10),
         ?ManualClock $clock = null,
     ): SpoolDrainer {
         return new SpoolDrainer(
             new DirectorySpoolSource(new SpoolReaderConfig($this->spool->path, 'drainer')),
             $forwarder,
             $window,
-            $clock ?? new SystemClock(),
+            $clock ?? new ManualClock(20_000_000_000),
         );
     }
 
-    private function write(string $name, string $payload): void
+    /**
+     * Writes one compact spool file with a distinct aggregation key (`id` label).
+     */
+    private function write(string $name, string $id): void
     {
-        $file = new SpoolFile('blog', EventType::Wall, 10_000_000, 1_798_000_000_000_000_000, 1_798_000_000_100_000_000, [], SpoolFile::FORMAT_PPROF, $payload);
-        file_put_contents($this->spool->path . '/' . $name, $file->toBytes());
+        $this->writeCompact($name, 1_000_000_000, 1_100_000_000, 1, EventType::Wall, 10_000_000, ['id' => $id]);
     }
 
+    /**
+     * @param array<string, string> $labels
+     */
     private function writeCompact(
         string $name,
         int $startNs,
@@ -545,19 +555,28 @@ final class SpoolDrainerTest extends TestCase
         int $weight,
         EventType $eventType = EventType::Wall,
         int $periodNs = 10_000_000,
+        array $labels = ['env' => 'prod'],
     ): void {
-        $profile = new Profile($eventType, $periodNs, $startNs, $endNs, [new Frame('work')], [new Stack([0], $weight)], new Labels(['env' => 'prod']));
+        $profile = new Profile($eventType, $periodNs, $startNs, $endNs, [new Frame('work')], [new Stack([0], $weight)], new Labels($labels));
         $file = new SpoolFile(
             'blog',
             $eventType,
             $periodNs,
             $startNs,
             $endNs,
-            ['env' => 'prod'],
+            $labels,
             SpoolFile::FORMAT_COMPACT_STACKS,
             (new CompactStacksCodec())->encode($profile),
             SpoolFile::VERSION_2,
         );
         file_put_contents($this->spool->path . '/' . $name, $file->toBytes());
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function forwardedIds(ScriptedForwarder $forwarder): array
+    {
+        return array_map(static fn(SpoolFile $file): string => $file->labels['id'] ?? '', $forwarder->forwarded);
     }
 }

@@ -8,10 +8,7 @@ use Psr\Log\LoggerInterface;
 use Tracewick\Clock\SystemClock;
 use Tracewick\Diagnostics\DiagnosticLogger;
 use Tracewick\Encoder\CompactStacksCodec;
-use Tracewick\Encoder\Pprof\LabelKeyRewriter;
-use Tracewick\Encoder\Pprof\ProtobufException;
 use Tracewick\Encoder\PprofEncoder;
-use Tracewick\Exception\LogicException;
 use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
 use Tracewick\Transport\CachingDnsResolver;
@@ -87,14 +84,8 @@ final readonly class PyroscopeSink implements Sink, SpoolForwarder
 
             try {
                 ApplicationName::assertValid($file->application);
-                $body = match ($file->format) {
-                    SpoolFile::FORMAT_PPROF => $this->hasDottedKey($file->labels)
-                        ? LabelKeyRewriter::rewrite($file->payload, $this->labelKey(...))
-                        : $file->payload,
-                    SpoolFile::FORMAT_COMPACT_STACKS => $this->encodeCompact($file),
-                    default => throw new LogicException(\sprintf('Payload format "%s" cannot be sent to Pyroscope.', $file->format)),
-                };
-            } catch (LogicException|ProtobufException $e) {
+                $body = $this->encodeCompact($file);
+            } catch (\Throwable $e) {
                 return Delivery::rejected($e->getMessage());
             }
 
@@ -156,20 +147,6 @@ final readonly class PyroscopeSink implements Sink, SpoolForwarder
         }
 
         return new Labels($mapped);
-    }
-
-    /**
-     * @param array<string, string> $labels
-     */
-    private function hasDottedKey(array $labels): bool
-    {
-        foreach (array_keys($labels) as $key) {
-            if (str_contains($key, '.')) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /**
