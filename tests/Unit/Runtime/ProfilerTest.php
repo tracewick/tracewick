@@ -440,6 +440,31 @@ final class ProfilerTest extends TestCase
         self::assertSame(['route' => 'import'], $this->labelsOf(1));
     }
 
+    public function testPulseIsANoOpBeforeTheDurationLimit(): void
+    {
+        $clock = new ManualClock(0);
+        $profiler = new Profiler(
+            $this->sampler,
+            $this->sink,
+            new ProfilerConfig(maxProfileDurationSeconds: 10),
+            null,
+            null,
+            null,
+            new DiagnosticLogger($this->logger, $this->logDirectory->path, clock: new ManualClock()),
+            $clock,
+        );
+        $this->sampler->willSample('handle');
+
+        $profiler->pulse();
+        $profiler->start(['route' => 'import']);
+        $clock->advanceNs(1_000_000_000);
+        $profiler->pulse();
+
+        self::assertTrue($profiler->isRunning());
+        self::assertSame(0, $profiler->bufferedProfiles());
+        self::assertSame(['flush', 'start'], $this->sampler->calls);
+    }
+
     public function testStopsAndFlushesAtShutdown(): void
     {
         $profiler = $this->profiler();

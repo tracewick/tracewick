@@ -61,4 +61,23 @@ final class StackAggregatorTest extends TestCase
         self::assertFalse($aggregator->wasCapped());
         self::assertSame([], $aggregator->toSamples(0));
     }
+
+    public function testIgnoresNonPositiveCounts(): void
+    {
+        $aggregator = new StackAggregator(10);
+        $aggregator->add([new Frame('a')], 0);
+        $aggregator->add([new Frame('a')], -1);
+
+        self::assertTrue($aggregator->isEmpty());
+        self::assertSame(0, $aggregator->uniqueStackCount());
+    }
+
+    public function testCountsOverflowAsAUniqueStack(): void
+    {
+        $aggregator = new StackAggregator(1);
+        $aggregator->add([new Frame('a')], 1);
+        $aggregator->add([new Frame('b')], 2);
+
+        self::assertSame(2, $aggregator->uniqueStackCount());
+    }
 }
