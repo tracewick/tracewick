@@ -25,6 +25,22 @@ final class SamplerConfigTest extends TestCase
         self::assertSame(256, $config->maxDepth);
         self::assertSame(SamplerConfig::DEFAULT_MAX_SAMPLES, $config->maxSamples);
         self::assertSame(SamplerConfig::DEFAULT_MAX_UNIQUE_STACKS, $config->maxUniqueStacks);
+        self::assertNull($config->projectRoot);
+    }
+
+    public function testNormalizesProjectRootTrailingSlash(): void
+    {
+        $config = new SamplerConfig(projectRoot: '/var/www/app/');
+
+        self::assertSame('/var/www/app', $config->projectRoot);
+    }
+
+    public function testRejectsEmptyProjectRoot(): void
+    {
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('Project root must be a non-empty path when set.');
+
+        new SamplerConfig(projectRoot: '   ');
     }
 
     public function testKeepsValidValues(): void

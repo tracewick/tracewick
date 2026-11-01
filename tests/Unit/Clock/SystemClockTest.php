@@ -36,4 +36,57 @@ final class SystemClockTest extends TestCase
             $previous = $current;
         }
     }
+
+    public function testReanchorsWhenWallDriftsBeyondThreshold(): void
+    {
+        $wall = 1_700_000_000_000_000_000;
+        $mono = 100;
+        $clock = new SystemClock(
+            static function () use (&$wall): int {
+                return $wall;
+            },
+            static function () use (&$mono): int {
+                return $mono;
+            },
+        );
+
+        self::assertSame(1_700_000_000_000_000_000, $clock->nowNs());
+        self::assertSame(0, $clock->reanchorCount());
+
+        // Monotonic advances 50 ns; wall stays put — within threshold.
+        $mono = 150;
+        self::assertSame(1_700_000_000_000_000_050, $clock->nowNs());
+        self::assertSame(0, $clock->reanchorCount());
+
+        // Wall jumps by more than 1 s while monotonic barely moves (suspend / NTP step).
+        // Projected is still ~base+60; wall must exceed projected by more than the threshold.
+        $wall = 1_700_000_000_000_000_000 + SystemClock::DRIFT_THRESHOLD_NS + 1_000;
+        $mono = 160;
+        self::assertSame($wall, $clock->nowNs());
+        self::assertSame(1, $clock->reanchorCount());
+
+        // After re-anchor, further monotonic advances track the new wall.
+        $mono = 260;
+        self::assertSame($wall + 100, $clock->nowNs());
+        self::assertSame(1, $clock->reanchorCount());
+    }
+
+    public function testReanchorsWhenProjectedDriftsAheadOfWall(): void
+    {
+        $wall = 1_700_000_000_000_000_000;
+        $mono = 0;
+        $clock = new SystemClock(
+            static function () use (&$wall): int {
+                return $wall;
+            },
+            static function () use (&$mono): int {
+                return $mono;
+            },
+        );
+
+        // Monotonic ran during a pause of wall time (projected ahead of wall by > 1 s).
+        $mono = SystemClock::DRIFT_THRESHOLD_NS + 10;
+        self::assertSame($wall, $clock->nowNs());
+        self::assertSame(1, $clock->reanchorCount());
+    }
 }

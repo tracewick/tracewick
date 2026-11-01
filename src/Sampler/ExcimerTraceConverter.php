@@ -15,13 +15,15 @@ namespace Tracewick\Sampler;
 final readonly class ExcimerTraceConverter
 {
     /**
-     * @param int $originNs Unix time in nanoseconds at which the profiler object was constructed,
-     *                      the reference point of Excimer timestamps
-     * @param int $maxDepth depth limit configured on the profiler, used to detect truncated stacks
+     * @param int     $originNs     Unix time in nanoseconds at which the profiler object was constructed,
+     *                              the reference point of Excimer timestamps
+     * @param int     $maxDepth     depth limit configured on the profiler, used to detect truncated stacks
+     * @param ?string $projectRoot  absolute app base stripped from frame paths; null keeps Excimer paths
      */
     public function __construct(
         private int $originNs,
         private int $maxDepth,
+        private ?string $projectRoot = null,
     ) {}
 
     /**
@@ -118,10 +120,13 @@ final readonly class ExcimerTraceConverter
      */
     private function convertFrame(array $frame): Frame
     {
+        $function = $this->stringOrNull($frame['function'] ?? null);
+        $file = $this->stripPath($this->stringOrNull($frame['file'] ?? null));
+
         return new Frame(
-            $this->stringOrNull($frame['function'] ?? null),
+            $this->stripPathInFunction($function),
             $this->stringOrNull($frame['class'] ?? null),
-            $this->stringOrNull($frame['file'] ?? null),
+            $file,
             \is_int($frame['line'] ?? null) ? $frame['line'] : 0,
             \is_int($frame['closure_line'] ?? null) ? $frame['closure_line'] : null,
         );
@@ -130,5 +135,55 @@ final readonly class ExcimerTraceConverter
     private function stringOrNull(mixed $value): ?string
     {
         return \is_string($value) && '' !== $value ? $value : null;
+    }
+
+    private function stripPath(?string $path): ?string
+    {
+        if (null === $path || null === $this->projectRoot) {
+            return $path;
+        }
+
+        if ($path === $this->projectRoot) {
+            return '';
+        }
+
+        $prefix = $this->projectRoot . '/';
+        if (str_starts_with($path, $prefix)) {
+            return substr($path, \strlen($prefix));
+        }
+
+        return $path;
+    }
+
+    private function stripPathInFunction(?string $function): ?string
+    {
+        if (null === $function || null === $this->projectRoot) {
+            return $function;
+        }
+
+        if (!str_starts_with($function, '{closure:') || !str_ends_with($function, '}')) {
+            return $function;
+        }
+
+        $inner = substr($function, \strlen('{closure:'), -1);
+        $colon = strrpos($inner, ':');
+        if (false === $colon) {
+            return $function;
+        }
+
+        $scope = substr($inner, 0, $colon);
+        $line = substr($inner, $colon + 1);
+        if ('' === $line || \strlen($line) !== strspn($line, '0123456789')) {
+            return $function;
+        }
+
+        // Path-shaped scopes only; Class::method() / foo() keep their form for Frame::name().
+        if (!str_contains($scope, '/') && !str_starts_with($scope, '\\')) {
+            return $function;
+        }
+
+        $stripped = $this->stripPath($scope);
+
+        return '{closure:' . ($stripped ?? $scope) . ':' . $line . '}';
     }
 }
