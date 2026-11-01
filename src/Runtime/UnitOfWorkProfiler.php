@@ -23,7 +23,9 @@ use Tracewick\Transport\Delivery;
 use Tracewick\Transport\DeliveryStatus;
 
 /**
- * Profiles units of work, such as requests or jobs, and delivers the profiles after the work is done.
+ * Profiles one unit of work at a time (HTTP request, console command, queue job) and delivers after
+ * the work is done. For process-level continuous profiling without per-request labels, use
+ * {@see ContinuousProfiler}.
  *
  * {@see start()} begins a profile and {@see stop()} ends it. A finished profile waits in a bounded
  * buffer in memory, so nothing is sent while the work runs; {@see flush()} hands the buffered
@@ -39,7 +41,7 @@ use Tracewick\Transport\DeliveryStatus;
  * {@see DiagnosticLogger} reports problems to the application's logger. With a {@see \Tracewick\Sink\SpoolSink} a flush is a local file
  * write; with a sink that sends over the network the work of the flush depends on the backend.
  */
-final class Profiler
+final class UnitOfWorkProfiler
 {
     private static bool $inactiveSamplerWarned = false;
 

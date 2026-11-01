@@ -49,6 +49,16 @@ final class ScriptedSampler implements Sampler
         return $this;
     }
 
+    /**
+     * Makes the next flush return this batch when the sampler has been running.
+     */
+    public function willReturn(SampleBatch $batch): self
+    {
+        $this->batches[] = $batch;
+
+        return $this;
+    }
+
     public function willFail(string $method, \Throwable $failure): self
     {
         $this->failures[$method] = $failure;

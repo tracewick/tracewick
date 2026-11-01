@@ -122,7 +122,7 @@ and `http://toxiproxy:14318` is the Collector, but with whatever faults a test s
 the API at `TOXIPROXY_URL`. Integration chaos tests use it to check that **transports and sinks**
 fail within their time budgets and that the circuit breaker opens (see
 [ADR 5](docs/adr/0005-fail-open-policy.md)). They do not yet run a host application with
-`Profiler` under load; that remains a separate gate.
+`UnitOfWorkProfiler` under load; that remains a separate gate.
 
 Tests talk to the real backends through the plain URLs and to the faulty ones through the
 `toxiproxy` URLs. A test that adds a toxic must remove it when it ends, for example:

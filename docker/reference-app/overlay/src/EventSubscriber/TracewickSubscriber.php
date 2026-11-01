@@ -11,7 +11,7 @@ use Symfony\Component\HttpKernel\Event\RequestEvent;
 use Symfony\Component\HttpKernel\Event\TerminateEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Tracewick\Profile\Labels;
-use Tracewick\Runtime\Profiler;
+use Tracewick\Runtime\UnitOfWorkProfiler;
 use Tracewick\Runtime\ProfilerConfig;
 use Tracewick\Sink\PyroscopeConfig;
 use Tracewick\Sink\PyroscopeSink;
@@ -35,7 +35,7 @@ final class TracewickSubscriber implements EventSubscriberInterface
 {
     private const APPLICATION = 'symfony-demo';
 
-    private readonly Profiler $profiler;
+    private readonly UnitOfWorkProfiler $profiler;
 
     public function __construct(
         LoggerInterface $logger,
@@ -48,7 +48,7 @@ final class TracewickSubscriber implements EventSubscriberInterface
         #[Autowire(env: 'PYROSCOPE_URL')]
         string $pyroscopeUrl,
     ) {
-        $this->profiler = Profiler::create(
+        $this->profiler = UnitOfWorkProfiler::create(
             $this->sink($sink, $spoolDir, $pyroscopeUrl, $logger),
             new ProfilerConfig(new Labels(['runtime' => $runtime])),
             logger: $logger,
