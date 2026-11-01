@@ -32,6 +32,7 @@ use Tracewick\Tests\Support\RecordingLogger;
 use Tracewick\Tests\Support\ScriptedTransport;
 use Tracewick\Tests\Support\TemporaryDirectory;
 use Tracewick\Transport\AtomicFile;
+use Tracewick\Transport\CachingDnsResolver;
 use Tracewick\Transport\CircuitBreakerConfig;
 use Tracewick\Transport\CircuitBreakerState;
 use Tracewick\Transport\CircuitBreakerTransport;
@@ -43,14 +44,15 @@ use Tracewick\Transport\HttpConfig;
 use Tracewick\Transport\HttpTransport;
 use Tracewick\Transport\InMemoryCircuitBreakerStore;
 use Tracewick\Transport\Payload;
+use Tracewick\Transport\SystemDnsResolver;
 
 #[CoversClass(PyroscopeSink::class)]
 #[UsesClass(PyroscopeConfig::class)]
 #[UsesClass(ApplicationName::class)]
 #[UsesClass(HttpConfig::class)]
 #[UsesClass(HttpTransport::class)]
-#[UsesClass(\Tracewick\Transport\CachingDnsResolver::class)]
-#[UsesClass(\Tracewick\Transport\SystemDnsResolver::class)]
+#[UsesClass(CachingDnsResolver::class)]
+#[UsesClass(SystemDnsResolver::class)]
 #[UsesClass(CircuitBreakerConfig::class)]
 #[UsesClass(CircuitBreakerTransport::class)]
 #[UsesClass(CircuitBreakerState::class)]

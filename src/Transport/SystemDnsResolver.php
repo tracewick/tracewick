@@ -26,9 +26,9 @@ final readonly class SystemDnsResolver implements DnsResolver
     private function isIpLiteral(string $host): bool
     {
         if (str_starts_with($host, '[') && str_ends_with($host, ']')) {
-            return false !== filter_var(substr($host, 1, -1), \FILTER_VALIDATE_IP, \FILTER_FLAG_IPV6);
+            return false !== @inet_pton(substr($host, 1, -1));
         }
 
-        return false !== filter_var($host, \FILTER_VALIDATE_IP);
+        return false !== @inet_pton($host);
     }
 }

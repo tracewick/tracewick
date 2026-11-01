@@ -28,6 +28,7 @@ use Tracewick\Tests\Support\ManualClock;
 use Tracewick\Tests\Support\ScriptedForwarder;
 use Tracewick\Tests\Support\TemporaryDirectory;
 use Tracewick\Transport\AtomicFile;
+use Tracewick\Transport\CachingDnsResolver;
 use Tracewick\Transport\CircuitBreakerConfig;
 use Tracewick\Transport\CircuitBreakerState;
 use Tracewick\Transport\CircuitBreakerTransport;
@@ -41,6 +42,7 @@ use Tracewick\Transport\HttpTransport;
 use Tracewick\Transport\InMemoryCircuitBreakerStore;
 use Tracewick\Transport\SpoolReaderConfig;
 use Tracewick\Transport\SpoolTransport;
+use Tracewick\Transport\SystemDnsResolver;
 
 #[CoversClass(DrainCommand::class)]
 #[UsesClass(DrainSettings::class)]
@@ -61,6 +63,8 @@ use Tracewick\Transport\SpoolTransport;
 #[UsesClass(ApplicationName::class)]
 #[UsesClass(HttpConfig::class)]
 #[UsesClass(HttpTransport::class)]
+#[UsesClass(CachingDnsResolver::class)]
+#[UsesClass(SystemDnsResolver::class)]
 #[UsesClass(CircuitBreakerConfig::class)]
 #[UsesClass(CircuitBreakerTransport::class)]
 #[UsesClass(CircuitBreakerState::class)]
