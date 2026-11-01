@@ -34,8 +34,10 @@ use Tracewick\Sampler\StackAggregator;
 use Tracewick\Sink\ApplicationName;
 use Tracewick\Sink\SpoolAggregationKey;
 use Tracewick\Tests\Support\ManualClock;
+use Tracewick\Tests\Support\RecordingLogger;
 use Tracewick\Tests\Support\RecordingSink;
 use Tracewick\Tests\Support\ScriptedSampler;
+use Tracewick\Tests\Support\TemporaryDirectory;
 use Tracewick\Transport\AtomicFile;
 use Tracewick\Transport\Delivery;
 
@@ -175,6 +177,27 @@ final class ContinuousProfilerTest extends TestCase
         self::assertNull($profiler->lastFailure());
     }
 
+    public function testWiresAnExcimerSegmentListenerWhenAvailable(): void
+    {
+        if (!\extension_loaded('excimer')) {
+            self::markTestSkipped('ext-excimer is not loaded.');
+        }
+
+        $sampler = new ExcimerSampler(new SamplerConfig());
+        $profiler = new ContinuousProfiler(
+            $sampler,
+            $this->sink,
+            new ContinuousProfilerConfig('blog'),
+            clock: $this->clock,
+        );
+
+        $profiler->start();
+        $profiler->pulse();
+        $profiler->stop();
+
+        self::assertFalse($profiler->isRunning());
+    }
+
     public function testRegisterShutdownStopsOnce(): void
     {
         $calls = 0;
@@ -199,6 +222,199 @@ final class ContinuousProfilerTest extends TestCase
     {
         $this->expectException(LogicException::class);
         new ContinuousProfilerConfig('bad name');
+    }
+
+    public function testFlushSendsClosedWindowsWithoutStopping(): void
+    {
+        $this->sampler->willReturn($this->batch(1_000_000_000, 2_000_000_000, 'work', 1));
+        $profiler = $this->profiler();
+
+        $profiler->start();
+        $this->clock->advanceNs(self::WINDOW_NS);
+        $profiler->flush();
+
+        self::assertTrue($profiler->isRunning());
+        self::assertCount(1, $this->sink->sent);
+        self::assertSame(1, $profiler->diagnostics()->deliveredProfiles);
+    }
+
+    public function testStartSwallowsAQuietSamplerFailure(): void
+    {
+        $this->sampler->willFailQuietly('start', new \RuntimeException('timer'));
+        $profiler = $this->profiler();
+
+        $profiler->start();
+
+        self::assertFalse($profiler->isRunning());
+        self::assertSame(1, $profiler->diagnostics()->swallowedErrors);
+        self::assertSame('timer', $profiler->lastFailure()?->getMessage());
+    }
+
+    public function testPulseIsIgnoredWhileAlreadyPulsing(): void
+    {
+        $this->sampler->willReturn($this->batch(1_000_000_000, 2_000_000_000, 'work', 1));
+        $this->clock->advanceNs(self::WINDOW_NS);
+        $profiler = $this->profiler();
+        $profiler->start();
+        $this->sink->onSend[] = static function () use ($profiler): void {
+            $profiler->pulse();
+        };
+
+        $profiler->pulse();
+
+        self::assertCount(1, $this->sink->sent);
+    }
+
+    public function testPulseSwallowsSamplerFailures(): void
+    {
+        $profiler = $this->profiler();
+        $profiler->start();
+        $this->sampler->willFail('flush', new \RuntimeException('flush boom'));
+
+        $profiler->pulse();
+
+        self::assertSame(1, $profiler->diagnostics()->swallowedErrors);
+        self::assertSame('flush boom', $profiler->lastFailure()?->getMessage());
+    }
+
+    public function testFlushSwallowsFailures(): void
+    {
+        $profiler = $this->profiler();
+        $profiler->start();
+        $this->sampler->willFail('flush', new \RuntimeException('flush boom'));
+
+        $profiler->flush();
+
+        self::assertSame(1, $profiler->diagnostics()->swallowedErrors);
+    }
+
+    public function testStopSwallowsFailures(): void
+    {
+        $profiler = $this->profiler();
+        $profiler->start();
+        $this->sampler->willFail('stop', new \RuntimeException('stop boom'));
+
+        $profiler->stop();
+
+        self::assertFalse($profiler->isRunning());
+        self::assertSame(1, $profiler->diagnostics()->swallowedErrors);
+        self::assertSame('stop boom', $profiler->lastFailure()?->getMessage());
+    }
+
+    public function testRegisterShutdownSwallowsRegistrationFailures(): void
+    {
+        $profiler = new ContinuousProfiler(
+            $this->sampler,
+            $this->sink,
+            new ContinuousProfilerConfig('blog'),
+            clock: $this->clock,
+            registerShutdownFunction: static function (): never {
+                throw new \RuntimeException('cannot register');
+            },
+        );
+
+        $profiler->registerShutdown();
+
+        self::assertSame(1, $profiler->diagnostics()->swallowedErrors);
+        self::assertSame('cannot register', $profiler->lastFailure()?->getMessage());
+    }
+
+    public function testRegisterShutdownUsesPhpWhenNoCallbackGiven(): void
+    {
+        $profiler = new ContinuousProfiler(
+            $this->sampler,
+            $this->sink,
+            new ContinuousProfilerConfig('blog'),
+            clock: $this->clock,
+        );
+
+        $profiler->registerShutdown();
+
+        self::assertSame(0, $profiler->diagnostics()->swallowedErrors);
+    }
+
+    public function testRecordsDeliveryOutcomes(): void
+    {
+        $this->sink->deliveries = [
+            Delivery::rejected('bad'),
+            Delivery::configuration('auth'),
+            Delivery::failed('down'),
+            Delivery::skipped('breaker'),
+        ];
+        $this->sampler
+            ->willReturn($this->batch(1_000_000_000, 2_000_000_000, 'a', 1))
+            ->willReturn($this->batch(1_000_000_000, 2_000_000_000, 'b', 1))
+            ->willReturn($this->batch(1_000_000_000, 2_000_000_000, 'c', 1))
+            ->willReturn($this->batch(1_000_000_000, 2_000_000_000, 'd', 1));
+        $profiler = $this->profiler();
+        $profiler->start();
+        $this->clock->advanceNs(self::WINDOW_NS);
+
+        for ($i = 0; $i < 4; ++$i) {
+            $profiler->flush();
+            $this->clock->advanceNs(self::WINDOW_NS);
+        }
+
+        $diagnostics = $profiler->diagnostics();
+        self::assertSame(2, $diagnostics->rejectedProfiles);
+        self::assertSame(1, $diagnostics->failedProfiles);
+        self::assertSame(1, $diagnostics->skippedProfiles);
+        self::assertSame(4, \count($this->sink->sent));
+    }
+
+    public function testSwallowsSinkExceptionsDuringDelivery(): void
+    {
+        $sink = new RecordingSink(failOn: [0]);
+        $this->sampler->willReturn($this->batch(1_000_000_000, 2_000_000_000, 'work', 1));
+        $profiler = new ContinuousProfiler(
+            $this->sampler,
+            $sink,
+            new ContinuousProfilerConfig('blog'),
+            clock: $this->clock,
+        );
+        $profiler->start();
+        $this->clock->advanceNs(self::WINDOW_NS);
+        $profiler->flush();
+
+        self::assertSame(1, $profiler->diagnostics()->swallowedErrors);
+        self::assertSame('Send 0 failed.', $profiler->lastFailure()?->getMessage());
+    }
+
+    public function testWarnsAboutDisabledAndFailedSamplers(): void
+    {
+        $logger = new RecordingLogger();
+        $directory = new TemporaryDirectory();
+        try {
+            ContinuousProfiler::resetInactiveSamplerWarning();
+            new ContinuousProfiler(
+                new NullSampler(NullSamplerReason::Disabled, clock: $this->clock),
+                $this->sink,
+                new ContinuousProfilerConfig('blog'),
+                new DiagnosticLogger($logger, $directory->path, clock: $this->clock),
+                $this->clock,
+            );
+            self::assertSame(['warning: Tracewick profiling is disabled (TRACEWICK_ENABLED).'], $logger->lines());
+
+            ContinuousProfiler::resetInactiveSamplerWarning();
+            new ContinuousProfiler(
+                new NullSampler(
+                    NullSamplerReason::InitializationFailed,
+                    cause: new \RuntimeException('Cannot create timer.'),
+                    clock: $this->clock,
+                ),
+                $this->sink,
+                new ContinuousProfilerConfig('blog'),
+                new DiagnosticLogger($logger, $directory->path, clock: $this->clock),
+                $this->clock,
+            );
+            self::assertContains(
+                'warning: Tracewick profiling is inactive: ExcimerProfiler failed to initialize.',
+                $logger->lines(),
+            );
+            self::assertSame('Cannot create timer.', $logger->records[array_key_last($logger->records)]['context']['error'] ?? null);
+        } finally {
+            $directory->remove();
+        }
     }
 
     private function profiler(Labels $labels = new Labels()): ContinuousProfiler
