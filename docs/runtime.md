@@ -116,11 +116,21 @@ profile into the buffer first.
 ## Console commands
 
 ```php
+$profiler = Profiler::create(
+    $sink,
+    new ProfilerConfig(maxProfileDurationSeconds: 15),
+);
 $profiler->start(['command' => 'app:import']);
 $profiler->registerShutdown();
 ```
 
-The same as PHP-FPM: the profile covers the command and is flushed when the script ends.
+With `maxProfileDurationSeconds` greater than 0, a long command is split into successive profile
+windows. The Excimer flush callback calls `pulse()` as samples arrive; a worker loop can also call
+`pulse()` itself. Without a duration limit the profile covers the whole command until shutdown.
+
+Sampling itself is capped in the sampler: Excimer drains its log every `maxSamples` hits into an
+in-memory stack→count map, and stacks beyond `maxUniqueStacks` go into an `[overflow]` frame so the
+profile stays bounded.
 
 ## Diagnostics
 

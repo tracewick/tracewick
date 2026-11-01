@@ -372,6 +372,40 @@ final class ProfilerTest extends TestCase
         );
     }
 
+    public function testRotatesAProfileWhenTheDurationLimitElapses(): void
+    {
+        $clock = new ManualClock(0);
+        $profiler = new Profiler(
+            $this->sampler,
+            $this->sink,
+            new ProfilerConfig(maxProfileDurationSeconds: 1),
+            function (): void {
+                $this->events[] = 'finish request';
+            },
+            /** @param callable(): void $callback */
+            function (callable $callback): void {
+                $this->shutdownFunctions[] = $callback;
+            },
+            null,
+            new DiagnosticLogger($this->logger, $this->logDirectory->path, clock: new ManualClock()),
+            $clock,
+        );
+        $this->sampler->willSample('first')->willSample('second');
+
+        $profiler->start(['route' => 'import']);
+        $clock->advanceNs(1_000_000_000);
+        $profiler->pulse();
+        self::assertTrue($profiler->isRunning());
+        self::assertSame(1, $profiler->bufferedProfiles());
+
+        $profiler->stop();
+        $profiler->flush();
+
+        self::assertSame(['first', 'second'], $this->sink->functions());
+        self::assertSame(['route' => 'import'], $this->labelsOf(0));
+        self::assertSame(['route' => 'import'], $this->labelsOf(1));
+    }
+
     public function testStopsAndFlushesAtShutdown(): void
     {
         $profiler = $this->profiler();

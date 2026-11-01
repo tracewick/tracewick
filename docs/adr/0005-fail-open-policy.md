@@ -31,7 +31,6 @@ memory without a bound, it becomes an outage. It must also install on hosts with
 
 These belong to the decision but are **not** fully true of the current code:
 
-- Sample / unique-stack caps on the Excimer log (native flush callback) are not wired yet.
 - Broader kill switch (file flag, `$_SERVER` / `$_ENV`, ini) is not wired yet; only
   `TRACEWICK_ENABLED` via the factory.
 - `ProfilerConfig::finishRequest` defaults to `false`, so shutdown may still send on the request

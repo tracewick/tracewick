@@ -24,6 +24,21 @@ final class ProfilerConfigTest extends TestCase
         self::assertSame(ProfilerConfig::DEFAULT_MAX_BUFFERED_PROFILES, $config->maxBufferedProfiles);
         self::assertSame(1.0, $config->sampleRate);
         self::assertFalse($config->finishRequest);
+        self::assertSame(0, $config->maxProfileDurationSeconds);
+    }
+
+    public function testAcceptsAProfileDurationLimit(): void
+    {
+        self::assertSame(15, (new ProfilerConfig(maxProfileDurationSeconds: 15))->maxProfileDurationSeconds);
+    }
+
+    #[TestWith([-1])]
+    #[TestWith([86_401])]
+    public function testRejectsProfileDurationOutsideTheLimits(int $seconds): void
+    {
+        $this->expectException(LogicException::class);
+
+        new ProfilerConfig(maxProfileDurationSeconds: $seconds);
     }
 
     #[TestWith([1])]

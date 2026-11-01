@@ -45,6 +45,42 @@ final readonly class ExcimerTraceConverter
     }
 
     /**
+     * Feeds a log into an aggregator without building one Sample per Excimer entry.
+     */
+    public function ingestLog(\ExcimerLog $log, StackAggregator $aggregator): void
+    {
+        foreach ($log as $entry) {
+            if (!$entry instanceof \ExcimerLogEntry) {
+                continue;
+            }
+
+            $this->ingestEntry($entry->getTrace(), $entry->getEventCount(), $aggregator);
+        }
+    }
+
+    /**
+     * @param array<mixed> $trace innermost first
+     */
+    public function ingestEntry(array $trace, int $count, StackAggregator $aggregator): void
+    {
+        if ($count < 1) {
+            return;
+        }
+
+        $truncated = \count($trace) >= $this->maxDepth;
+        $trace = \array_slice($trace, 0, $this->maxDepth);
+
+        $frames = [];
+        foreach ($trace as $rawFrame) {
+            if (\is_array($rawFrame)) {
+                $frames[] = $this->convertFrame($rawFrame);
+            }
+        }
+
+        $aggregator->add(array_reverse($frames), $count, $truncated);
+    }
+
+    /**
      * @param array<mixed> $trace     frames as returned by `ExcimerLogEntry::getTrace()`, innermost first
      * @param int          $count     number of sampling periods the entry represents
      * @param float        $timestamp seconds since the profiler object was constructed

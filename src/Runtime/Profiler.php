@@ -6,10 +6,13 @@ namespace Tracewick\Runtime;
 
 use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
+use Tracewick\Clock\Clock;
+use Tracewick\Clock\SystemClock;
 use Tracewick\Diagnostics\DiagnosticLogger;
 use Tracewick\Exception\LogicException;
 use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
+use Tracewick\Sampler\ExcimerSampler;
 use Tracewick\Sampler\NullSampler;
 use Tracewick\Sampler\NullSamplerReason;
 use Tracewick\Sampler\Sampler;
@@ -67,6 +70,14 @@ final class Profiler
 
     private readonly ?NullSamplerReason $inactiveSampler;
 
+    private readonly Clock $clock;
+
+    private readonly int $maxProfileDurationNs;
+
+    private ?int $deadlineNs = null;
+
+    private bool $rotating = false;
+
     /** @var \Closure(): void */
     private readonly \Closure $finishRequest;
 
@@ -89,9 +100,12 @@ final class Profiler
         ?\Closure $registerShutdownFunction = null,
         ?\Closure $random = null,
         private readonly DiagnosticLogger $logger = new DiagnosticLogger(),
+        ?Clock $clock = null,
     ) {
         $this->labels = $config->labels;
         $this->inactiveSampler = $sampler instanceof NullSampler ? $sampler->reason : null;
+        $this->clock = $clock ?? new SystemClock();
+        $this->maxProfileDurationNs = $config->maxProfileDurationSeconds * 1_000_000_000;
         $this->finishRequest = $finishRequest ?? static function (): void {
             if (\function_exists('fastcgi_finish_request')) {
                 fastcgi_finish_request();
@@ -101,6 +115,10 @@ final class Profiler
             register_shutdown_function($callback);
         };
         $this->random = $random ?? static fn(): float => mt_rand() / (mt_getrandmax() + 1);
+        if ($sampler instanceof ExcimerSampler && $this->maxProfileDurationNs > 0) {
+            $sampler->setSegmentListener($this->pulse(...));
+        }
+
         $this->warnAboutInactiveSampler();
     }
 
@@ -142,23 +160,37 @@ final class Profiler
                 return;
             }
 
-            $prepared = $this->prepareLabels($labels);
+            $this->beginProfile($this->prepareLabels($labels));
+        } catch (\Throwable $e) {
+            $this->started = false;
+            $this->deadlineNs = null;
+            $this->swallow($e);
+        }
+    }
 
-            // Samples taken before the start belong to no profile.
-            $this->sampler->flush();
-            $this->sampler->start();
-
-            if (!$this->inactiveSampler instanceof NullSamplerReason && !$this->sampler->isRunning()) {
-                $this->swallow($this->sampler->lastFailure() ?? new \RuntimeException('Tracewick sampler failed to start.'));
-
+    /**
+     * Rotates the running profile when {@see ProfilerConfig::$maxProfileDurationSeconds} has
+     * elapsed. Safe to call often from a worker loop; also wired to the Excimer flush callback.
+     */
+    public function pulse(): void
+    {
+        try {
+            if ($this->rotating || !$this->started || $this->maxProfileDurationNs <= 0 || null === $this->deadlineNs) {
                 return;
             }
 
-            $this->labels = $prepared;
-            $this->started = true;
+            if ($this->clock->nowNs() < $this->deadlineNs) {
+                return;
+            }
+
+            $this->rotating = true;
+            $labels = $this->labels;
+            $this->stop();
+            $this->beginProfile($labels);
         } catch (\Throwable $e) {
-            $this->started = false;
             $this->swallow($e);
+        } finally {
+            $this->rotating = false;
         }
     }
 
@@ -188,6 +220,7 @@ final class Profiler
             }
 
             $this->started = false;
+            $this->deadlineNs = null;
             $this->sampler->stop();
             $profile = Profile::fromBatch($this->sampler->flush(), $this->labels);
             if ($profile->isEmpty()) {
@@ -203,6 +236,7 @@ final class Profiler
             }
         } catch (\Throwable $e) {
             $this->started = false;
+            $this->deadlineNs = null;
             $this->swallow($e);
         }
     }
@@ -306,6 +340,25 @@ final class Profiler
     public static function resetInactiveSamplerWarning(): void
     {
         self::$inactiveSamplerWarned = false;
+    }
+
+    private function beginProfile(Labels $labels): void
+    {
+        // Samples taken before the start belong to no profile.
+        $this->sampler->flush();
+        $this->sampler->start();
+
+        if (!$this->inactiveSampler instanceof NullSamplerReason && !$this->sampler->isRunning()) {
+            $this->swallow($this->sampler->lastFailure() ?? new \RuntimeException('Tracewick sampler failed to start.'));
+
+            return;
+        }
+
+        $this->labels = $labels;
+        $this->started = true;
+        $this->deadlineNs = $this->maxProfileDurationNs > 0
+            ? $this->clock->nowNs() + $this->maxProfileDurationNs
+            : null;
     }
 
     /**

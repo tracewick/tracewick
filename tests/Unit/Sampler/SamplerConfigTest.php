@@ -23,15 +23,19 @@ final class SamplerConfigTest extends TestCase
         self::assertSame(10_000_000, $config->periodNs);
         self::assertSame(EventType::Wall, $config->eventType);
         self::assertSame(256, $config->maxDepth);
+        self::assertSame(SamplerConfig::DEFAULT_MAX_SAMPLES, $config->maxSamples);
+        self::assertSame(SamplerConfig::DEFAULT_MAX_UNIQUE_STACKS, $config->maxUniqueStacks);
     }
 
     public function testKeepsValidValues(): void
     {
-        $config = new SamplerConfig(periodNs: 1_000_000, eventType: EventType::Cpu, maxDepth: 64);
+        $config = new SamplerConfig(periodNs: 1_000_000, eventType: EventType::Cpu, maxDepth: 64, maxSamples: 100, maxUniqueStacks: 50);
 
         self::assertSame(1_000_000, $config->periodNs);
         self::assertSame(EventType::Cpu, $config->eventType);
         self::assertSame(64, $config->maxDepth);
+        self::assertSame(100, $config->maxSamples);
+        self::assertSame(50, $config->maxUniqueStacks);
     }
 
     public function testAcceptsBoundaryValues(): void
@@ -89,5 +93,39 @@ final class SamplerConfigTest extends TestCase
         yield 'negative' => [-1];
         yield 'zero means unlimited in Excimer and is not allowed' => [0];
         yield 'just above maximum' => [SamplerConfig::MAX_DEPTH_LIMIT + 1];
+    }
+
+    #[DataProvider('invalidMaxSamples')]
+    public function testRejectsMaxSamplesOutOfRange(int $maxSamples): void
+    {
+        $this->expectException(LogicException::class);
+
+        new SamplerConfig(maxSamples: $maxSamples);
+    }
+
+    /**
+     * @return iterable<string, array{int}>
+     */
+    public static function invalidMaxSamples(): iterable
+    {
+        yield 'zero' => [0];
+        yield 'above maximum' => [SamplerConfig::MAX_MAX_SAMPLES + 1];
+    }
+
+    #[DataProvider('invalidMaxUniqueStacks')]
+    public function testRejectsMaxUniqueStacksOutOfRange(int $maxUniqueStacks): void
+    {
+        $this->expectException(LogicException::class);
+
+        new SamplerConfig(maxUniqueStacks: $maxUniqueStacks);
+    }
+
+    /**
+     * @return iterable<string, array{int}>
+     */
+    public static function invalidMaxUniqueStacks(): iterable
+    {
+        yield 'zero' => [0];
+        yield 'above maximum' => [SamplerConfig::MAX_MAX_UNIQUE_STACKS + 1];
     }
 }
