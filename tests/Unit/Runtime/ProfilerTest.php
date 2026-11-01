@@ -404,6 +404,37 @@ final class ProfilerTest extends TestCase
         self::assertSame('Cannot create timer.', $this->logger->records[0]['context']['error'] ?? null);
     }
 
+    public function testWritesInactiveSamplerWarningsToThePhpLogWithoutAPsrLogger(): void
+    {
+        Profiler::resetInactiveSamplerWarning();
+        $logFile = tempnam(sys_get_temp_dir(), 'tracewick-error-log-');
+        self::assertNotFalse($logFile);
+        $previous = ini_set('error_log', $logFile);
+
+        try {
+            new Profiler(
+                new NullSampler(
+                    NullSamplerReason::InitializationFailed,
+                    cause: new \RuntimeException('Cannot create timer.'),
+                    clock: new ManualClock(),
+                ),
+                $this->sink,
+            );
+
+            $logged = (string) file_get_contents($logFile);
+        } finally {
+            if (false !== $previous) {
+                ini_set('error_log', $previous);
+            }
+            unlink($logFile);
+        }
+
+        self::assertStringContainsString(
+            'Tracewick profiling is inactive: ExcimerProfiler failed to initialize.: Cannot create timer.',
+            $logged,
+        );
+    }
+
     public function testStopsAndFlushesAtShutdown(): void
     {
         $profiler = $this->profiler();
