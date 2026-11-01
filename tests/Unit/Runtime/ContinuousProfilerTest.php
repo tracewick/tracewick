@@ -359,7 +359,7 @@ final class ContinuousProfilerTest extends TestCase
         self::assertSame(2, $diagnostics->rejectedProfiles);
         self::assertSame(1, $diagnostics->failedProfiles);
         self::assertSame(1, $diagnostics->skippedProfiles);
-        self::assertSame(4, \count($this->sink->sent));
+        self::assertCount(4, $this->sink->sent);
     }
 
     public function testSwallowsSinkExceptionsDuringDelivery(): void
