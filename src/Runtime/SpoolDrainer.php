@@ -40,18 +40,21 @@ final readonly class SpoolDrainer
     {
         $delivered = 0;
         $rejected = 0;
+        $ackFailures = 0;
         $lastRejection = '';
 
         try {
             for ($handled = 0; $handled < $maxFiles; ++$handled) {
                 $claimed = $this->source->claim();
                 if (!$claimed instanceof ClaimedSpoolFile) {
-                    return new DrainResult(DrainOutcome::Empty, $delivered, $rejected, $lastRejection);
+                    return new DrainResult(DrainOutcome::Empty, $delivered, $rejected, $lastRejection, ackFailures: $ackFailures);
                 }
 
                 $delivery = $this->forward($claimed);
                 if ($delivery->isDelivered()) {
-                    $this->source->acknowledge($claimed);
+                    if (!$this->source->acknowledge($claimed)) {
+                        ++$ackFailures;
+                    }
                     ++$delivered;
                 } elseif (
                     DeliveryStatus::Rejected === $delivery->status
@@ -63,14 +66,14 @@ final readonly class SpoolDrainer
                 } else {
                     $this->source->release($claimed);
 
-                    return new DrainResult(DrainOutcome::Failed, $delivered, $rejected, $lastRejection, $delivery->reason);
+                    return new DrainResult(DrainOutcome::Failed, $delivered, $rejected, $lastRejection, $delivery->reason, $ackFailures);
                 }
             }
         } catch (\Throwable $e) {
-            return new DrainResult(DrainOutcome::Failed, $delivered, $rejected, $lastRejection, $e->getMessage());
+            return new DrainResult(DrainOutcome::Failed, $delivered, $rejected, $lastRejection, $e->getMessage(), $ackFailures);
         }
 
-        return new DrainResult(DrainOutcome::LimitReached, $delivered, $rejected, $lastRejection);
+        return new DrainResult(DrainOutcome::LimitReached, $delivered, $rejected, $lastRejection, ackFailures: $ackFailures);
     }
 
     private function forward(ClaimedSpoolFile $claimed): Delivery

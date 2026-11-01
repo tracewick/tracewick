@@ -203,7 +203,10 @@ final class SpoolDrainerTest extends TestCase
                 throw new \RuntimeException('The store is down.');
             }
 
-            public function acknowledge(ClaimedSpoolFile $file): void {}
+            public function acknowledge(ClaimedSpoolFile $file): bool
+            {
+                return true;
+            }
 
             public function release(ClaimedSpoolFile $file): void {}
 
@@ -214,6 +217,46 @@ final class SpoolDrainerTest extends TestCase
 
         self::assertSame(DrainOutcome::Failed, $result->outcome);
         self::assertSame('The store is down.', $result->failure);
+    }
+
+    public function testCountsAcknowledgeFailuresAfterASuccessfulSend(): void
+    {
+        $this->write(self::FIRST, 'first');
+        $source = new class ($this->spool->path) implements SpoolSource {
+            private ?ClaimedSpoolFile $claimed = null;
+
+            public function __construct(private readonly string $directory) {}
+
+            public function claim(): ?ClaimedSpoolFile
+            {
+                if ($this->claimed instanceof ClaimedSpoolFile) {
+                    return null;
+                }
+
+                $name = '01798000000000000001-0000000000000000.spool';
+                $path = $this->directory . '/' . $name;
+                $bytes = (string) file_get_contents($path);
+                $this->claimed = new ClaimedSpoolFile($name, $bytes, $path);
+
+                return $this->claimed;
+            }
+
+            public function acknowledge(ClaimedSpoolFile $file): bool
+            {
+                return false;
+            }
+
+            public function release(ClaimedSpoolFile $file): void {}
+
+            public function reject(ClaimedSpoolFile $file): void {}
+        };
+
+        $result = (new SpoolDrainer($source, new ScriptedForwarder(Delivery::delivered())))->drain();
+
+        self::assertSame(DrainOutcome::Empty, $result->outcome);
+        self::assertSame(1, $result->delivered);
+        self::assertSame(1, $result->ackFailures);
+        self::assertSame([self::FIRST], $this->spool->entries());
     }
 
     public function testKeepsCountsAndTheLastRejectionWhenThePassFails(): void

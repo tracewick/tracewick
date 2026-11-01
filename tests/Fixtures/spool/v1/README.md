@@ -33,7 +33,7 @@ defect.
 | File                        | Defect                                                         |
 |-----------------------------|----------------------------------------------------------------|
 | `bad-magic.spool`           | Starts with `XWSP` instead of `TWSP`                           |
-| `unsupported-version.spool` | Version byte is 2                                              |
+| `unsupported-version.spool` | Version byte is 3                                              |
 | `header-too-large.spool`    | Header length is 1 MiB + 1                                     |
 | `truncated-payload.spool`   | Payload is one byte shorter than `payload_size`                |
 | `header-not-json.spool`     | Header is cut off JSON                                         |

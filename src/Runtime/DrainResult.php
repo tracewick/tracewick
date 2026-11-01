@@ -15,6 +15,7 @@ final readonly class DrainResult
      * @param int          $rejected      files moved aside because they are invalid or were refused
      * @param string       $lastRejection the reason the last file was rejected, or an empty string
      * @param string       $failure       the reason the pass ended with {@see DrainOutcome::Failed}, or an empty string
+     * @param int          $ackFailures   delivered files that could not be deleted after a successful send
      */
     public function __construct(
         public DrainOutcome $outcome,
@@ -22,5 +23,6 @@ final readonly class DrainResult
         public int $rejected,
         public string $lastRejection = '',
         public string $failure = '',
+        public int $ackFailures = 0,
     ) {}
 }

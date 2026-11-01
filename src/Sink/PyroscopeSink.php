@@ -7,6 +7,7 @@ namespace Tracewick\Sink;
 use Psr\Log\LoggerInterface;
 use Tracewick\Clock\SystemClock;
 use Tracewick\Diagnostics\DiagnosticLogger;
+use Tracewick\Encoder\CompactStacksCodec;
 use Tracewick\Encoder\Pprof\LabelKeyRewriter;
 use Tracewick\Encoder\Pprof\ProtobufException;
 use Tracewick\Encoder\PprofEncoder;
@@ -79,19 +80,19 @@ final readonly class PyroscopeSink implements Sink, SpoolForwarder
     public function forward(SpoolFile $file): Delivery
     {
         try {
-            if (SpoolFile::FORMAT_PPROF !== $file->format) {
-                return Delivery::rejected(\sprintf('Payload format "%s" cannot be sent to Pyroscope.', $file->format));
-            }
-
             if ($file->periodNs < 1 || $file->endNs < $file->startNs) {
                 return Delivery::rejected('The spool file has an invalid sampling period or time window.');
             }
 
             try {
                 ApplicationName::assertValid($file->application);
-                // The header lists the labels of every sample, so the payload is parsed only when
-                // a key actually needs renaming.
-                $body = $this->hasDottedKey($file->labels) ? LabelKeyRewriter::rewrite($file->payload, $this->labelKey(...)) : $file->payload;
+                $body = match ($file->format) {
+                    SpoolFile::FORMAT_PPROF => $this->hasDottedKey($file->labels)
+                        ? LabelKeyRewriter::rewrite($file->payload, $this->labelKey(...))
+                        : $file->payload,
+                    SpoolFile::FORMAT_COMPACT_STACKS => $this->encodeCompact($file),
+                    default => throw new LogicException(\sprintf('Payload format "%s" cannot be sent to Pyroscope.', $file->format)),
+                };
             } catch (LogicException|ProtobufException $e) {
                 return Delivery::rejected($e->getMessage());
             }
@@ -100,6 +101,22 @@ final readonly class PyroscopeSink implements Sink, SpoolForwarder
         } catch (\Throwable $e) {
             return Delivery::failed(\sprintf('Cannot send the profile to Pyroscope: %s', $e->getMessage()));
         }
+    }
+
+    private function encodeCompact(SpoolFile $file): string
+    {
+        $parts = (new CompactStacksCodec())->decode($file->payload);
+        $profile = new Profile(
+            $file->eventType,
+            $file->periodNs,
+            $file->startNs,
+            $file->endNs,
+            $parts->frames,
+            $parts->stacks,
+            $this->labels(new Labels($file->labels)),
+        );
+
+        return $this->encoder->encode($profile);
     }
 
     private function defaultTransport(PyroscopeConfig $config, ?LoggerInterface $logger): Transport

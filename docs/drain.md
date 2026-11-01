@@ -9,9 +9,10 @@ It is written in PHP and ships with the library, so it works without `tracewick-
 drains, or a drain and an agent, can read the same directory at the same time; each file goes to
 exactly one of them ([ADR 9](adr/0009-agent-hand-off.md)).
 
-Planned (not shipped yet): merge files by aggregation key over a 10–15 s window before upload
-([ADR 12](adr/0012-aggregate-before-delivery.md)), and encode pprof here from compact spool v2
-payloads ([ADR 13](adr/0013-spool-v2-compact-payload.md)). Today each file is still one pprof POST.
+`PyroscopeSink::forward()` encodes pprof from compact spool v2 payloads
+([ADR 13](adr/0013-spool-v2-compact-payload.md)) and still accepts v1 pprof files. Planned (not
+shipped yet): merge files by aggregation key over a 10–15 s window before upload
+([ADR 12](adr/0012-aggregate-before-delivery.md)). Today each file is still one POST.
 
 ## What it does with each file
 

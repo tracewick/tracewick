@@ -74,7 +74,7 @@ final class SpoolFixturesTest extends TestCase
     public static function invalid(): iterable
     {
         yield 'bad magic' => ['bad-magic.spool', static fn(string $valid): string => 'XWSP' . substr($valid, 4)];
-        yield 'unsupported version' => ['unsupported-version.spool', static fn(string $valid): string => "TWSP\x02" . substr($valid, 5)];
+        yield 'unsupported version' => ['unsupported-version.spool', static fn(string $valid): string => "TWSP\x03" . substr($valid, 5)];
         yield 'header too large' => ['header-too-large.spool', static fn(string $valid): string => "TWSP\x01" . pack('N', SpoolFile::MAX_HEADER_BYTES + 1) . substr($valid, 9)];
         yield 'truncated payload' => ['truncated-payload.spool', static fn(string $valid): string => substr($valid, 0, -1)];
         yield 'header not JSON' => ['header-not-json.spool', static fn(string $valid): string => self::withRawHeader($valid, '{"application":"blog",')];

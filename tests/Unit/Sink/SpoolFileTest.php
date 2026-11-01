@@ -46,6 +46,14 @@ final class SpoolFileTest extends TestCase
         self::assertEquals($file, SpoolFile::fromBytes($file->toBytes()));
     }
 
+    public function testReadsWhatItWritesForVersion2(): void
+    {
+        $file = new SpoolFile('blog', EventType::Wall, 10_000_000, 5, 7, ['env' => 'prod'], SpoolFile::FORMAT_COMPACT_STACKS, "\x01\x00", SpoolFile::VERSION_2);
+
+        self::assertEquals($file, SpoolFile::fromBytes($file->toBytes()));
+        self::assertSame(SpoolFile::VERSION_2, \ord($file->toBytes()[4]));
+    }
+
     public function testIgnoresUnknownHeaderKeys(): void
     {
         $file = SpoolFile::fromBytes(self::file(['future' => ['nested' => [1, 2, 3]]]));
@@ -68,7 +76,7 @@ final class SpoolFileTest extends TestCase
         yield 'too short' => ["TWSP\x01\x00\x00\x00", 'The file does not start with the spool magic bytes.'];
         yield 'wrong magic' => ['XWSP' . substr(self::file(), 4), 'The file does not start with the spool magic bytes.'];
         yield 'version 0' => ["TWSP\x00" . substr(self::file(), 5), 'Spool format version 0 is not supported.'];
-        yield 'version 2' => ["TWSP\x02" . substr(self::file(), 5), 'Spool format version 2 is not supported.'];
+        yield 'version 3' => ["TWSP\x03" . substr(self::file(), 5), 'Spool format version 3 is not supported.'];
         yield 'empty header' => ["TWSP\x01\x00\x00\x00\x00", 'The header is not valid JSON: Syntax error'];
         yield 'header of exactly the limit, cut short' => ["TWSP\x01" . pack('N', 1_048_576) . '{}', 'The file ends inside the header.'];
         yield 'header too large' => ["TWSP\x01" . pack('N', 1_048_577) . '{}', 'The header of 1048577 bytes exceeds the limit of 1048576 bytes.'];
