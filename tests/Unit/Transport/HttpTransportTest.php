@@ -6,6 +6,7 @@ namespace Tracewick\Tests\Unit\Transport;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Clock\SystemClock;
@@ -233,5 +234,25 @@ final class HttpTransportTest extends TestCase
 
         self::assertSame(DeliveryStatus::Failed, $delivery->status);
         self::assertStringStartsWith('Timed out after 1000 ms talking to 127.0.0.1:', $delivery->reason);
+    }
+
+    #[RequiresPhpExtension('pcntl')]
+    public function testRetriesWhenStreamSelectIsInterruptedByASignal(): void
+    {
+        // Stall long enough for SIGALRM (1 s) to interrupt stream_select, then answer 200.
+        $server = new FakeHttpServer([['stallMs' => 1_500, 'status' => 200]]);
+        $transport = new HttpTransport(new HttpConfig($server->url(), 200, 3_000));
+
+        pcntl_async_signals(true);
+        pcntl_signal(\SIGALRM, static function (): void {});
+        pcntl_alarm(1);
+
+        try {
+            $delivery = $transport->send(new Payload('x', 'text/plain'));
+        } finally {
+            pcntl_alarm(0);
+        }
+
+        self::assertTrue($delivery->isDelivered());
     }
 }

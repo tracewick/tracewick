@@ -114,6 +114,9 @@ WantedBy=multi-user.target
 With cron, `--time-limit` below the cron interval keeps runs from piling up; if they do overlap,
 the runs share the files without delivering any of them twice.
 
+Default HTTP timeouts are 200 ms connect / 1 s total (same as request-path). If Pyroscope is often
+slower than that on your network, raise them on `PyroscopeConfig` for the drain process only.
+
 `stopwaitsecs` and `TimeoutStopSec` must be longer than one delivery, which the HTTP timeouts
 bound to a few seconds.
 

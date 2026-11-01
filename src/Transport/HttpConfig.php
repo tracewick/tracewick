@@ -11,9 +11,11 @@ use Tracewick\Exception\LogicException;
  */
 final readonly class HttpConfig
 {
-    public const DEFAULT_CONNECT_TIMEOUT_MS = 500;
+    /** Bound for request-path delivery; long enough to open a healthy connection, short enough for FPM. */
+    public const DEFAULT_CONNECT_TIMEOUT_MS = 200;
 
-    public const DEFAULT_TIMEOUT_MS = 2_000;
+    /** Whole-request bound for request-path delivery (connection included). Drain may raise this. */
+    public const DEFAULT_TIMEOUT_MS = 1_000;
 
     private const MAX_TIMEOUT_MS = 60_000;
 

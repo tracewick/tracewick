@@ -27,8 +27,8 @@ final class PyroscopeConfigTest extends TestCase
 
         self::assertSame('http://pyroscope:4040/ingest', $http->url);
         self::assertSame('/ingest', $http->target);
-        self::assertSame(500, $http->connectTimeoutMs);
-        self::assertSame(2_000, $http->timeoutMs);
+        self::assertSame(200, $http->connectTimeoutMs);
+        self::assertSame(1_000, $http->timeoutMs);
         self::assertSame([], $http->headers);
         self::assertEquals(new CircuitBreakerConfig(), $config->circuitBreaker);
     }

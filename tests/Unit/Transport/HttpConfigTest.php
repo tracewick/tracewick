@@ -22,8 +22,8 @@ final class HttpConfigTest extends TestCase
         self::assertSame(4040, $config->port);
         self::assertSame('/ingest', $config->target);
         self::assertSame('pyroscope:4040', $config->authority());
-        self::assertSame(500, $config->connectTimeoutMs);
-        self::assertSame(2_000, $config->timeoutMs);
+        self::assertSame(200, $config->connectTimeoutMs);
+        self::assertSame(1_000, $config->timeoutMs);
         self::assertSame([], $config->headers);
     }
 

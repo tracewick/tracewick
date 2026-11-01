@@ -10,7 +10,9 @@ declare(strict_types=1);
  * The scenario is a list of actions, one per accepted connection:
  *   {"status": 200}           read the request, answer with this status
  *   {"raw": "..."}            read the request, write these bytes as the response
- *   {"stallMs": 2000}         read the request, answer nothing for this long, then close
+ *   {"stallMs": 2000}         read the request, wait this long, then close without answering
+ *   {"stallMs": 200, "status": 200}
+ *                             wait, then answer with this status (for interrupt/retry tests)
  *   {"close": true}           close the connection without reading or answering
  *
  * Every request read is appended to the log file as one base64-encoded line. The server prints
@@ -65,13 +67,15 @@ foreach ($scenario as $action) {
     file_put_contents($logFile, base64_encode($request) . "\n", FILE_APPEND);
 
     $stallMs = $action['stallMs'] ?? null;
-    $raw = $action['raw'] ?? null;
-    $status = $action['status'] ?? 200;
     if (is_int($stallMs)) {
         usleep($stallMs * 1_000);
-    } elseif (is_string($raw)) {
+    }
+
+    $raw = $action['raw'] ?? null;
+    if (is_string($raw)) {
         fwrite($connection, $raw);
-    } elseif (is_int($status)) {
+    } elseif (array_key_exists('status', $action) || !array_key_exists('stallMs', $action)) {
+        $status = is_int($action['status'] ?? null) ? $action['status'] : 200;
         fwrite($connection, sprintf("HTTP/1.1 %d Test\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", $status));
     }
 

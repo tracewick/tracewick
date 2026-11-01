@@ -28,8 +28,9 @@ use Tracewick\Transport\Transport;
  * profile type (wall or CPU) comes from the pprof sample types.
  *
  * By default payloads go through an {@see HttpTransport} behind a {@see CircuitBreakerTransport},
- * whose state the processes of a host share per server and tenant, so that all PHP-FPM workers
- * stop sending when the server keeps failing.
+ * whose state the processes of a host share per server and tenant. Use this sink from drain,
+ * CLI, staging, or long-running workers — not from PHP-FPM request handlers. Under FPM prefer
+ * {@see SpoolSink} and `tracewick-drain`, so the worker never waits on the network.
  *
  * @see https://grafana.com/docs/pyroscope/latest/configure-server/about-server-api/
  */
