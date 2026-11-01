@@ -25,9 +25,11 @@ use Tracewick\Transport\CircuitBreakerConfig;
 use Tracewick\Transport\CircuitBreakerState;
 use Tracewick\Transport\CircuitBreakerTransport;
 use Tracewick\Transport\Delivery;
+use Tracewick\Transport\FallbackCircuitBreakerStore;
 use Tracewick\Transport\FileCircuitBreakerStore;
 use Tracewick\Transport\HttpConfig;
 use Tracewick\Transport\HttpTransport;
+use Tracewick\Transport\InMemoryCircuitBreakerStore;
 use Tracewick\Transport\Payload;
 
 /**
@@ -42,6 +44,8 @@ use Tracewick\Transport\Payload;
 #[UsesClass(CircuitBreakerTransport::class)]
 #[UsesClass(CircuitBreakerState::class)]
 #[UsesClass(FileCircuitBreakerStore::class)]
+#[UsesClass(FallbackCircuitBreakerStore::class)]
+#[UsesClass(InMemoryCircuitBreakerStore::class)]
 #[UsesClass(DiagnosticLogger::class)]
 #[UsesClass(AtomicFile::class)]
 #[UsesClass(Delivery::class)]
