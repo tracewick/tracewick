@@ -9,6 +9,8 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Clock\SystemClock;
 use Tracewick\Encoder\CompactStacksCodec;
+use Tracewick\Encoder\Pprof\ProtobufWriter;
+use Tracewick\Encoder\Pprof\StringTable;
 use Tracewick\Encoder\PprofEncoder;
 use Tracewick\Encoder\ProfileParts;
 use Tracewick\Profile\Labels;
@@ -62,6 +64,8 @@ use Tracewick\Transport\SystemDnsResolver;
 #[UsesClass(HttpConfig::class)]
 #[UsesClass(CircuitBreakerConfig::class)]
 #[UsesClass(PprofEncoder::class)]
+#[UsesClass(ProtobufWriter::class)]
+#[UsesClass(StringTable::class)]
 #[UsesClass(CompactStacksCodec::class)]
 #[UsesClass(ProfileParts::class)]
 #[UsesClass(Profile::class)]

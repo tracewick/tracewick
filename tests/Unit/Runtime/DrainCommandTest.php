@@ -12,8 +12,10 @@ use Tracewick\Clock\SystemClock;
 use Tracewick\Diagnostics\DiagnosticLogger;
 use Tracewick\Encoder\CompactStacksCodec;
 use Tracewick\Encoder\PprofEncoder;
+use Tracewick\Encoder\ProfileParts;
 use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
+use Tracewick\Profile\ProfileMerger;
 use Tracewick\Profile\Stack;
 use Tracewick\Runtime\DrainCommand;
 use Tracewick\Runtime\DrainOutcome;
@@ -26,8 +28,10 @@ use Tracewick\Sampler\Frame;
 use Tracewick\Sink\ApplicationName;
 use Tracewick\Sink\PyroscopeConfig;
 use Tracewick\Sink\PyroscopeSink;
+use Tracewick\Sink\SpoolAggregationKey;
 use Tracewick\Sink\SpoolFile;
 use Tracewick\Sink\SpoolFileException;
+use Tracewick\Sink\SpoolFileName;
 use Tracewick\Sink\SpoolForwarder;
 use Tracewick\Tests\Support\ManualClock;
 use Tracewick\Tests\Support\ScriptedForwarder;
@@ -79,6 +83,15 @@ use Tracewick\Transport\SystemDnsResolver;
 #[UsesClass(DiagnosticLogger::class)]
 #[UsesClass(AtomicFile::class)]
 #[UsesClass(PprofEncoder::class)]
+#[UsesClass(CompactStacksCodec::class)]
+#[UsesClass(ProfileParts::class)]
+#[UsesClass(Labels::class)]
+#[UsesClass(Profile::class)]
+#[UsesClass(ProfileMerger::class)]
+#[UsesClass(Stack::class)]
+#[UsesClass(Frame::class)]
+#[UsesClass(SpoolAggregationKey::class)]
+#[UsesClass(SpoolFileName::class)]
 final class DrainCommandTest extends TestCase
 {
     private const FIRST = '01798000000000000001-0000000000000000.spool';
