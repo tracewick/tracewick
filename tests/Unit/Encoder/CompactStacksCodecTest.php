@@ -15,6 +15,8 @@ use Tracewick\Profile\Profile;
 use Tracewick\Profile\Stack;
 use Tracewick\Sampler\EventType;
 use Tracewick\Sampler\Frame;
+use Tracewick\Sampler\Sample;
+use Tracewick\Sampler\SampleBatch;
 use Tracewick\Tests\Support\ProfileFixtures;
 
 #[CoversClass(CompactStacksCodec::class)]
@@ -23,6 +25,8 @@ use Tracewick\Tests\Support\ProfileFixtures;
 #[UsesClass(Stack::class)]
 #[UsesClass(Labels::class)]
 #[UsesClass(Frame::class)]
+#[UsesClass(Sample::class)]
+#[UsesClass(SampleBatch::class)]
 #[UsesClass(LogicException::class)]
 final class CompactStacksCodecTest extends TestCase
 {

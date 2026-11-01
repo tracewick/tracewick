@@ -30,6 +30,7 @@ use Tracewick\Tests\Support\TemporaryDirectory;
 use Tracewick\Transport\Delivery;
 use Tracewick\Transport\DeliveryStatus;
 use Tracewick\Transport\Payload;
+use Tracewick\Transport\SpoolAdmissionState;
 use Tracewick\Transport\SpoolConfig;
 use Tracewick\Transport\SpoolTransport;
 
@@ -38,6 +39,7 @@ use Tracewick\Transport\SpoolTransport;
 #[UsesClass(SpoolFile::class)]
 #[UsesClass(SpoolConfig::class)]
 #[UsesClass(SpoolTransport::class)]
+#[UsesClass(SpoolAdmissionState::class)]
 #[UsesClass(Delivery::class)]
 #[UsesClass(Payload::class)]
 #[UsesClass(SystemClock::class)]
