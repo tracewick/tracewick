@@ -7,7 +7,7 @@ namespace Tracewick\Runtime;
 use Tracewick\Sampler\NullSamplerReason;
 
 /**
- * What a {@see Profiler} has done since it was created, for metrics and debugging.
+ * What a {@see UnitOfWorkProfiler} or {@see ContinuousProfiler} has done since it was created, for metrics and debugging.
  *
  * Under PHP-FPM a profiler lives for one request, so the numbers cover that request; a
  * long-running worker accumulates them for its whole life.

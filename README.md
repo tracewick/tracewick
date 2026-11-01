@@ -20,10 +20,10 @@ meant to run continuously in production.
 - **Open formats.** Collapsed stacks, Speedscope and pprof. Production delivery uses pprof over
   Grafana Pyroscope's push API ([ADR 4](docs/adr/0004-pprof-as-primary-format.md)). OpenTelemetry
   Profiles export is planned and experimental ([ADR 6](docs/adr/0006-otlp-profiles-experimental.md)).
-- **Where PHP runs.** Designed for PHP-FPM, CLI and long-running workers. The public facade today is
-  request- or unit-of-work oriented. Continuous process-level profiling (for example under Swoole or
-  Fibers) is planned as a separate adapter, without per-request labels.
-  Symfony and Laravel integrations are planned as separate packages; they are not in this repository.
+- **Where PHP runs.** PHP-FPM, CLI and sequential workers use `UnitOfWorkProfiler` (one profile per
+  request or job). Concurrent runtimes such as Swoole, Fibers or ReactPHP use `ContinuousProfiler`:
+  process-level sampling without per-request labels. Symfony and Laravel integrations are planned
+  as separate packages; they are not in this repository.
 
 ## Requirements
 

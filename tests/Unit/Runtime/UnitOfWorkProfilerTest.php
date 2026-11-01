@@ -15,8 +15,8 @@ use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
 use Tracewick\Profile\Stack;
 use Tracewick\Runtime\Diagnostics;
-use Tracewick\Runtime\Profiler;
 use Tracewick\Runtime\ProfilerConfig;
+use Tracewick\Runtime\UnitOfWorkProfiler;
 use Tracewick\Sampler\ExcimerSampler;
 use Tracewick\Sampler\ExcimerTraceConverter;
 use Tracewick\Sampler\Frame;
@@ -35,7 +35,7 @@ use Tracewick\Tests\Support\TemporaryDirectory;
 use Tracewick\Transport\AtomicFile;
 use Tracewick\Transport\Delivery;
 
-#[CoversClass(Profiler::class)]
+#[CoversClass(UnitOfWorkProfiler::class)]
 #[UsesClass(ProfilerConfig::class)]
 #[UsesClass(Labels::class)]
 #[UsesClass(Profile::class)]
@@ -55,7 +55,7 @@ use Tracewick\Transport\Delivery;
 #[UsesClass(Diagnostics::class)]
 #[UsesClass(DiagnosticLogger::class)]
 #[UsesClass(AtomicFile::class)]
-final class ProfilerTest extends TestCase
+final class UnitOfWorkProfilerTest extends TestCase
 {
     private ScriptedSampler $sampler;
 
@@ -73,7 +73,7 @@ final class ProfilerTest extends TestCase
 
     protected function setUp(): void
     {
-        Profiler::resetInactiveSamplerWarning();
+        UnitOfWorkProfiler::resetInactiveSamplerWarning();
         $this->sampler = new ScriptedSampler();
         $this->sink = new RecordingSink();
         $this->logger = new RecordingLogger();
@@ -357,7 +357,7 @@ final class ProfilerTest extends TestCase
     public function testWarnsOnceWhenTheSamplerIsInactive(): void
     {
         $sampler = new NullSampler(NullSamplerReason::ExtensionMissing, clock: new ManualClock());
-        $profiler = new Profiler(
+        $profiler = new UnitOfWorkProfiler(
             $sampler,
             $this->sink,
             new ProfilerConfig(),
@@ -373,7 +373,7 @@ final class ProfilerTest extends TestCase
             $this->logger->lines(),
         );
 
-        new Profiler(
+        new UnitOfWorkProfiler(
             new NullSampler(NullSamplerReason::Disabled, clock: new ManualClock()),
             $this->sink,
             logger: new DiagnosticLogger($this->logger, $this->logDirectory->path, clock: new ManualClock()),
@@ -387,8 +387,8 @@ final class ProfilerTest extends TestCase
 
     public function testWarnsAboutADisabledSamplerSeparatelyWhenReset(): void
     {
-        Profiler::resetInactiveSamplerWarning();
-        new Profiler(
+        UnitOfWorkProfiler::resetInactiveSamplerWarning();
+        new UnitOfWorkProfiler(
             new NullSampler(NullSamplerReason::Disabled, clock: new ManualClock()),
             $this->sink,
             logger: new DiagnosticLogger($this->logger, $this->logDirectory->path, clock: new ManualClock()),
@@ -402,9 +402,9 @@ final class ProfilerTest extends TestCase
 
     public function testWarnsAboutAnInitializationFailureWithItsCause(): void
     {
-        Profiler::resetInactiveSamplerWarning();
+        UnitOfWorkProfiler::resetInactiveSamplerWarning();
         $cause = new \RuntimeException('Cannot create timer.');
-        new Profiler(
+        new UnitOfWorkProfiler(
             new NullSampler(NullSamplerReason::InitializationFailed, cause: $cause, clock: new ManualClock()),
             $this->sink,
             logger: new DiagnosticLogger($this->logger, $this->logDirectory->path, clock: new ManualClock()),
@@ -419,13 +419,13 @@ final class ProfilerTest extends TestCase
 
     public function testWritesInactiveSamplerWarningsToThePhpLogWithoutAPsrLogger(): void
     {
-        Profiler::resetInactiveSamplerWarning();
+        UnitOfWorkProfiler::resetInactiveSamplerWarning();
         $logFile = tempnam(sys_get_temp_dir(), 'tracewick-error-log-');
         self::assertNotFalse($logFile);
         $previous = ini_set('error_log', $logFile);
 
         try {
-            new Profiler(
+            new UnitOfWorkProfiler(
                 new NullSampler(
                     NullSamplerReason::InitializationFailed,
                     cause: new \RuntimeException('Cannot create timer.'),
@@ -451,7 +451,7 @@ final class ProfilerTest extends TestCase
     public function testRotatesAProfileWhenTheDurationLimitElapses(): void
     {
         $clock = new ManualClock(0);
-        $profiler = new Profiler(
+        $profiler = new UnitOfWorkProfiler(
             $this->sampler,
             $this->sink,
             new ProfilerConfig(maxProfileDurationSeconds: 1),
@@ -485,7 +485,7 @@ final class ProfilerTest extends TestCase
     public function testPulseIsANoOpBeforeTheDurationLimit(): void
     {
         $clock = new ManualClock(0);
-        $profiler = new Profiler(
+        $profiler = new UnitOfWorkProfiler(
             $this->sampler,
             $this->sink,
             new ProfilerConfig(maxProfileDurationSeconds: 10),
@@ -554,7 +554,7 @@ final class ProfilerTest extends TestCase
 
     public function testDeliversWhenEndingTheResponseFails(): void
     {
-        $profiler = new Profiler($this->sampler, $this->sink, new ProfilerConfig(finishRequest: true), static function (): never {
+        $profiler = new UnitOfWorkProfiler($this->sampler, $this->sink, new ProfilerConfig(finishRequest: true), static function (): never {
             throw new \RuntimeException('Headers already sent.');
         });
         $this->sampler->willSample('handle');
@@ -568,7 +568,7 @@ final class ProfilerTest extends TestCase
 
     public function testReportsAFailureToRegisterTheShutdown(): void
     {
-        $profiler = new Profiler($this->sampler, $this->sink, registerShutdownFunction: static function (): never {
+        $profiler = new UnitOfWorkProfiler($this->sampler, $this->sink, registerShutdownFunction: static function (): never {
             throw new \RuntimeException('Not allowed.');
         });
 
@@ -646,7 +646,7 @@ final class ProfilerTest extends TestCase
 
     public function testCreatesAProfilerWithTheAvailableSampler(): void
     {
-        $profiler = Profiler::create($this->sink, logger: $this->logger);
+        $profiler = UnitOfWorkProfiler::create($this->sink, logger: $this->logger);
 
         $profiler->start();
         self::assertTrue($profiler->isRunning());
@@ -659,7 +659,7 @@ final class ProfilerTest extends TestCase
     private function startWithSeededDraw(float $rate): bool
     {
         mt_srand(7);
-        $profiler = new Profiler(new ScriptedSampler(), $this->sink, new ProfilerConfig(sampleRate: $rate));
+        $profiler = new UnitOfWorkProfiler(new ScriptedSampler(), $this->sink, new ProfilerConfig(sampleRate: $rate));
         $profiler->start();
 
         return $profiler->isRunning();
@@ -676,9 +676,9 @@ final class ProfilerTest extends TestCase
     /**
      * @param ?\Closure(): float $random
      */
-    private function profiler(ProfilerConfig $config = new ProfilerConfig(), ?\Closure $random = null): Profiler
+    private function profiler(ProfilerConfig $config = new ProfilerConfig(), ?\Closure $random = null): UnitOfWorkProfiler
     {
-        return new Profiler(
+        return new UnitOfWorkProfiler(
             $this->sampler,
             $this->sink,
             $config,

@@ -8,7 +8,7 @@ use Tracewick\Exception\LogicException;
 use Tracewick\Profile\Labels;
 
 /**
- * Settings of a {@see Profiler}.
+ * Settings of a {@see UnitOfWorkProfiler}.
  */
 final readonly class ProfilerConfig
 {

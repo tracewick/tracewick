@@ -22,8 +22,9 @@ agent; the PHP drain path needs the same rule, or high-load FPM never reaches a 
   overlap a configurable interval of **10–15 seconds** (default **15 s**). One merged pprof is
   sent per key per window. Appearance latency in Pyroscope is about one window.
 - **Where it runs:** the delivery process (`tracewick-drain`, later `tracewick-agent`), not the
-  FPM request path. An optional in-process accumulator for long-running workers may follow; it
-  must use the same key and window rules.
+  FPM request path. `ContinuousProfiler` also merges in-process with the same key and window
+  (`ProfileAccumulator`) before calling the sink, so concurrent workers do not emit one payload
+  per Excimer segment.
 - **Merge rule:** stacks are keyed by the sequence of frames; each frame by
   `function + file + line` (same identity the Profile model already uses). Weights for equal
   stacks add. Profile `start_ns` / `end_ns` become the min start and max end of the merged set.
@@ -35,7 +36,8 @@ agent; the PHP drain path needs the same rule, or high-load FPM never reaches a 
 - **Cardinality:** a host-wide cap on distinct keys (via the planned `CounterStore`) may collapse
   excess keys into an `other` bucket; that limit is separate work.
 
-Hash-in-name landed with the spool v2 writer; the aggregating drain pipeline follows this contract.
+Hash-in-name landed with the spool v2 writer; the aggregating drain pipeline and
+`ContinuousProfiler`'s accumulator follow this contract.
 
 ## Consequences
 

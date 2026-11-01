@@ -53,7 +53,7 @@ Layers depend only downward; a lower layer never imports a higher one:
    ([ADR 9](docs/adr/0009-agent-hand-off.md)).
 5. **Sink**: combines an encoder and a transport with backend-specific rules (`PyroscopeSink`,
    `SpoolSink`).
-6. **Runtime**: `Profiler`, spool drain, CLI. Framework packages and a continuous worker adapter
+6. **Runtime**: `UnitOfWorkProfiler`, `ContinuousProfiler`, spool drain, CLI. Framework packages
    are not in this repository yet.
 
 Cross-cutting helpers (`Clock`, `Diagnostics`, `Exception`) sit beside these layers.
