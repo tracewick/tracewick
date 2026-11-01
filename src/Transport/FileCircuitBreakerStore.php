@@ -9,8 +9,10 @@ namespace Tracewick\Transport;
  * PHP-FPM workers stop sending to a destination that keeps failing, not each of them on its own.
  *
  * The file holds one line, the failure count and the end of the open period or `-`. It is
- * replaced by an atomic rename, so a reader never sees half of it. A missing or unreadable file
- * means a closed circuit, and a file that cannot be written leaves the state as it was.
+ * replaced by an atomic rename, so a reader never sees half of it. {@see update()} takes an
+ * exclusive flock on a sibling lock file so concurrent workers do not race the trial delivery.
+ * A missing or unreadable file means a closed circuit; a write that cannot persist leaves the
+ * previous state as it was.
  */
 final readonly class FileCircuitBreakerStore implements CircuitBreakerStore
 {
@@ -19,10 +21,14 @@ final readonly class FileCircuitBreakerStore implements CircuitBreakerStore
     /**
      * A store in the directory for the given destination, so that destinations do not share state.
      *
+     * Creates the directory with mode 0700 when it is missing.
+     *
      * @param string $destination anything that identifies the destination, such as its URL
      */
     public static function forDestination(string $directory, string $destination): self
     {
+        self::ensureDirectory($directory);
+
         return new self(\sprintf('%s/tracewick-circuit-%s', $directory, md5($destination)));
     }
 
@@ -38,6 +44,57 @@ final readonly class FileCircuitBreakerStore implements CircuitBreakerStore
 
     public function save(CircuitBreakerState $state): void
     {
+        self::ensureDirectory(\dirname($this->path));
         AtomicFile::write($this->path, \sprintf("%d %s\n", $state->consecutiveFailures, $state->openUntilNs ?? '-'));
+    }
+
+    public function update(callable $updater): CircuitBreakerState
+    {
+        self::ensureDirectory(\dirname($this->path));
+        $lockPath = $this->path . '.lock';
+        $lock = @fopen($lockPath, 'c+');
+        if (false === $lock) {
+            $state = $updater($this->load());
+            $this->save($state);
+
+            return $state;
+        }
+
+        try {
+            if (!@flock($lock, \LOCK_EX)) {
+                $state = $updater($this->load());
+                $this->save($state);
+
+                return $state;
+            }
+
+            $state = $updater($this->load());
+            $this->save($state);
+
+            return $state;
+        } finally {
+            @flock($lock, \LOCK_UN);
+            fclose($lock);
+        }
+    }
+
+    /**
+     * Whether the last {@see save()} content is what {@see load()} would read now.
+     */
+    public function persisted(CircuitBreakerState $expected): bool
+    {
+        $loaded = $this->load();
+
+        return $loaded->consecutiveFailures === $expected->consecutiveFailures
+            && $loaded->openUntilNs === $expected->openUntilNs;
+    }
+
+    private static function ensureDirectory(string $directory): void
+    {
+        if (is_dir($directory)) {
+            return;
+        }
+
+        @mkdir($directory, 0o700, true);
     }
 }

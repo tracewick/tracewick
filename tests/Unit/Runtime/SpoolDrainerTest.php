@@ -111,6 +111,22 @@ final class SpoolDrainerTest extends TestCase
         self::assertSame([self::FIRST], $this->spool->entries('/rejected'));
     }
 
+    public function testRejectsAFileWhenTheBackendReportsAConfigurationError(): void
+    {
+        $this->write(self::FIRST, 'first');
+        $this->write(self::SECOND, 'second');
+        $forwarder = new ScriptedForwarder(Delivery::configuration('HTTP 401'), Delivery::delivered());
+
+        $result = $this->drainer($forwarder)->drain();
+
+        self::assertSame(DrainOutcome::Empty, $result->outcome);
+        self::assertSame(1, $result->delivered);
+        self::assertSame(1, $result->rejected);
+        self::assertSame(self::FIRST . ': HTTP 401', $result->lastRejection);
+        self::assertSame(['rejected'], $this->spool->entries());
+        self::assertSame([self::FIRST], $this->spool->entries('/rejected'));
+    }
+
     public function testEndsThePassAtAFailedDeliveryAndKeepsTheFile(): void
     {
         $this->write(self::FIRST, 'first');

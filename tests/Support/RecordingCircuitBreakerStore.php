@@ -27,4 +27,13 @@ final class RecordingCircuitBreakerStore implements CircuitBreakerStore
         $this->saved[] = $state;
         $this->state = $state;
     }
+
+    public function update(callable $updater): CircuitBreakerState
+    {
+        $state = $updater($this->state);
+        $this->saved[] = $state;
+        $this->state = $state;
+
+        return $state;
+    }
 }

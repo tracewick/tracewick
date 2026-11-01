@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tracewick\Tests\Unit\Transport;
 
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -41,7 +42,7 @@ final class FileCircuitBreakerStoreTest extends TestCase
 
         self::assertEquals(new CircuitBreakerState(3, 1_793_338_892_820_000_000), $this->store()->load());
         self::assertSame("3 1793338892820000000\n", file_get_contents($this->directory->path . '/state'));
-        self::assertSame(['state'], $this->directory->entries());
+        self::assertTrue($this->store()->persisted(new CircuitBreakerState(3, 1_793_338_892_820_000_000)));
 
         $this->store()->save(new CircuitBreakerState(1));
 
@@ -77,12 +78,13 @@ final class FileCircuitBreakerStoreTest extends TestCase
 
     public function testForgetsTheStateWhenTheFileCannotBeWritten(): void
     {
-        $store = new FileCircuitBreakerStore($this->directory->path . '/missing/state');
+        file_put_contents($this->directory->path . '/blocked', 'x');
+        $store = new FileCircuitBreakerStore($this->directory->path . '/blocked/state');
 
         $store->save(new CircuitBreakerState(3, 1));
 
         self::assertEquals(new CircuitBreakerState(), $store->load());
-        self::assertSame([], $this->directory->entries());
+        self::assertFalse($store->persisted(new CircuitBreakerState(3, 1)));
     }
 
     public function testRemovesTheTemporaryFileWhenTheRenameFails(): void
@@ -92,6 +94,15 @@ final class FileCircuitBreakerStoreTest extends TestCase
         $this->store()->save(new CircuitBreakerState(3, 1));
 
         self::assertSame(['state'], $this->directory->entries());
+    }
+
+    public function testCreatesTheDestinationDirectoryWithOwnerOnlyPermissions(): void
+    {
+        $nested = $this->directory->path . '/state-dir';
+        FileCircuitBreakerStore::forDestination($nested, 'http://a')->save(new CircuitBreakerState(1));
+
+        self::assertDirectoryExists($nested);
+        self::assertSame(0o700, fileperms($nested) & 0o777);
     }
 
     public function testKeepsOneFilePerDestination(): void
@@ -104,6 +115,59 @@ final class FileCircuitBreakerStoreTest extends TestCase
             $this->directory->entries(),
         );
         self::assertEquals(new CircuitBreakerState(1), FileCircuitBreakerStore::forDestination($this->directory->path, 'http://a')->load());
+    }
+
+    public function testUpdateAppliesChangesUnderALock(): void
+    {
+        $store = $this->store();
+        $state = $store->update(static fn(CircuitBreakerState $current): CircuitBreakerState => new CircuitBreakerState(2, 99));
+
+        self::assertEquals(new CircuitBreakerState(2, 99), $state);
+        self::assertEquals(new CircuitBreakerState(2, 99), $store->load());
+        self::assertFileExists($this->directory->path . '/state.lock');
+    }
+
+    public function testUpdateStillWorksWhenTheLockFileCannotBeOpened(): void
+    {
+        $path = $this->directory->path . '/state';
+        $store = new FileCircuitBreakerStore($path);
+        $store->save(new CircuitBreakerState(1));
+        mkdir($path . '.lock');
+
+        $state = $store->update(static fn(CircuitBreakerState $current): CircuitBreakerState => new CircuitBreakerState(3, 11));
+
+        self::assertEquals(new CircuitBreakerState(3, 11), $state);
+        self::assertEquals(new CircuitBreakerState(3, 11), $store->load());
+    }
+
+    #[RequiresPhpExtension('pcntl')]
+    public function testConcurrentUpdatesSerializeThroughTheLock(): void
+    {
+        $path = $this->directory->path . '/state';
+        $store = new FileCircuitBreakerStore($path);
+        $store->save(new CircuitBreakerState());
+
+        $children = [];
+        for ($i = 0; $i < 2; ++$i) {
+            $pid = pcntl_fork();
+            if (-1 === $pid) {
+                self::fail('pcntl_fork failed.');
+            }
+            if (0 === $pid) {
+                $child = new FileCircuitBreakerStore($path);
+                for ($n = 0; $n < 20; ++$n) {
+                    $child->update(static fn(CircuitBreakerState $state): CircuitBreakerState => new CircuitBreakerState($state->consecutiveFailures + 1));
+                }
+                exit(0);
+            }
+            $children[] = $pid;
+        }
+
+        foreach ($children as $pid) {
+            pcntl_waitpid($pid, $status);
+        }
+
+        self::assertSame(40, $store->load()->consecutiveFailures);
     }
 
     private function store(): FileCircuitBreakerStore

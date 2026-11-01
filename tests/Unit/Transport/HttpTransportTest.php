@@ -87,9 +87,14 @@ final class HttpTransportTest extends TestCase
         yield '199' => [199, DeliveryStatus::Rejected];
         yield '300' => [300, DeliveryStatus::Rejected];
         yield '400' => [400, DeliveryStatus::Rejected];
+        yield '401' => [401, DeliveryStatus::Configuration];
+        yield '403' => [403, DeliveryStatus::Configuration];
+        yield '404' => [404, DeliveryStatus::Configuration];
         yield '407' => [407, DeliveryStatus::Rejected];
         yield '408' => [408, DeliveryStatus::Failed];
         yield '409' => [409, DeliveryStatus::Rejected];
+        yield '413' => [413, DeliveryStatus::Configuration];
+        yield '422' => [422, DeliveryStatus::Rejected];
         yield '428' => [428, DeliveryStatus::Rejected];
         yield '429' => [429, DeliveryStatus::Failed];
         yield '430' => [430, DeliveryStatus::Rejected];

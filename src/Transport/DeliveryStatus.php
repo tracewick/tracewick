@@ -15,6 +15,12 @@ enum DeliveryStatus: string
     /** The destination refused the payload itself; sending it again would not help. */
     case Rejected = 'rejected';
 
+    /**
+     * The destination refused the request because of how Tracewick is configured (auth, URL, size
+     * limit). Retrying the same payload will not help until the configuration changes.
+     */
+    case Configuration = 'configuration';
+
     /** The destination could not be reached or failed; a later attempt may succeed. */
     case Failed = 'failed';
 

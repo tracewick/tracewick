@@ -79,7 +79,7 @@ final class CircuitBreakerTransportTest extends TestCase
             Delivery::delivered(),
             Delivery::failed('3'),
             Delivery::failed('4'),
-            Delivery::rejected('reachable'),
+            Delivery::delivered(),
             Delivery::failed('5'),
             Delivery::failed('6'),
         );
@@ -91,6 +91,70 @@ final class CircuitBreakerTransportTest extends TestCase
 
         self::assertFalse($breaker->isOpen());
         self::assertCount(8, $inner->sent);
+    }
+
+    public function testRejectedPayloadsDoNotChangeTheBreakerState(): void
+    {
+        $store = new RecordingCircuitBreakerStore(new CircuitBreakerState(2));
+        $breaker = $this->breaker(new ScriptedTransport(Delivery::rejected('bad payload')), store: $store);
+
+        self::assertSame(DeliveryStatus::Rejected, $this->send($breaker)->status);
+        self::assertSame([], $store->saved);
+        self::assertEquals(new CircuitBreakerState(2), $store->load());
+        self::assertFalse($breaker->isOpen());
+    }
+
+    public function testAConfigurationErrorOpensImmediatelyForTheLongerPause(): void
+    {
+        $logger = new RecordingLogger();
+        $directory = new TemporaryDirectory();
+        $breaker = new CircuitBreakerTransport(
+            new ScriptedTransport(Delivery::configuration('HTTP 401'), Delivery::delivered()),
+            new CircuitBreakerConfig(3, 1_000, configurationOpenDurationMs: 5_000),
+            $this->clock,
+            new InMemoryCircuitBreakerStore(),
+            new DiagnosticLogger($logger, $directory->path, clock: $this->clock),
+        );
+
+        try {
+            self::assertSame(DeliveryStatus::Configuration, $this->send($breaker)->status);
+            self::assertTrue($breaker->isOpen());
+            $this->clock->advanceMs(4_999);
+            self::assertSame(DeliveryStatus::Skipped, $this->send($breaker)->status);
+            $this->clock->advanceMs(1);
+            self::assertTrue($this->send($breaker)->isDelivered());
+        } finally {
+            $directory->remove();
+        }
+
+        self::assertSame(
+            [
+                'warning: Tracewick stopped sending profiles for {pauseMs} ms after a configuration error: {reason}',
+                'info: Tracewick resumed sending profiles after a successful trial delivery.',
+            ],
+            $logger->lines(),
+        );
+        self::assertArrayHasKey(0, $logger->records);
+        self::assertSame(['pauseMs' => 5_000, 'reason' => 'HTTP 401'], $logger->records[0]['context']);
+    }
+
+    public function testClampsACorruptOpenDeadlineToTheLongestConfiguredPause(): void
+    {
+        $farFuture = $this->clock->nowNs() + 86_400_000 * 1_000_000;
+        $store = new RecordingCircuitBreakerStore(new CircuitBreakerState(3, $farFuture));
+        $breaker = $this->breaker(
+            new ScriptedTransport(Delivery::delivered()),
+            new CircuitBreakerConfig(3, 1_000, configurationOpenDurationMs: 5_000),
+            $store,
+        );
+
+        self::assertTrue($breaker->isOpen());
+        self::assertEquals(new CircuitBreakerState(3, $this->clock->nowNs() + 5_000_000_000), $store->load());
+        self::assertSame(DeliveryStatus::Skipped, $this->send($breaker)->status);
+
+        $this->clock->advanceMs(5_000);
+        self::assertFalse($breaker->isOpen());
+        self::assertTrue($this->send($breaker)->isDelivered());
     }
 
     public function testCountsFromZeroAfterASuccess(): void
@@ -288,7 +352,7 @@ final class CircuitBreakerTransportTest extends TestCase
     {
         $directory = new TemporaryDirectory();
         $logger = new RecordingLogger();
-        $inner = new ScriptedTransport(Delivery::delivered(), Delivery::failed('1'), Delivery::failed('2'), Delivery::failed('trial'), Delivery::rejected('reachable'), Delivery::delivered());
+        $inner = new ScriptedTransport(Delivery::delivered(), Delivery::failed('1'), Delivery::failed('2'), Delivery::failed('trial'), Delivery::delivered());
         $breaker = new CircuitBreakerTransport($inner, new CircuitBreakerConfig(2, 1_500), $this->clock, new InMemoryCircuitBreakerStore(), new DiagnosticLogger($logger, $directory->path, clock: $this->clock));
 
         try {
@@ -299,7 +363,6 @@ final class CircuitBreakerTransportTest extends TestCase
             $this->clock->advanceMs(1_500);
             $this->send($breaker);
             $this->clock->advanceMs(1_500);
-            $this->send($breaker);
             $this->send($breaker);
         } finally {
             $directory->remove();

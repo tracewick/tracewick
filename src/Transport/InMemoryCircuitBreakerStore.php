@@ -25,4 +25,11 @@ final class InMemoryCircuitBreakerStore implements CircuitBreakerStore
     {
         $this->state = $state;
     }
+
+    public function update(callable $updater): CircuitBreakerState
+    {
+        $this->state = $updater($this->state);
+
+        return $this->state;
+    }
 }

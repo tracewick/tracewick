@@ -33,9 +33,11 @@ use Tracewick\Transport\CircuitBreakerTransport;
 use Tracewick\Transport\ClaimedSpoolFile;
 use Tracewick\Transport\Delivery;
 use Tracewick\Transport\DirectorySpoolSource;
+use Tracewick\Transport\FallbackCircuitBreakerStore;
 use Tracewick\Transport\FileCircuitBreakerStore;
 use Tracewick\Transport\HttpConfig;
 use Tracewick\Transport\HttpTransport;
+use Tracewick\Transport\InMemoryCircuitBreakerStore;
 use Tracewick\Transport\SpoolReaderConfig;
 use Tracewick\Transport\SpoolTransport;
 
@@ -61,6 +63,8 @@ use Tracewick\Transport\SpoolTransport;
 #[UsesClass(CircuitBreakerTransport::class)]
 #[UsesClass(CircuitBreakerState::class)]
 #[UsesClass(FileCircuitBreakerStore::class)]
+#[UsesClass(FallbackCircuitBreakerStore::class)]
+#[UsesClass(InMemoryCircuitBreakerStore::class)]
 #[UsesClass(DiagnosticLogger::class)]
 #[UsesClass(AtomicFile::class)]
 #[UsesClass(PprofEncoder::class)]

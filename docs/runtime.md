@@ -71,12 +71,12 @@ debugging, not for high-load FPM: timeouts and the circuit breaker bound time sp
 worker still pays that time, and DNS for hostnames is outside the socket deadline
 ([ADR 8](adr/0008-own-http-transport.md)).
 
-The circuit breaker stops sending after a few failed deliveries in a row (default 3) and tries
-again after 30 seconds. State is a small file (default under the system temp dir; set
-`stateDirectory` in `CircuitBreakerConfig`). Sharing across FPM workers is best-effort until the
-store uses atomic updates; docs that promised a local in-memory fallback when the file cannot be
-written describe the intended behaviour — check the current `FileCircuitBreakerStore` if you rely
-on it.
+The circuit breaker classifies outcomes: transient failures (timeouts, 5xx) open after a few in a
+row (default 3) for 30 seconds; configuration errors (401/403/404/413) open at once for 5 minutes;
+a rejected payload leaves the breaker alone. State is a small file under `stateDirectory` (default:
+system temp dir), created with mode `0700`, updated under an exclusive lock so FPM workers share
+one trial. If the file cannot be written, that process falls back to in-memory state and logs a
+warning.
 
 ## PHP-FPM
 

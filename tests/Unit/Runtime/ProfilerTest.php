@@ -247,33 +247,44 @@ final class ProfilerTest extends TestCase
 
     public function testCountsAndReportsWhatHappensToEachProfile(): void
     {
-        $profiler = $this->profiler(new ProfilerConfig(maxBufferedProfiles: 4));
-        $this->sink->deliveries = [Delivery::delivered(), Delivery::rejected('Bad request.'), Delivery::failed('Timeout.'), Delivery::skipped('Circuit breaker is open.')];
-        for ($i = 0; $i < 6; ++$i) {
+        $profiler = $this->profiler(new ProfilerConfig(maxBufferedProfiles: 5));
+        $this->sink->deliveries = [
+            Delivery::delivered(),
+            Delivery::rejected('Bad request.'),
+            Delivery::configuration('HTTP 401'),
+            Delivery::failed('Timeout.'),
+            Delivery::skipped('Circuit breaker is open.'),
+        ];
+        for ($i = 0; $i < 7; ++$i) {
             $this->sampler->willSample('handle');
         }
 
-        for ($i = 0; $i < 6; ++$i) {
+        for ($i = 0; $i < 7; ++$i) {
             $profiler->start();
             $profiler->stop();
         }
 
-        $profiler->start();
-        $profiler->stop();
         $profiler->flush();
 
-        self::assertEquals(new Diagnostics(collectedProfiles: 6, droppedProfiles: 2, deliveredProfiles: 1, rejectedProfiles: 1, failedProfiles: 1, skippedProfiles: 1), $profiler->diagnostics());
+        self::assertEquals(new Diagnostics(collectedProfiles: 7, droppedProfiles: 2, deliveredProfiles: 1, rejectedProfiles: 2, failedProfiles: 1, skippedProfiles: 1), $profiler->diagnostics());
         self::assertSame(
             [
                 'notice: Tracewick dropped a profile because {count} profiles already wait for the flush.',
                 'warning: The profile backend rejected a profile: {reason}',
+                'warning: Tracewick could not deliver a profile because of a configuration error: {reason}',
                 'warning: Tracewick could not deliver a profile: {reason}',
                 'notice: Tracewick skipped a profile: {reason}',
             ],
             $this->logger->lines(),
         );
         self::assertSame(
-            [['count' => 4], ['reason' => 'Bad request.'], ['reason' => 'Timeout.'], ['reason' => 'Circuit breaker is open.']],
+            [
+                ['count' => 5],
+                ['reason' => 'Bad request.'],
+                ['reason' => 'HTTP 401'],
+                ['reason' => 'Timeout.'],
+                ['reason' => 'Circuit breaker is open.'],
+            ],
             array_column($this->logger->records, 'context'),
         );
     }
