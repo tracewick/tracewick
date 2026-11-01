@@ -297,6 +297,18 @@ final class DirectorySpoolSourceTest extends TestCase
         self::assertSame(['.' . self::FIRST . '.claimed-reader-alive-' . $epoch], $this->spool->entries());
     }
 
+    public function testReturnsALegacyClaimWithoutAnEpochUsingMtime(): void
+    {
+        $this->write('.' . self::FIRST . '.claimed-reader-legacy', 'first', time() - 700);
+        $this->clock->advanceMs(1_000);
+
+        $file = $this->source('reader-alive')->claim();
+
+        self::assertNotNull($file);
+        self::assertSame(self::FIRST, $file->name);
+        self::assertSame('first', $file->bytes);
+    }
+
     public function testLeavesAnActiveClaimAlone(): void
     {
         $this->write(self::FIRST, 'first');

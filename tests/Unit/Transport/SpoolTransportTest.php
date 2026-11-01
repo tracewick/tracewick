@@ -70,6 +70,44 @@ final class SpoolTransportTest extends TestCase
         self::assertMatchesRegularExpression('/^01798000000123456789-abcdef0123456789-[0-9a-f]{16}\.spool$/D', $entries[0]);
     }
 
+    public function testRejectsAnInvalidAggregationKeyHash(): void
+    {
+        $transport = new SpoolTransport($this->config());
+
+        $delivery = $transport->send(new Payload('body', 'application/vnd.tracewick.spool', [
+            SpoolTransport::PARAM_AGGREGATION_KEY_HASH => 'not-a-hash',
+        ]));
+
+        self::assertSame(DeliveryStatus::Rejected, $delivery->status);
+        self::assertSame('The aggregation key hash must be 16 lowercase hexadecimal digits.', $delivery->reason);
+        self::assertSame([], $this->spool->entries());
+    }
+
+    public function testCountsShardedFilesTowardsTheMaximum(): void
+    {
+        mkdir($this->spool->path . '/ab', 0o700);
+        touch($this->spool->path . '/ab/01798000000000000000-abcdef0123456789-0000000000000000.spool');
+        $transport = new SpoolTransport($this->config(maxFiles: 1));
+
+        $delivery = $transport->send(new Payload('second', 'text/plain'));
+
+        self::assertSame(DeliveryStatus::Skipped, $delivery->status);
+        self::assertSame('The spool directory already holds 1 files.', $delivery->reason);
+    }
+
+    public function testFailsWhenTheShardDirectoryCannotBeCreated(): void
+    {
+        touch($this->spool->path . '/ab');
+        $transport = new SpoolTransport($this->config());
+
+        $delivery = $transport->send(new Payload('body', 'application/vnd.tracewick.spool', [
+            SpoolTransport::PARAM_AGGREGATION_KEY_HASH => 'abcdef0123456789',
+        ]));
+
+        self::assertSame(DeliveryStatus::Failed, $delivery->status);
+        self::assertSame(\sprintf('Cannot create the spool shard directory "%s/ab".', $this->spool->path), $delivery->reason);
+    }
+
     public function testGivesEveryFileItsOwnName(): void
     {
         $transport = new SpoolTransport($this->config(), new ManualClock());
