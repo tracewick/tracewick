@@ -57,9 +57,9 @@ final class PprofEncoderTest extends TestCase
         $profile = ProtobufMessage::decode((new PprofEncoder())->encode(new Profile(EventType::Cpu, 10, 1_000, 1_500)));
 
         $strings = $profile->strings(6);
-        self::assertSame(['', 'samples', 'count', 'cpu', 'nanoseconds'], $strings);
+        self::assertSame(['', 'cpu', 'nanoseconds'], $strings);
         self::assertSame(
-            [['samples', 'count'], ['cpu', 'nanoseconds']],
+            [['cpu', 'nanoseconds']],
             array_map(fn(ProtobufMessage $type): array => $this->valueType($strings, $type), $profile->messages(1)),
         );
         self::assertFalse($profile->has(2));
@@ -71,7 +71,7 @@ final class PprofEncoderTest extends TestCase
         self::assertSame(10, $profile->int(12));
     }
 
-    public function testSampleValuesAndLabels(): void
+    public function testSampleValuesUseASingleNanosecondType(): void
     {
         $profile = ProtobufMessage::decode((new PprofEncoder())->encode(new Profile(
             EventType::Wall,
@@ -85,15 +85,36 @@ final class PprofEncoderTest extends TestCase
         $strings = $profile->strings(6);
         $samples = $profile->messages(2);
 
+        self::assertSame([['wall', 'nanoseconds']], array_map(
+            fn(ProtobufMessage $type): array => $this->valueType($strings, $type),
+            $profile->messages(1),
+        ));
         self::assertCount(2, $samples);
-        self::assertSame([3, 30], $this->item($samples, 0)->packed(2));
-        self::assertSame([2, 20], $this->item($samples, 1)->packed(2));
+        self::assertSame([30], $this->item($samples, 0)->packed(2));
+        self::assertSame([20], $this->item($samples, 1)->packed(2));
         foreach ($samples as $sample) {
-            self::assertSame(['env=prod', 'service=blog'], array_map(
-                fn(ProtobufMessage $label): string => $this->string($strings, $label->int(1)) . '=' . $this->string($strings, $label->int(2)),
-                $sample->messages(3),
-            ));
+            self::assertFalse($sample->has(3), 'Series labels must not repeat on every sample.');
         }
+    }
+
+    public function testKeepsOnlySpanIdAsASampleLabel(): void
+    {
+        $profile = ProtobufMessage::decode((new PprofEncoder())->encode(new Profile(
+            EventType::Wall,
+            10,
+            0,
+            100,
+            [new Frame('work')],
+            [new Stack([0], 1)],
+            new Labels(['span_id' => '00f067aa0ba902b7', 'env' => 'prod']),
+        )));
+        $strings = $profile->strings(6);
+        $sample = $this->item($profile->messages(2), 0);
+
+        self::assertSame(['span_id=00f067aa0ba902b7'], array_map(
+            fn(ProtobufMessage $label): string => $this->string($strings, $label->int(1)) . '=' . $this->string($strings, $label->int(2)),
+            $sample->messages(3),
+        ));
     }
 
     public function testKeepsLinesAndSharesFunctions(): void

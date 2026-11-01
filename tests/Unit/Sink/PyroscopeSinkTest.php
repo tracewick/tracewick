@@ -24,6 +24,7 @@ use Tracewick\Sampler\EventType;
 use Tracewick\Sampler\Frame;
 use Tracewick\Sink\ApplicationName;
 use Tracewick\Sink\PyroscopeConfig;
+use Tracewick\Sink\PyroscopePushRequest;
 use Tracewick\Sink\PyroscopeSink;
 use Tracewick\Sink\SpoolFile;
 use Tracewick\Tests\Support\ProtobufMessage;
@@ -47,6 +48,7 @@ use Tracewick\Transport\SystemDnsResolver;
 
 #[CoversClass(PyroscopeSink::class)]
 #[UsesClass(PyroscopeConfig::class)]
+#[UsesClass(PyroscopePushRequest::class)]
 #[UsesClass(ApplicationName::class)]
 #[UsesClass(HttpConfig::class)]
 #[UsesClass(HttpTransport::class)]
@@ -79,93 +81,74 @@ final class PyroscopeSinkTest extends TestCase
 {
     private const START_NS = 1_798_000_000_500_000_000;
 
-    public function testSendsThePprofWithTheIngestParameters(): void
-    {
-        $transport = new ScriptedTransport(Delivery::delivered());
-        $sink = new PyroscopeSink(new PyroscopeConfig('http://pyroscope:4040', 'blog'), $transport);
-
-        $delivery = $sink->send($this->profile(10_000_000, self::START_NS + 200_000_000));
-
-        self::assertTrue($delivery->isDelivered());
-        self::assertCount(1, $transport->sent);
-        $payload = $transport->payload();
-        self::assertSame('application/x-protobuf', $payload->contentType);
-        self::assertSame([
-            'name' => 'blog',
-            'format' => 'pprof',
-            'from' => '1798000000',
-            'until' => '1798000001',
-            'spyName' => 'tracewick',
-            'sampleRate' => '100',
-        ], $payload->parameters);
-        self::assertSame(self::START_NS, ProtobufMessage::decode($payload->body)->int(9));
-    }
-
-    public function testKeepsAWholeSecondEnd(): void
-    {
-        $transport = new ScriptedTransport(Delivery::delivered());
-        $sink = new PyroscopeSink(new PyroscopeConfig('http://pyroscope:4040', 'blog'), $transport);
-
-        $sink->send($this->profile(10_000_000, 1_798_000_002_000_000_000));
-
-        self::assertSame('1798000002', $transport->payload()->parameters['until'] ?? null);
-    }
-
-    public function testRoundsAnEndJustPastASecondUp(): void
-    {
-        $transport = new ScriptedTransport(Delivery::delivered());
-        $sink = new PyroscopeSink(new PyroscopeConfig('http://pyroscope:4040', 'blog'), $transport);
-
-        $sink->send($this->profile(10_000_000, 1_798_000_002_000_000_001));
-
-        self::assertSame('1798000003', $transport->payload()->parameters['until'] ?? null);
-    }
-
-    /**
-     * @return iterable<string, array{int, string}>
-     */
-    public static function sampleRates(): iterable
-    {
-        yield '10 ms' => [10_000_000, '100'];
-        yield '7 ms rounds to nearest' => [7_000_000, '143'];
-        yield '3 ms rounds to nearest' => [3_000_000, '333'];
-        yield '1 µs' => [1_000, '1000000'];
-        yield '3 ns rounds down' => [3, '333333333'];
-        yield '400 ms rounds half up' => [400_000_000, '3'];
-        yield '625 ms rounds up from .6' => [625_000_000, '2'];
-        yield 'longer than a second' => [3_000_000_000, '1'];
-    }
-
-    #[DataProvider('sampleRates')]
-    public function testDerivesTheSampleRateFromThePeriod(int $periodNs, string $expected): void
-    {
-        $transport = new ScriptedTransport(Delivery::delivered());
-        $sink = new PyroscopeSink(new PyroscopeConfig('http://pyroscope:4040', 'blog'), $transport);
-
-        $sink->send($this->profile($periodNs, self::START_NS + 200_000_000));
-
-        self::assertSame($expected, $transport->payload()->parameters['sampleRate'] ?? null);
-    }
-
-    public function testReplacesDotsInLabelKeys(): void
+    public function testSendsAPushRequestWithSeriesLabels(): void
     {
         $transport = new ScriptedTransport(Delivery::delivered());
         $sink = new PyroscopeSink(new PyroscopeConfig('http://pyroscope:4040', 'blog'), $transport);
         $profile = $this->profile(10_000_000, self::START_NS + 200_000_000)
-            ->withLabels(new Labels(['http.route' => '/posts/{id}', 'deployment.environment.name' => 'prod', 'region' => 'a.b']));
+            ->withLabels(new Labels(['http.route' => '/posts/{id}', 'region' => 'eu']));
+
+        $delivery = $sink->send($profile);
+
+        self::assertTrue($delivery->isDelivered());
+        self::assertCount(1, $transport->sent);
+        $payload = $transport->payload();
+        self::assertSame(PyroscopePushRequest::MEDIA_TYPE, $payload->contentType);
+        self::assertSame([], $payload->parameters);
+
+        [$labels, $rawProfile, $id] = $this->decodePush($payload->body);
+        self::assertSame([
+            '__name__' => 'wall',
+            'service_name' => 'blog',
+            'pyroscope_spy' => 'tracewick',
+            'http_route' => '/posts/{id}',
+            'region' => 'eu',
+        ], $labels);
+        self::assertMatchesRegularExpression(
+            '/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/',
+            $id,
+        );
+        self::assertSame((new PprofEncoder())->encode($profile), $rawProfile);
+        $pprof = ProtobufMessage::decode($rawProfile);
+        self::assertSame(self::START_NS, $pprof->int(9));
+        $samples = $pprof->messages(2);
+        self::assertNotEmpty($samples);
+        self::assertFalse($samples[0]->has(3));
+    }
+
+    public function testKeepsSpanIdInsideThePprofOnly(): void
+    {
+        $transport = new ScriptedTransport(Delivery::delivered());
+        $sink = new PyroscopeSink(new PyroscopeConfig('http://pyroscope:4040', 'blog'), $transport);
+        $profile = $this->profile(10_000_000, self::START_NS + 200_000_000)
+            ->withLabels(new Labels(['span_id' => '00f067aa0ba902b7', 'env' => 'prod']));
 
         $sink->send($profile);
 
-        $pprof = ProtobufMessage::decode($transport->payload()->body);
-        $strings = $pprof->strings(6);
-        $labels = [];
-        $samples = $pprof->messages(2);
-        self::assertCount(1, $samples);
-        foreach ($samples[0]->messages(3) as $label) {
-            $labels[$strings[$label->int(1)] ?? ''] = $strings[$label->int(2)] ?? '';
-        }
+        [$labels, $rawProfile] = $this->decodePush($transport->payload()->body);
+        self::assertSame('prod', $labels['env'] ?? null);
+        self::assertArrayNotHasKey('span_id', $labels);
 
-        self::assertSame(['deployment_environment_name' => 'prod', 'http_route' => '/posts/{id}', 'region' => 'a.b'], $labels);
+        $pprof = ProtobufMessage::decode($rawProfile);
+        $strings = $pprof->strings(6);
+        $sampleLabels = ($pprof->messages(2)[0] ?? self::fail('No sample.'))->messages(3);
+        self::assertCount(1, $sampleLabels);
+        self::assertSame(
+            'span_id=00f067aa0ba902b7',
+            ($strings[$sampleLabels[0]->int(1)] ?? '') . '=' . ($strings[$sampleLabels[0]->int(2)] ?? ''),
+        );
+    }
+
+    public function testMapsCpuEventTypeToProcessCpuSeries(): void
+    {
+        $transport = new ScriptedTransport(Delivery::delivered());
+        $sink = new PyroscopeSink(new PyroscopeConfig('http://pyroscope:4040', 'blog'), $transport);
+        $profile = new Profile(EventType::Cpu, 10_000_000, self::START_NS, self::START_NS + 200_000_000, [new Frame('work')], [new Stack([0], 3)]);
+
+        $sink->send($profile);
+
+        [$labels] = $this->decodePush($transport->payload()->body);
+        self::assertSame('process_cpu', $labels['__name__'] ?? null);
     }
 
     public function testSkipsAnEmptyProfile(): void
@@ -221,7 +204,10 @@ final class PyroscopeSinkTest extends TestCase
             self::assertSame(DeliveryStatus::Failed, $first->status);
             self::assertStringStartsWith('Cannot connect to ' . $address, $first->reason);
             self::assertSame(DeliveryStatus::Skipped, $second->status);
-            self::assertContains('tracewick-circuit-' . md5('http://' . $address . "/ingest\nteam-a"), $directory->entries());
+            self::assertContains(
+                'tracewick-circuit-' . md5('http://' . $address . PyroscopePushRequest::PATH . "\nteam-a"),
+                $directory->entries(),
+            );
             self::assertCount(2, $directory->entries());
             self::assertSame(['warning: Tracewick stopped sending profiles for {pauseMs} ms after {failures} failed deliveries in a row: {reason}'], $logger->lines());
         } finally {
@@ -239,22 +225,20 @@ final class PyroscopeSinkTest extends TestCase
 
         self::assertTrue($delivery->isDelivered());
         $payload = $transport->payload();
-        self::assertSame('application/x-protobuf', $payload->contentType);
-        self::assertSame([
-            'name' => 'shop',
-            'format' => 'pprof',
-            'from' => '1798000000',
-            'until' => '1798000001',
-            'spyName' => 'tracewick',
-            'sampleRate' => '100',
-        ], $payload->parameters);
-        $pprof = ProtobufMessage::decode($payload->body);
-        $strings = $pprof->strings(6);
-        $label = ($pprof->messages(2)[0] ?? self::fail('No sample.'))->messages(3)[0] ?? self::fail('No label.');
-        self::assertSame(['http_route', '/posts/{id}'], [$strings[$label->int(1)] ?? '', $strings[$label->int(2)] ?? '']);
+        self::assertSame(PyroscopePushRequest::MEDIA_TYPE, $payload->contentType);
+        [$labels, $rawProfile] = $this->decodePush($payload->body);
+        self::assertSame('shop', $labels['service_name'] ?? null);
+        self::assertSame('/posts/{id}', $labels['http_route'] ?? null);
+        self::assertSame(
+            (new PprofEncoder())->encode($profile),
+            $rawProfile,
+        );
+        $samples = ProtobufMessage::decode($rawProfile)->messages(2);
+        self::assertNotEmpty($samples);
+        self::assertFalse($samples[0]->has(3));
     }
 
-    public function testForwardsACompactStacksPayloadAsPprof(): void
+    public function testForwardsACompactStacksPayloadAsPprofInsidePush(): void
     {
         $transport = new ScriptedTransport(Delivery::delivered());
         $sink = new PyroscopeSink(new PyroscopeConfig('http://pyroscope:4040', 'drain'), $transport);
@@ -263,9 +247,8 @@ final class PyroscopeSinkTest extends TestCase
         $delivery = $sink->forward($this->spoolFile($profile));
 
         self::assertTrue($delivery->isDelivered());
-        self::assertSame('application/x-protobuf', $transport->payload()->contentType);
-        $expected = (new PprofEncoder())->encode($profile->withLabels(new Labels(['http_route' => '/posts/{id}'])));
-        self::assertSame($expected, $transport->payload()->body);
+        [, $rawProfile] = $this->decodePush($transport->payload()->body);
+        self::assertSame((new PprofEncoder())->encode($profile), $rawProfile);
     }
 
     /**
@@ -305,7 +288,8 @@ final class PyroscopeSinkTest extends TestCase
         $delivery = $sink->forward($this->spoolFile($profile));
 
         self::assertTrue($delivery->isDelivered());
-        self::assertSame('1000000000', $transport->payload()->parameters['sampleRate'] ?? null);
+        [$labels] = $this->decodePush($transport->payload()->body);
+        self::assertSame('process_cpu', $labels['__name__'] ?? null);
     }
 
     public function testNeverThrowsWhenForwarding(): void
@@ -317,6 +301,22 @@ final class PyroscopeSinkTest extends TestCase
 
         self::assertSame(DeliveryStatus::Failed, $delivery->status);
         self::assertSame('Cannot send the profile to Pyroscope: boom', $delivery->reason);
+    }
+
+    /**
+     * @return array{array<string, string>, string, string}
+     */
+    private function decodePush(string $body): array
+    {
+        $series = ProtobufMessage::decode($body)->messages(1)[0] ?? self::fail('No series.');
+        $labels = [];
+        foreach ($series->messages(1) as $label) {
+            $labels[$label->string(1)] = $label->string(2);
+        }
+
+        $sample = $series->messages(2)[0] ?? self::fail('No sample.');
+
+        return [$labels, $sample->string(1), $sample->string(2)];
     }
 
     private function spoolFile(Profile $profile): SpoolFile

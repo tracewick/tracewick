@@ -27,6 +27,7 @@ use Tracewick\Sampler\EventType;
 use Tracewick\Sampler\Frame;
 use Tracewick\Sink\ApplicationName;
 use Tracewick\Sink\PyroscopeConfig;
+use Tracewick\Sink\PyroscopePushRequest;
 use Tracewick\Sink\PyroscopeSink;
 use Tracewick\Sink\SpoolAggregationKey;
 use Tracewick\Sink\SpoolFile;
@@ -69,6 +70,7 @@ use Tracewick\Transport\SystemDnsResolver;
 #[UsesClass(Delivery::class)]
 #[UsesClass(PyroscopeConfig::class)]
 #[UsesClass(PyroscopeSink::class)]
+#[UsesClass(PyroscopePushRequest::class)]
 #[UsesClass(ApplicationName::class)]
 #[UsesClass(HttpConfig::class)]
 #[UsesClass(HttpTransport::class)]

@@ -14,11 +14,13 @@ use Tracewick\Sampler\Frame;
  * (ADR 4) used with Grafana Pyroscope and validated with `go tool pprof`.
  *
  * The output is uncompressed protobuf. Callers may gzip when a receiver requires it; this
- * encoder and the built-in HTTP transport do not compress. Each sample carries two values, the
- * sample count and the time it represents in nanoseconds, and the profile labels as string
- * labels. Every distinct frame (function and line) becomes a location, and frames of the same
- * function and file share one function entry. Output is deterministic: tables follow the order
- * of the profile.
+ * encoder and the built-in HTTP transport do not compress. Each sample carries one value: the
+ * time it represents in nanoseconds for the profile's single sample type (wall or cpu). Profile
+ * labels that identify a series belong on the Pyroscope push request, not on every sample; the
+ * only sample label this encoder may emit is span_id, when present.
+ * Every distinct frame (function and line) becomes a location, and frames of the same function
+ * and file share one function entry. Output is deterministic: tables follow the order of the
+ * profile.
  *
  * @see https://github.com/google/pprof/blob/main/proto/profile.proto
  */
@@ -51,12 +53,13 @@ final readonly class PprofEncoder implements Encoder
     private const FUNCTION_FILENAME = 4;
     private const FUNCTION_START_LINE = 5;
 
+    private const SAMPLE_LABEL_SPAN_ID = 'span_id';
+
     public function encode(Profile $profile): string
     {
         $strings = new StringTable();
         $out = new ProtobufWriter();
 
-        $out->bytes(self::PROFILE_SAMPLE_TYPE, $this->valueType($strings, 'samples', 'count'));
         $out->bytes(self::PROFILE_SAMPLE_TYPE, $this->valueType($strings, $profile->eventType->value, 'nanoseconds'));
 
         /** @var array<string, int> $functionIds */
@@ -97,6 +100,8 @@ final readonly class PprofEncoder implements Encoder
             return $locationIds[$key];
         };
 
+        $spanId = $profile->labels->get(self::SAMPLE_LABEL_SPAN_ID);
+
         $samples = new ProtobufWriter();
         foreach ($profile->stacks as $stack) {
             $ids = [];
@@ -118,11 +123,11 @@ final readonly class PprofEncoder implements Encoder
             $sample = (new ProtobufWriter())
                 // pprof lists locations from the innermost frame outwards.
                 ->packed(self::SAMPLE_LOCATION_ID, array_reverse($ids))
-                ->packed(self::SAMPLE_VALUE, [$stack->count, $stack->count * $profile->periodNs]);
-            foreach ($profile->labels as $key => $value) {
+                ->packed(self::SAMPLE_VALUE, [$stack->count * $profile->periodNs]);
+            if (null !== $spanId) {
                 $sample->bytes(self::SAMPLE_LABEL, (new ProtobufWriter())
-                    ->varint(self::LABEL_KEY, $strings->index($key))
-                    ->varint(self::LABEL_STR, $strings->index($value))
+                    ->varint(self::LABEL_KEY, $strings->index(self::SAMPLE_LABEL_SPAN_ID))
+                    ->varint(self::LABEL_STR, $strings->index($spanId))
                     ->toString());
             }
 

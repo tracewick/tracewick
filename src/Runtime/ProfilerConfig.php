@@ -44,7 +44,11 @@ final readonly class ProfilerConfig
         public int $maxProfileDurationSeconds = 0,
     ) {
         if (is_nan($sampleRate) || $sampleRate < 0.0 || $sampleRate > 1.0) {
-            throw new LogicException(\sprintf('The sample rate must be between 0 and 1, got %s.', $sampleRate));
+            // PHP 8.5 warns when NAN is coerced to string; print it explicitly.
+            throw new LogicException(\sprintf(
+                'The sample rate must be between 0 and 1, got %s.',
+                is_nan($sampleRate) ? 'NAN' : (string) $sampleRate,
+            ));
         }
 
         if ($maxBufferedProfiles < 1 || $maxBufferedProfiles > self::MAX_MAX_BUFFERED_PROFILES) {
