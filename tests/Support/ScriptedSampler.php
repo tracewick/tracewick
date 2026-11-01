@@ -28,9 +28,16 @@ final class ScriptedSampler implements Sampler
     /** @var array<string, \Throwable> */
     private array $failures = [];
 
+    /** @var array<string, \Throwable> */
+    private array $quietFailures = [];
+
     private bool $running = false;
 
     private bool $ranSinceFlush = false;
+
+    private int $failureCount = 0;
+
+    private ?\Throwable $lastFailure = null;
 
     /**
      * Makes the next flush return a batch with one sample of the given function.
@@ -51,7 +58,12 @@ final class ScriptedSampler implements Sampler
 
     public function start(): void
     {
+        $failures = $this->failureCount;
         $this->record('start');
+        if ($this->failureCount > $failures) {
+            return;
+        }
+
         $this->running = true;
         $this->ranSinceFlush = true;
     }
@@ -77,12 +89,43 @@ final class ScriptedSampler implements Sampler
         return $this->running;
     }
 
+    public function failureCount(): int
+    {
+        return $this->failureCount;
+    }
+
+    public function lastFailure(): ?\Throwable
+    {
+        return $this->lastFailure;
+    }
+
+    /**
+     * Makes the next call to the method fail without throwing, like ExcimerSampler.
+     */
+    public function willFailQuietly(string $method, \Throwable $failure): self
+    {
+        $this->quietFailures[$method] = $failure;
+
+        return $this;
+    }
+
     private function record(string $method): void
     {
         $this->calls[] = $method;
+        $quiet = $this->quietFailures[$method] ?? null;
+        if ($quiet instanceof \Throwable) {
+            unset($this->quietFailures[$method]);
+            ++$this->failureCount;
+            $this->lastFailure = $quiet;
+
+            return;
+        }
+
         $failure = $this->failures[$method] ?? null;
         if ($failure instanceof \Throwable) {
             unset($this->failures[$method]);
+            ++$this->failureCount;
+            $this->lastFailure = $failure;
 
             throw $failure;
         }

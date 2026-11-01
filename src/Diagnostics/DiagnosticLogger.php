@@ -40,6 +40,14 @@ final readonly class DiagnosticLogger
     ) {}
 
     /**
+     * Whether a PSR-3 logger will receive messages.
+     */
+    public function hasLogger(): bool
+    {
+        return $this->logger instanceof LoggerInterface;
+    }
+
+    /**
      * @param string               $level   a {@see \Psr\Log\LogLevel} constant
      * @param string               $message message with PSR-3 placeholders; the same text is the
      *                                      same message for the interval

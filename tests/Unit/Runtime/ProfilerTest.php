@@ -21,6 +21,7 @@ use Tracewick\Sampler\ExcimerSampler;
 use Tracewick\Sampler\ExcimerTraceConverter;
 use Tracewick\Sampler\Frame;
 use Tracewick\Sampler\NullSampler;
+use Tracewick\Sampler\NullSamplerReason;
 use Tracewick\Sampler\Sample;
 use Tracewick\Sampler\SampleBatch;
 use Tracewick\Sampler\SamplerConfig;
@@ -44,6 +45,7 @@ use Tracewick\Transport\Delivery;
 #[UsesClass(SamplerConfig::class)]
 #[UsesClass(SamplerFactory::class)]
 #[UsesClass(NullSampler::class)]
+#[UsesClass(NullSamplerReason::class)]
 #[UsesClass(ExcimerSampler::class)]
 #[UsesClass(ExcimerTraceConverter::class)]
 #[UsesClass(SystemClock::class)]
@@ -69,6 +71,7 @@ final class ProfilerTest extends TestCase
 
     protected function setUp(): void
     {
+        Profiler::resetInactiveSamplerWarning();
         $this->sampler = new ScriptedSampler();
         $this->sink = new RecordingSink();
         $this->logger = new RecordingLogger();
@@ -157,18 +160,48 @@ final class ProfilerTest extends TestCase
         self::assertSame([], $this->labelsOf(0));
     }
 
-    public function testIgnoresAStartWhileRunning(): void
+    public function testRotatesARunningProfileOnANewStart(): void
     {
         $profiler = $this->profiler();
-        $this->sampler->willSample('handle');
+        $this->sampler->willSample('first')->willSample('second');
 
         $profiler->start(['route' => 'first']);
         $profiler->start(['route' => 'second']);
         $profiler->stop();
         $profiler->flush();
 
-        self::assertSame(['flush', 'start', 'stop', 'flush'], $this->sampler->calls);
+        self::assertSame(['flush', 'start', 'stop', 'flush', 'flush', 'start', 'stop', 'flush'], $this->sampler->calls);
+        self::assertSame(['first', 'second'], $this->sink->functions());
         self::assertSame(['route' => 'first'], $this->labelsOf(0));
+        self::assertSame(['route' => 'second'], $this->labelsOf(1));
+    }
+
+    public function testSkipsNonStringLabelsWithoutLeavingAStuckProfile(): void
+    {
+        $profiler = $this->profiler();
+        $this->sampler->willSample('handle');
+
+        $profiler->start([0 => 'x', 'route' => 'home', 'nested' => ['a']]);
+        self::assertTrue($profiler->isRunning());
+        $profiler->stop();
+        $profiler->flush();
+
+        self::assertSame(['route' => 'home'], $this->labelsOf(0));
+        self::assertSame(2, $profiler->diagnostics()->swallowedErrors);
+        self::assertInstanceOf(LogicException::class, $profiler->lastFailure());
+    }
+
+    public function testDoesNotMarkStartedWhenTheSamplerFailsQuietly(): void
+    {
+        $profiler = $this->profiler();
+        $this->sampler->willFailQuietly('start', new \RuntimeException('Timer unavailable.'));
+
+        $profiler->start(['route' => 'home']);
+
+        self::assertFalse($profiler->isRunning());
+        self::assertSame('Timer unavailable.', $profiler->lastFailure()?->getMessage());
+        self::assertSame(1, $profiler->diagnostics()->samplerFailures);
+        self::assertSame(1, $profiler->diagnostics()->swallowedErrors);
     }
 
     public function testIgnoresAStopWithoutAStart(): void
@@ -293,13 +326,50 @@ final class ProfilerTest extends TestCase
         $profiler->start();
 
         self::assertSame('Cannot start.', $profiler->lastFailure()?->getMessage());
+        self::assertFalse($profiler->isRunning());
+        self::assertSame(1, $profiler->diagnostics()->samplerFailures);
+        self::assertSame(0, $profiler->bufferedProfiles());
 
+        $this->sampler->willSample('handle');
         $this->sampler->willFail('stop', new \RuntimeException('Cannot stop.'));
+        $profiler->start();
+        self::assertTrue($profiler->isRunning());
         $profiler->stop();
 
         self::assertSame('Cannot stop.', $profiler->lastFailure()?->getMessage());
         self::assertFalse($profiler->isRunning());
         self::assertSame(0, $profiler->bufferedProfiles());
+    }
+
+    public function testWarnsOnceWhenTheSamplerIsInactive(): void
+    {
+        $sampler = new NullSampler(NullSamplerReason::ExtensionMissing, clock: new ManualClock());
+        $profiler = new Profiler(
+            $sampler,
+            $this->sink,
+            new ProfilerConfig(),
+            null,
+            null,
+            null,
+            new DiagnosticLogger($this->logger, $this->logDirectory->path, clock: new ManualClock()),
+        );
+
+        self::assertSame(NullSamplerReason::ExtensionMissing, $profiler->diagnostics()->inactiveSampler);
+        self::assertSame(
+            ['warning: Tracewick profiling is inactive: ext-excimer is not loaded.'],
+            $this->logger->lines(),
+        );
+
+        new Profiler(
+            new NullSampler(NullSamplerReason::Disabled, clock: new ManualClock()),
+            $this->sink,
+            logger: new DiagnosticLogger($this->logger, $this->logDirectory->path, clock: new ManualClock()),
+        );
+
+        self::assertSame(
+            ['warning: Tracewick profiling is inactive: ext-excimer is not loaded.'],
+            $this->logger->lines(),
+        );
     }
 
     public function testStopsAndFlushesAtShutdown(): void
@@ -441,7 +511,7 @@ final class ProfilerTest extends TestCase
 
     public function testCreatesAProfilerWithTheAvailableSampler(): void
     {
-        $profiler = Profiler::create($this->sink);
+        $profiler = Profiler::create($this->sink, logger: $this->logger);
 
         $profiler->start();
         self::assertTrue($profiler->isRunning());

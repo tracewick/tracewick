@@ -31,9 +31,9 @@ memory without a bound, it becomes an outage. It must also install on hosts with
 
 These belong to the decision but are **not** fully true of the current code:
 
-- Missing-extension warning once per process (reason exists on `NullSampler`, not logged yet).
-- Sampler failures are not merged into `Profiler::diagnostics()`.
 - Sample / unique-stack caps on the Excimer log (native flush callback) are not wired yet.
+- Broader kill switch (file flag, `$_SERVER` / `$_ENV`, ini) is not wired yet; only
+  `TRACEWICK_ENABLED` via the factory.
 - `ProfilerConfig::finishRequest` defaults to `false`, so shutdown may still send on the request
   path unless the app opts in.
 - DNS resolution for hostnames is outside the HTTP socket timeout ([ADR 8](0008-own-http-transport.md)).

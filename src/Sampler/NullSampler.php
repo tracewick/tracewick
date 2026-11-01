@@ -46,4 +46,14 @@ final class NullSampler implements Sampler
     {
         return false;
     }
+
+    public function failureCount(): int
+    {
+        return 0;
+    }
+
+    public function lastFailure(): ?\Throwable
+    {
+        return $this->cause;
+    }
 }
