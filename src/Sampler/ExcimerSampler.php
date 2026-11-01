@@ -54,7 +54,7 @@ final class ExcimerSampler implements Sampler
         $pid = getmypid();
         $this->pid = false === $pid ? 0 : $pid;
         $this->profiler = $this->createProfiler();
-        $this->converter = new ExcimerTraceConverter($this->clock->nowNs(), $config->maxDepth);
+        $this->converter = new ExcimerTraceConverter($this->clock->nowNs(), $config->maxDepth, $config->projectRoot);
     }
 
     /**
@@ -162,7 +162,7 @@ final class ExcimerSampler implements Sampler
         $this->windowStartNs = null;
         $this->aggregator->reset();
         $this->profiler = $this->createProfiler();
-        $this->converter = new ExcimerTraceConverter($this->clock->nowNs(), $this->config->maxDepth);
+        $this->converter = new ExcimerTraceConverter($this->clock->nowNs(), $this->config->maxDepth, $this->config->projectRoot);
         if ($wasRunning) {
             $this->windowStartNs = $this->clock->nowNs();
             $this->profiler->start();

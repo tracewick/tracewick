@@ -81,6 +81,69 @@ final class ExcimerTraceConverterTest extends TestCase
         self::assertEquals([new Frame('{closure}', null, '/app/routes.php', 8, 7)], $sample->frames);
     }
 
+    public function testStripsProjectRootFromFileAndClosurePath(): void
+    {
+        $converter = new ExcimerTraceConverter(self::ORIGIN_NS, 256, '/app');
+
+        $sample = $converter->convertEntry([
+            [
+                'file' => '/app/src/routes.php',
+                'line' => 12,
+                'function' => '{closure:/app/src/routes.php:10}',
+                'closure_line' => 10,
+            ],
+            [
+                'file' => '/app/src/Foo.php',
+                'line' => 15,
+                'class' => 'App\Foo',
+                'function' => '{closure:App\Foo::bar():12}',
+                'closure_line' => 12,
+            ],
+        ], 1, 0.0);
+
+        self::assertNotNull($sample);
+        self::assertCount(2, $sample->frames);
+        self::assertEquals([
+            new Frame('{closure:App\Foo::bar():12}', 'App\Foo', 'src/Foo.php', 15, 12),
+            new Frame('{closure:src/routes.php:10}', null, 'src/routes.php', 12, 10),
+        ], $sample->frames);
+        self::assertSame('App\Foo::bar{closure:12}', $sample->frames[0]->name());
+        self::assertSame('{closure:src/routes.php:10}', $sample->frames[1]->name());
+    }
+
+    public function testStripLeavesPathsOutsideProjectRoot(): void
+    {
+        $converter = new ExcimerTraceConverter(self::ORIGIN_NS, 256, '/app');
+
+        $sample = $converter->convertEntry([
+            ['file' => '/app', 'line' => 1, 'function' => 'boot'],
+            ['file' => '/other/lib.php', 'line' => 2, 'function' => 'helper'],
+            ['file' => '/app/src/x.php', 'line' => 3, 'function' => '{closure:broken}'],
+            ['file' => '/app/src/y.php', 'line' => 4, 'function' => '{closure:nocolon}'],
+            ['file' => '/app/src/z.php', 'line' => 5, 'function' => '{closure:scope:abc}'],
+            ['file' => '/app/src/w.php', 'line' => 6, 'function' => 'named'],
+            ['file' => '/app/top.php', 'line' => 7],
+            [
+                'file' => '/app/win.php',
+                'line' => 8,
+                'function' => '{closure:\\release\\win.php:3}',
+                'closure_line' => 3,
+            ],
+        ], 1, 0.0);
+
+        self::assertNotNull($sample);
+        self::assertEquals([
+            new Frame('{closure:\\release\\win.php:3}', null, 'win.php', 8, 3),
+            new Frame(null, null, 'top.php', 7),
+            new Frame('named', null, 'src/w.php', 6),
+            new Frame('{closure:scope:abc}', null, 'src/z.php', 5),
+            new Frame('{closure:nocolon}', null, 'src/y.php', 4),
+            new Frame('{closure:broken}', null, 'src/x.php', 3),
+            new Frame('helper', null, '/other/lib.php', 2),
+            new Frame('boot', null, '', 1),
+        ], $sample->frames);
+    }
+
     public function testSkipsMalformedFramesAndFields(): void
     {
         $sample = $this->converter()->convertEntry([

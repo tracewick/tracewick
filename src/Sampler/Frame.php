@@ -30,10 +30,13 @@ final readonly class Frame
     ) {}
 
     /**
-     * Human-readable name that identifies the function, independent of the line being executed.
+     * Aggregation name independent of PHP version and (when paths were stripped) deploy prefix.
      *
-     * Closures are named `{closure:file:line}` on every PHP version, matching the native naming
-     * of PHP 8.4, so that profiles from different PHP versions aggregate the same way.
+     * Closures use a Tracewick canon:
+     * - `Class::method{closure:line}` / `function{closure:line}` when the enclosing scope is known
+     *   (PHP 8.4-shaped Excimer names, or reconstructed from fields);
+     * - `Class::{closure:line}` when only the class is known (pre-8.4 bound closures);
+     * - `{closure:file:line}` for top-level closures.
      */
     public function name(): string
     {
@@ -42,8 +45,9 @@ final readonly class Frame
             return self::MAIN;
         }
 
-        if ('{closure}' === $function && null !== $this->closureLine) {
-            $function = \sprintf('{closure:%s:%d}', $this->file ?? '', $this->closureLine);
+        $canon = $this->canonicalClosure($function);
+        if (null !== $canon) {
+            return $canon;
         }
 
         if (null === $this->class || '' === $this->class) {
@@ -51,5 +55,72 @@ final readonly class Frame
         }
 
         return $this->class . '::' . $function;
+    }
+
+    /**
+     * @return ?string null when $function is not a closure name
+     */
+    private function canonicalClosure(string $function): ?string
+    {
+        if ('{closure}' === $function) {
+            return $this->closureFromFields();
+        }
+
+        if (!str_starts_with($function, '{closure:') || !str_ends_with($function, '}')) {
+            return null;
+        }
+
+        $inner = substr($function, \strlen('{closure:'), -1);
+        $colon = strrpos($inner, ':');
+        if (false === $colon) {
+            return $function;
+        }
+
+        $scope = substr($inner, 0, $colon);
+        $linePart = substr($inner, $colon + 1);
+        if ('' === $linePart || !ctype_digit($linePart)) {
+            return $function;
+        }
+
+        $line = (int) $linePart;
+
+        // PHP 8.4 method: Class::method():12
+        if (str_ends_with($scope, '()') && str_contains($scope, '::')) {
+            $withoutParens = substr($scope, 0, -2);
+
+            return $withoutParens . '{closure:' . $line . '}';
+        }
+
+        // PHP 8.4 function: foo():12
+        if (str_ends_with($scope, '()') && !str_contains($scope, '::')) {
+            $withoutParens = substr($scope, 0, -2);
+
+            return $withoutParens . '{closure:' . $line . '}';
+        }
+
+        // Path form: /abs/file.php:12 (path may already be stripped by the converter)
+        if (null !== $this->class && '' !== $this->class) {
+            return $this->class . '::{closure:' . $line . '}';
+        }
+
+        return '{closure:' . $scope . ':' . $line . '}';
+    }
+
+    private function closureFromFields(): string
+    {
+        $line = $this->closureLine;
+        if (null === $line) {
+            if (null !== $this->class && '' !== $this->class) {
+                return $this->class . '::{closure}';
+            }
+
+            return '{closure}';
+        }
+
+        if (null !== $this->class && '' !== $this->class) {
+            return $this->class . '::{closure:' . $line . '}';
+        }
+
+        return '{closure:' . ($this->file ?? '') . ':' . $line . '}';
     }
 }

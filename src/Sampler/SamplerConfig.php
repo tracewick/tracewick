@@ -58,6 +58,8 @@ final readonly class SamplerConfig
 
     public const MAX_MAX_UNIQUE_STACKS = 100_000;
 
+    public ?string $projectRoot;
+
     /**
      * @param int       $periodNs         time between two samples, in nanoseconds
      * @param EventType $eventType        whether the period is measured in wall-clock or CPU time
@@ -66,6 +68,9 @@ final readonly class SamplerConfig
      * @param int       $maxSamples       Excimer flush-callback threshold; the C log is drained into
      *                                    the aggregator at least this often
      * @param int       $maxUniqueStacks  distinct stacks kept per profile window before overflow
+     * @param ?string   $projectRoot      absolute app base path stripped from frame files and closure
+     *                                    names so release directories do not split aggregation; null
+     *                                    keeps paths as Excimer reports them
      */
     public function __construct(
         public int $periodNs = self::DEFAULT_PERIOD_NS,
@@ -73,6 +78,7 @@ final readonly class SamplerConfig
         public int $maxDepth = self::DEFAULT_MAX_DEPTH,
         public int $maxSamples = self::DEFAULT_MAX_SAMPLES,
         public int $maxUniqueStacks = self::DEFAULT_MAX_UNIQUE_STACKS,
+        ?string $projectRoot = null,
     ) {
         if ($periodNs < self::MIN_PERIOD_NS || $periodNs > self::MAX_PERIOD_NS) {
             throw new LogicException(\sprintf(
@@ -108,6 +114,8 @@ final readonly class SamplerConfig
                 $maxUniqueStacks,
             ));
         }
+
+        $this->projectRoot = $this->normalizeProjectRoot($projectRoot);
     }
 
     /**
@@ -116,5 +124,18 @@ final readonly class SamplerConfig
     public function periodSeconds(): float
     {
         return $this->periodNs / 1_000_000_000;
+    }
+
+    private function normalizeProjectRoot(?string $projectRoot): ?string
+    {
+        if (null === $projectRoot) {
+            return null;
+        }
+
+        if ('' === trim($projectRoot)) {
+            throw new LogicException('Project root must be a non-empty path when set.');
+        }
+
+        return rtrim($projectRoot, "/\\");
     }
 }

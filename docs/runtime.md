@@ -37,6 +37,10 @@ values are `0`, `false`, `off`, and `no`. The first profiler constructed in the 
 warning once (to the PSR-3 logger when given, otherwise to `error_log`) that names the reason:
 disabled, missing extension, or init failure.
 
+When constructing `SamplerConfig` yourself, set `projectRoot` to the application base path so frame
+files and closure names do not include release-directory prefixes (otherwise each deploy splits
+aggregation series).
+
 ### The lifecycle
 
 | Call                     | What it does                                                                 |
