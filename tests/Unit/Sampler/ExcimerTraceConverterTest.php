@@ -135,6 +135,7 @@ final class ExcimerTraceConverterTest extends TestCase
         $samples = $aggregator->toSamples(0);
         self::assertCount(1, $samples);
         self::assertSame(3, $samples[0]->count);
+        self::assertNotEmpty($samples[0]->frames);
         self::assertSame('handle', $samples[0]->frames[0]->function);
     }
 
