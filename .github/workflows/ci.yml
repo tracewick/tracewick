@@ -98,10 +98,9 @@ jobs:
       - name: Mutation testing
         if: ${{ !cancelled() && steps.tests.outcome == 'success' }}
         run: |
-          # Infection aborts when the tests execute no source statement at all, which is the case
-          # while src/ holds only exceptions and interfaces. Remove this guard once it never fires.
+          # Safety net if coverage is empty (misconfigured run). Normal builds have executable src/.
           if tail -n 3 build/coverage/clover.xml | grep -q ' statements="0"'; then
-            echo '::notice::No executable source code yet, skipping mutation testing.'
+            echo '::notice::Coverage reports zero statements; skipping mutation testing.'
             exit 0
           fi
           composer infection:ci

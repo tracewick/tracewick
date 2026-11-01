@@ -2,41 +2,35 @@
 
 - Status: Accepted
 - Date: 2026-10-29
+- Updated: 2026-11-01
 
 ## Context
 
-A profiler library has several independent concerns: taking samples, modelling the result,
-turning it into a file format, delivering bytes, applying backend rules, and fitting into the
-lifecycle of FPM, CLI and long-running workers. Prior art in this space mixes these concerns, which
-makes formats hard to test without the extension and backends hard to add without touching the
-sampler.
+A profiler library mixes sampling, modelling, encoding, delivery, backend rules and process
+lifecycle. Prior art often tangled these, so formats were hard to test without the extension and
+backends were hard to add without touching the sampler.
 
 ## Decision
 
-The core is split into six layers. Each layer depends only on the layers below it, never on a
-layer above:
+Six layers; each depends only on layers below:
 
-1. **Sampler** wraps `\ExcimerProfiler` behind an interface (`start`, `stop`, `flush`), so that
-   everything above it can be tested without the extension and without reflection.
-2. **Profile** is an immutable model of aggregated, weighted stacks with start and end timestamps
-   in nanoseconds, the sampling period, the event type (wall or CPU) and labels.
-3. **Encoder** turns a Profile into bytes: collapsed stacks, Speedscope, pprof. Encoders are pure
-   functions of the Profile.
-4. **Transport** delivers bytes somewhere: a file, HTTP through a PSR-18 client, a spool directory,
-   a local agent socket. Transports know nothing about formats.
-5. **Sink** combines an encoder and a transport with the rules of one backend (for example the
-   Pyroscope label syntax and query parameters).
-6. **Runtime** owns the lifecycle in a given environment: when to start and stop, request
-   sampling, deferred delivery after the response, flushing in workers.
+1. **Sampler** — `\ExcimerProfiler` behind an interface (`start`, `stop`, `flush`).
+2. **Profile** — immutable aggregated stacks, weights, timestamps, period, event type, labels.
+3. **Encoder** — Profile → bytes (collapsed, Speedscope, pprof).
+4. **Transport** — deliver bytes. Implemented: own HTTP ([ADR 8](0008-own-http-transport.md)),
+   spool directory. Proposed: unix socket ([ADR 9](0009-agent-hand-off.md)). Not: a generic
+   "file" transport or PSR-18 in the core.
+5. **Sink** — encoder + transport + backend rules (`PyroscopeSink`, `SpoolSink`).
+6. **Runtime** — when to start/stop, request sampling, flush, drain CLI.
 
-Framework integrations (Symfony, Laravel, PSR-15) live in separate packages and use only the
-Runtime and Sink public APIs. Each layer gets its own namespace under `Tracewick\`; a static
-analysis rule enforces the dependency direction once the layers exist.
+Framework packages (Symfony, Laravel, PSR-15) stay out of this repository and should use Runtime
+and Sink APIs only.
+
+`Clock`, `Diagnostics` and `Exception` are shared helpers beside the stack. A static-analysis rule
+for layer direction is still desirable; it is not configured yet.
 
 ## Consequences
 
-- Encoders are tested with golden files and no extension; transports are tested with fake servers
-  and no encoders.
-- A new backend is a new Sink, usually without touching other layers.
-- More types and indirection than a single profiler class, which the public facade in the Runtime
-  layer hides from most users.
+- Encoders can use golden files without the extension; transports can use fake servers.
+- A new backend is usually a new Sink.
+- More types than a single facade class; Runtime hides most of that from app code.

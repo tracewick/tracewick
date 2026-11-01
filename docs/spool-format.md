@@ -1,9 +1,12 @@
 # Spool format, version 1
 
 The spool is how Tracewick hands profiles to a separate delivery process, such as
-[`tracewick-drain`](drain.md), `tracewick-agent`, Grafana Alloy or a sidecar of your own ([ADR 7](adr/0007-language-neutral-spool-format.md)).
-The application writes each profile to a local directory within microseconds and goes on; the
-delivery process reads the directory, sends the profiles to a backend and removes them.
+[`tracewick-drain`](drain.md), a future `tracewick-agent`, Grafana Alloy or a sidecar of your own
+([ADR 7](adr/0007-language-neutral-spool-format.md)).
+The application writes each profile to a directory and continues; the delivery process reads the
+directory, sends the profiles to a backend and removes them. Write cost is small compared with
+encoding and HTTP, but it is not a measured microsecond budget (directory checks and disk I/O
+scale with backlog).
 
 This document is a public contract, independent of the PHP API. A reader or writer in any language
 can be built from it and checked against the fixture files in
@@ -13,6 +16,10 @@ The key words MUST, MUST NOT, SHOULD and MAY are used as described in RFC 2119.
 
 ## Directory
 
+- The spool directory MUST be on a **local** filesystem for the writer and its readers (same host
+  or the same Kubernetes volume as an `emptyDir`). MUST NOT place the spool on NFS or similar
+  network filesystems: claim `rename` and durability assumptions do not hold there
+  ([ADR 9](adr/0009-agent-hand-off.md)).
 - A spool is one flat directory. Writers MAY create it; readers MUST NOT require any other file in
   it.
 - A **spool file** is a regular file whose name ends in `.spool` and does not start with a dot.

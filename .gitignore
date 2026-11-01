@@ -5,5 +5,7 @@
 /.rector.cache/
 /.php-cs-fixer.cache
 /build/
+/artifacts/
+/.cursor/
 /phpstan.neon
 /phpunit.xml

@@ -11,13 +11,14 @@ use Tracewick\Sampler\Frame;
 
 /**
  * Encodes a profile in the pprof format (profile.proto), the primary interchange format
- * (ADR 4) accepted by Grafana Pyroscope, the OpenTelemetry Collector and `go tool pprof`.
+ * (ADR 4) used with Grafana Pyroscope and validated with `go tool pprof`.
  *
- * The output is uncompressed protobuf; transports compress it when the receiver expects gzip.
- * Each sample carries two values, the sample count and the time it represents in nanoseconds,
- * and the profile labels as string labels. Every distinct frame (function and line) becomes a
- * location, and frames of the same function and file share one function entry, so line-level
- * detail is kept. Output is deterministic: tables follow the order of the profile.
+ * The output is uncompressed protobuf. Callers may gzip when a receiver requires it; this
+ * encoder and the built-in HTTP transport do not compress. Each sample carries two values, the
+ * sample count and the time it represents in nanoseconds, and the profile labels as string
+ * labels. Every distinct frame (function and line) becomes a location, and frames of the same
+ * function and file share one function entry. Output is deterministic: tables follow the order
+ * of the profile.
  *
  * @see https://github.com/google/pprof/blob/main/proto/profile.proto
  */

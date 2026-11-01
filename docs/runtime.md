@@ -55,18 +55,22 @@ by the rate. Shares within a flame graph, which is what profiling is read for, s
 ## Which sink
 
 Delivery happens in `flush()`, after the work, but in the same process. With a `SpoolSink` it is a
-local file write of a few microseconds, and a separate process sends the files on
-([`tracewick-drain`](drain.md) or `tracewick-agent`). This is the recommended setup in production.
+local file write (cheap next to encoding and HTTP; not a measured microsecond budget), and a
+separate process sends the files ([`tracewick-drain`](drain.md); a Go agent is planned). This is
+the recommended setup in production. Put the spool on a **local** filesystem
+([spool format](spool-format.md)).
 
-A `PyroscopeSink` sends over the network from the PHP process itself. Its timeouts and circuit
-breaker bound the time spent, but that time is still taken from the worker that did the work.
+A `PyroscopeSink` sends over the network from the PHP process itself. Prefer it for staging and
+debugging, not for high-load FPM: timeouts and the circuit breaker bound time spent, but the
+worker still pays that time, and DNS for hostnames is outside the socket deadline
+([ADR 8](adr/0008-own-http-transport.md)).
 
-The circuit breaker stops sending after a few failed deliveries in a row, 3 by default, and tries
-again after 30 seconds. Its state is shared by all processes of the host through a small file in
-the system temporary directory, one per server and tenant, so when Pyroscope goes down the
-PHP-FPM workers stop sending together instead of each paying for its own timeouts. Set
-`stateDirectory` in `CircuitBreakerConfig` to keep the file elsewhere. If the file cannot be
-written, every process falls back to its own count.
+The circuit breaker stops sending after a few failed deliveries in a row (default 3) and tries
+again after 30 seconds. State is a small file (default under the system temp dir; set
+`stateDirectory` in `CircuitBreakerConfig`). Sharing across FPM workers is best-effort until the
+store uses atomic updates; docs that promised a local in-memory fallback when the file cannot be
+written describe the intended behaviour — check the current `FileCircuitBreakerStore` if you rely
+on it.
 
 ## PHP-FPM
 

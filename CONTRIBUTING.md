@@ -76,52 +76,50 @@ The PHP container gets these addresses as `PYROSCOPE_URL`, `PYROSCOPE_TOXIC_URL`
 
 ### Reference application
 
-Profiles are only as convincing as the application they come from, so the stand includes a real
-one: the [Symfony Demo](https://github.com/symfony/demo) blog with PostgreSQL, served two ways:
+The stand includes the [Symfony Demo](https://github.com/symfony/demo) blog with PostgreSQL, served
+two ways. Both variants are profiled by Tracewick built from the working tree (`make app-build`
+picks up changes to `src/`):
 
-| Variant              | URL                     | What it exercises                                     |
-|----------------------|-------------------------|-------------------------------------------------------|
-| PHP-FPM behind nginx | http://127.0.0.1:8081   | Classic request-per-process lifecycle                 |
-| RoadRunner           | http://127.0.0.1:8082   | Long-running workers: flushing, memory over time      |
+| Variant              | URL                     | What it exercises                         |
+|----------------------|-------------------------|-------------------------------------------|
+| PHP-FPM behind nginx | http://127.0.0.1:8081   | Request-per-process lifecycle             |
+| RoadRunner           | http://127.0.0.1:8082   | Long-running workers                      |
 
 ```bash
 make app-up        # start the stand plus the reference app, load the demo fixtures
-make app-smoke     # check both variants
+make app-smoke     # check that both variants answer
 make app-profiles  # send requests and check that their profiles reach Pyroscope
 make stand-down    # stop everything
 ```
 
-Besides the demo pages (for example `/en/blog/`), `/reference/external` reads from PostgreSQL and
-calls an external HTTP service ([go-httpbin](https://github.com/mccutchen/go-httpbin)) through
-Toxiproxy (`toxiproxy:18080`), so wall-time profiles show both database and network waits; a
-Toxiproxy latency toxic on the `http-mock` proxy makes that wait longer. The app runs on PHP 8.4
-(the Symfony Demo requires it), with ext-excimer installed. The demo's code is downloaded at build
-time; only the files under `docker/reference-app/` belong to this repository.
-
-Both variants are profiled by Tracewick, built from the working tree into the images, so
-`make app-build` picks up changes to `src/`. `TracewickSubscriber` (in
-`docker/reference-app/overlay/src/EventSubscriber/`) wires the library by hand: it starts a profile
-on every main request, labels it with the Symfony route (`route`), the HTTP method (`method`) and
-the variant (`runtime`: `fpm` or `roadrunner`), and delivers it on `kernel.terminate`, after the
-response has gone out. The two variants deliver differently:
+`TracewickSubscriber` (in `docker/reference-app/overlay/src/EventSubscriber/`) wires the library by
+hand: it starts a profile on every main request, labels it with the Symfony route (`route`), the
+HTTP method (`method`) and the variant (`runtime`: `fpm` or `roadrunner`), and delivers it on
+`kernel.terminate`, after the response has gone out.
 
 | Variant    | Sink              | Path to Pyroscope                                                   |
 |------------|-------------------|---------------------------------------------------------------------|
 | PHP-FPM    | `SpoolSink`       | Spool volume, then the `app-drain` service running `tracewick-drain` |
 | RoadRunner | `PyroscopeSink`   | Straight from the worker, after each response                       |
 
-The profiles appear in Grafana as the `symfony-demo` service, under Drilldown, then Profiles, or in
-Explore with the Pyroscope data source. Group or filter by `route` to compare endpoints, or by
-`runtime` to compare the variants.
+Besides the demo pages (for example `/en/blog/`), `/reference/external` reads from PostgreSQL and
+calls an external HTTP service through Toxiproxy, so wall-time profiles show database and network
+waits. The demo's code is downloaded at build time; only the files under `docker/reference-app/`
+belong to this repository.
+
+Profiles appear in Grafana as the `symfony-demo` service (Drilldown → Profiles, or Explore with
+the Pyroscope data source). Group or filter by `route` or `runtime` to compare endpoints and
+variants.
 
 ### Toxiproxy and chaos tests
 
 [Toxiproxy](https://github.com/Shopify/toxiproxy) is a TCP proxy that can inject network faults on
 demand. In the stand it sits between PHP and the backends: `http://toxiproxy:14040` is Pyroscope
 and `http://toxiproxy:14318` is the Collector, but with whatever faults a test switches on through
-the API at `TOXIPROXY_URL`. Chaos tests use it to prove the fail-open promise (see
-[ADR 5](docs/adr/0005-fail-open-policy.md)): when a backend is slow, drops connections, returns
-errors or is down, the host application must not notice.
+the API at `TOXIPROXY_URL`. Integration chaos tests use it to check that **transports and sinks**
+fail within their time budgets and that the circuit breaker opens (see
+[ADR 5](docs/adr/0005-fail-open-policy.md)). They do not yet run a host application with
+`Profiler` under load; that remains a separate gate.
 
 Tests talk to the real backends through the plain URLs and to the faulty ones through the
 `toxiproxy` URLs. A test that adds a toxic must remove it when it ends, for example:
