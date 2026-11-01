@@ -17,10 +17,13 @@ $profiler = Profiler::create(
 );
 ```
 
-`Profiler::create()` picks the best sampler for the process. Without ext-excimer, or with
-`TRACEWICK_ENABLED=0`, the profiler collects and sends nothing, and the application runs as usual.
-The first profiler constructed in the process logs a warning once (to the PSR-3 logger when given,
-otherwise to `error_log`) that names the reason: disabled, missing extension, or init failure.
+`Profiler::create()` picks the best sampler for the process. Without ext-excimer, or when the kill
+switch disables profiling, the profiler collects and sends nothing, and the application runs as
+usual. The kill switch precedence is: `TRACEWICK_DISABLE_FILE` path exists → `TRACEWICK_ENABLED` in
+`$_SERVER` → `$_ENV` → `getenv` → `ini_get('tracewick.enabled')`. Disabling values are `0`,
+`false`, `off`, and `no`. The first profiler constructed in the process logs a warning once (to the
+PSR-3 logger when given, otherwise to `error_log`) that names the reason: disabled, missing
+extension, or init failure.
 
 ## The lifecycle
 

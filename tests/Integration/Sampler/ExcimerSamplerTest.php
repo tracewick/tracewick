@@ -234,6 +234,38 @@ final class ExcimerSamplerTest extends TestCase
         self::assertSame(1_030, $batch->endNs);
     }
 
+    public function testRecreatesTheProfilerAfterASimulatedFork(): void
+    {
+        $sampler = new ExcimerSampler(new SamplerConfig(periodNs: self::PERIOD_NS));
+        $sampler->start();
+        self::busyWait(10_000_000);
+        $sampler->simulateForkForTests();
+        self::busyWait(20_000_000);
+        $sampler->stop();
+
+        $batch = $sampler->flush();
+
+        self::assertFalse($batch->isEmpty());
+        self::assertSame(0, $sampler->failureCount());
+    }
+
+    public function testRecreatesARunningProfilerDuringFlushAfterASimulatedFork(): void
+    {
+        $sampler = new ExcimerSampler(new SamplerConfig(periodNs: self::PERIOD_NS));
+        $sampler->start();
+        self::busyWait(10_000_000);
+        $sampler->simulateForkForTests();
+
+        $batch = $sampler->flush();
+
+        self::assertTrue($sampler->isRunning());
+        self::assertFalse($batch->isEmpty());
+        self::assertSame(0, $sampler->failureCount());
+
+        $sampler->stop();
+        $sampler->flush();
+    }
+
     public function testNativeFlushCallbackFeedsTheAggregatorAndSegmentListener(): void
     {
         $hits = 0;

@@ -15,15 +15,16 @@ use Tracewick\Clock\SystemClock;
  * and the last one is kept for diagnostics.
  *
  * Samples are aggregated by stack as the native flush callback drains the Excimer log, so memory
- * stays proportional to unique stacks rather than to the number of timer hits.
+ * stays proportional to unique stacks rather than to the number of timer hits. After `pcntl_fork`
+ * the sampler rebuilds its `ExcimerProfiler` on the next start or flush.
  */
 final class ExcimerSampler implements Sampler
 {
     private readonly Clock $clock;
 
-    private readonly \ExcimerProfiler $profiler;
+    private \ExcimerProfiler $profiler;
 
-    private readonly ExcimerTraceConverter $converter;
+    private ExcimerTraceConverter $converter;
 
     private readonly StackAggregator $aggregator;
 
@@ -42,25 +43,18 @@ final class ExcimerSampler implements Sampler
     /** @var ?\Closure(): void */
     private ?\Closure $segmentListener = null;
 
+    private int $pid;
+
     public function __construct(
         private readonly SamplerConfig $config,
         ?Clock $clock = null,
     ) {
         $this->clock = $clock ?? new SystemClock();
         $this->aggregator = new StackAggregator($config->maxUniqueStacks);
-
-        $this->profiler = new \ExcimerProfiler();
-        $originNs = $this->clock->nowNs();
-
-        $this->profiler->setPeriod($config->periodSeconds());
-        $this->profiler->setEventType(match ($config->eventType) {
-            EventType::Wall => EXCIMER_REAL,
-            EventType::Cpu => EXCIMER_CPU,
-        });
-        $this->profiler->setMaxDepth($config->maxDepth);
-        $this->profiler->setFlushCallback($this->onNativeFlush(...), $config->maxSamples);
-
-        $this->converter = new ExcimerTraceConverter($originNs, $config->maxDepth);
+        $pid = getmypid();
+        $this->pid = false === $pid ? 0 : $pid;
+        $this->profiler = $this->createProfiler();
+        $this->converter = new ExcimerTraceConverter($this->clock->nowNs(), $config->maxDepth);
     }
 
     /**
@@ -82,6 +76,7 @@ final class ExcimerSampler implements Sampler
         }
 
         try {
+            $this->recreateAfterFork();
             $this->windowStartNs ??= $this->clock->nowNs();
             $this->profiler->start();
             $this->running = true;
@@ -105,6 +100,7 @@ final class ExcimerSampler implements Sampler
     public function flush(): SampleBatch
     {
         try {
+            $this->recreateAfterFork();
             $this->converter->ingestLog($this->profiler->flush(), $this->aggregator);
         } catch (\Throwable $e) {
             $this->recordFailure($e);
@@ -140,6 +136,52 @@ final class ExcimerSampler implements Sampler
     public function lastFailure(): ?\Throwable
     {
         return $this->lastFailure;
+    }
+
+    /**
+     * Forces a fork check as if the process id changed. For tests only.
+     *
+     * @internal
+     */
+    public function simulateForkForTests(): void
+    {
+        $this->pid = -1;
+    }
+
+    private function recreateAfterFork(): void
+    {
+        $currentPid = getmypid();
+        $pid = false === $currentPid ? 0 : $currentPid;
+        if ($pid === $this->pid) {
+            return;
+        }
+
+        $wasRunning = $this->running;
+        $this->pid = $pid;
+        $this->running = false;
+        $this->windowStartNs = null;
+        $this->aggregator->reset();
+        $this->profiler = $this->createProfiler();
+        $this->converter = new ExcimerTraceConverter($this->clock->nowNs(), $this->config->maxDepth);
+        if ($wasRunning) {
+            $this->windowStartNs = $this->clock->nowNs();
+            $this->profiler->start();
+            $this->running = true;
+        }
+    }
+
+    private function createProfiler(): \ExcimerProfiler
+    {
+        $profiler = new \ExcimerProfiler();
+        $profiler->setPeriod($this->config->periodSeconds());
+        $profiler->setEventType(match ($this->config->eventType) {
+            EventType::Wall => EXCIMER_REAL,
+            EventType::Cpu => EXCIMER_CPU,
+        });
+        $profiler->setMaxDepth($this->config->maxDepth);
+        $profiler->setFlushCallback($this->onNativeFlush(...), $this->config->maxSamples);
+
+        return $profiler;
     }
 
     private function onNativeFlush(\ExcimerLog $log): void

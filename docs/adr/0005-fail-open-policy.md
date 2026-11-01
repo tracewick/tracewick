@@ -18,9 +18,10 @@ memory without a bound, it becomes an outage. It must also install on hosts with
 - **Invalid configuration fails fast** when building value objects (boot / tests).
 - **ext-excimer is optional** (`suggest`, not `require`). Without it the factory returns a no-op
   sampler.
-- **Kill switch.** `TRACEWICK_ENABLED=0` (and a few synonyms) disables sampling via the factory.
-  Broader disable (file flag, ini, `$_SERVER` / Dotenv) is planned; not all entry points honour the
-  env var yet.
+- **Kill switch.** Sampling is disabled when, in order: the path in `TRACEWICK_DISABLE_FILE`
+  exists (stat once per process); or `TRACEWICK_ENABLED` is a disabling synonym in `$_SERVER`,
+  then `$_ENV`, then `getenv`; or `ini_get('tracewick.enabled')` is a disabling synonym. Unset
+  means enabled.
 - **Bounded cost.** Buffers, label sets, spool limits and HTTP timeouts must have explicit caps.
   When a limit is hit, drop and count — do not queue without bound.
 - **Delivery.** Prefer spool + a separate process, or finish the response before network I/O
@@ -31,8 +32,6 @@ memory without a bound, it becomes an outage. It must also install on hosts with
 
 These belong to the decision but are **not** fully true of the current code:
 
-- Broader kill switch (file flag, `$_SERVER` / `$_ENV`, ini) is not wired yet; only
-  `TRACEWICK_ENABLED` via the factory.
 - `ProfilerConfig::finishRequest` defaults to `false`, so shutdown may still send on the request
   path unless the app opts in.
 - DNS resolution for hostnames is outside the HTTP socket timeout ([ADR 8](0008-own-http-transport.md)).

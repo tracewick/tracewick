@@ -22,6 +22,11 @@ use Tracewick\Tests\Support\SteppingClock;
 #[UsesClass(SampleBatch::class)]
 final class SamplerFactoryTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        SamplerFactory::resetDisableFileCache();
+    }
+
     #[DataProvider('disablingValues')]
     public function testKillSwitchDisablesProfiling(string $value): void
     {
@@ -77,6 +82,71 @@ final class SamplerFactoryTest extends TestCase
         } finally {
             putenv(false === $previous ? SamplerFactory::ENV_ENABLED : SamplerFactory::ENV_ENABLED . '=' . $previous);
         }
+    }
+
+    public function testDisableFileWinsOverEnabledEnv(): void
+    {
+        $factory = new SamplerFactory(
+            extensionLoaded: true,
+            server: [
+                SamplerFactory::ENV_DISABLE_FILE => '/run/tracewick.off',
+                SamplerFactory::ENV_ENABLED => '1',
+            ],
+            fileExists: static fn(string $path): bool => '/run/tracewick.off' === $path,
+        );
+
+        self::assertFalse($factory->isEnabled());
+    }
+
+    public function testDisableFileIsStatCachedPerProcess(): void
+    {
+        $stats = 0;
+        $factory = new SamplerFactory(
+            server: [SamplerFactory::ENV_DISABLE_FILE => '/run/tracewick.off'],
+            fileExists: static function () use (&$stats): bool {
+                ++$stats;
+
+                return false;
+            },
+        );
+
+        self::assertTrue($factory->isEnabled());
+        self::assertTrue($factory->isEnabled());
+        self::assertSame(1, $stats);
+    }
+
+    public function testServerEnabledWinsOverEnvAndGetenv(): void
+    {
+        $factory = new SamplerFactory(
+            server: [SamplerFactory::ENV_ENABLED => '0'],
+            env: [SamplerFactory::ENV_ENABLED => '1'],
+            getenv: static fn(string $name): string|false => SamplerFactory::ENV_ENABLED === $name ? '1' : false,
+        );
+
+        self::assertFalse($factory->isEnabled());
+    }
+
+    public function testEnvWinsOverGetenv(): void
+    {
+        $factory = new SamplerFactory(
+            server: [],
+            env: [SamplerFactory::ENV_ENABLED => '0'],
+            getenv: static fn(string $name): string|false => SamplerFactory::ENV_ENABLED === $name ? '1' : false,
+        );
+
+        self::assertFalse($factory->isEnabled());
+    }
+
+    public function testIniIsCheckedLast(): void
+    {
+        $factory = new SamplerFactory(
+            server: [],
+            env: [],
+            getenv: static fn(string $name): false => false,
+            iniGet: static fn(string $name): string|false => SamplerFactory::INI_ENABLED === $name ? 'off' : false,
+        );
+
+        self::assertFalse($factory->isEnabled());
     }
 
     public function testFallsBackWhenExtensionIsMissing(): void
