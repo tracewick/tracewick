@@ -21,16 +21,19 @@ use Tracewick\Runtime\ProfileAccumulator;
 use Tracewick\Runtime\ProfilerConfig;
 use Tracewick\Runtime\SpoolAggregationWindow;
 use Tracewick\Sampler\EventType;
+use Tracewick\Sampler\ExcimerSampler;
+use Tracewick\Sampler\ExcimerTraceConverter;
 use Tracewick\Sampler\Frame;
 use Tracewick\Sampler\NullSampler;
+use Tracewick\Sampler\NullSamplerReason;
 use Tracewick\Sampler\Sample;
 use Tracewick\Sampler\SampleBatch;
 use Tracewick\Sampler\SamplerConfig;
 use Tracewick\Sampler\SamplerFactory;
+use Tracewick\Sampler\StackAggregator;
 use Tracewick\Sink\ApplicationName;
 use Tracewick\Sink\SpoolAggregationKey;
 use Tracewick\Tests\Support\ManualClock;
-use Tracewick\Tests\Support\RecordingLogger;
 use Tracewick\Tests\Support\RecordingSink;
 use Tracewick\Tests\Support\ScriptedSampler;
 use Tracewick\Transport\AtomicFile;
@@ -54,6 +57,10 @@ use Tracewick\Transport\Delivery;
 #[UsesClass(Sample::class)]
 #[UsesClass(SampleBatch::class)]
 #[UsesClass(NullSampler::class)]
+#[UsesClass(NullSamplerReason::class)]
+#[UsesClass(ExcimerSampler::class)]
+#[UsesClass(ExcimerTraceConverter::class)]
+#[UsesClass(StackAggregator::class)]
 #[UsesClass(SamplerConfig::class)]
 #[UsesClass(SamplerFactory::class)]
 #[UsesClass(Delivery::class)]
@@ -139,13 +146,13 @@ final class ContinuousProfilerTest extends TestCase
         self::assertSame('boom', $profiler->lastFailure()?->getMessage());
     }
 
-    public function testCreateUsesANullSamplerWithoutExcimer(): void
+    public function testStaysIdleWithANullSampler(): void
     {
-        $logger = new RecordingLogger();
-        $profiler = ContinuousProfiler::create(
+        $profiler = new ContinuousProfiler(
+            new NullSampler(NullSamplerReason::ExtensionMissing, clock: $this->clock),
             $this->sink,
             new ContinuousProfilerConfig('blog'),
-            logger: $logger,
+            clock: $this->clock,
         );
 
         $profiler->start();
@@ -153,7 +160,19 @@ final class ContinuousProfilerTest extends TestCase
         $profiler->stop();
 
         self::assertSame([], $this->sink->sent);
-        self::assertNotNull($profiler->diagnostics()->inactiveSampler);
+        self::assertSame(NullSamplerReason::ExtensionMissing, $profiler->diagnostics()->inactiveSampler);
+    }
+
+    public function testCreatePicksTheAvailableSampler(): void
+    {
+        $profiler = ContinuousProfiler::create($this->sink, new ContinuousProfilerConfig('blog'));
+
+        $profiler->start();
+        self::assertTrue($profiler->isRunning());
+        $profiler->stop();
+
+        self::assertFalse($profiler->isRunning());
+        self::assertNull($profiler->lastFailure());
     }
 
     public function testRegisterShutdownStopsOnce(): void
