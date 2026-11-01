@@ -38,7 +38,7 @@ final readonly class CircuitBreakerTransport implements Transport
     public function send(Payload $payload): Delivery
     {
         $nowNs = $this->clock->nowNs();
-        $state = $this->clampOpenUntil($this->store->load(), $nowNs);
+        $state = $this->loadClamped($nowNs);
 
         if (null !== $state->openUntilNs && $nowNs < $state->openUntilNs) {
             return Delivery::skipped('Circuit breaker is open after repeated failures.');
@@ -77,9 +77,24 @@ final readonly class CircuitBreakerTransport implements Transport
     public function isOpen(): bool
     {
         $nowNs = $this->clock->nowNs();
-        $openUntilNs = $this->clampOpenUntil($this->store->load(), $nowNs)->openUntilNs;
+        $openUntilNs = $this->loadClamped($nowNs)->openUntilNs;
 
         return null !== $openUntilNs && $nowNs < $openUntilNs;
+    }
+
+    /**
+     * Loads the store and persists a clamped open deadline when the file held a value further
+     * ahead than both configured pauses allow.
+     */
+    private function loadClamped(int $nowNs): CircuitBreakerState
+    {
+        $state = $this->store->load();
+        $clamped = $this->clampOpenUntil($state, $nowNs);
+        if ($clamped->openUntilNs !== $state->openUntilNs) {
+            $this->store->save($clamped);
+        }
+
+        return $clamped;
     }
 
     private function onSuccess(Delivery $delivery, CircuitBreakerState $stateBefore): Delivery

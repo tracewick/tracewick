@@ -138,6 +138,25 @@ final class CircuitBreakerTransportTest extends TestCase
         self::assertSame(['pauseMs' => 5_000, 'reason' => 'HTTP 401'], $logger->records[0]['context']);
     }
 
+    public function testClampsACorruptOpenDeadlineToTheLongestConfiguredPause(): void
+    {
+        $farFuture = $this->clock->nowNs() + 86_400_000 * 1_000_000;
+        $store = new RecordingCircuitBreakerStore(new CircuitBreakerState(3, $farFuture));
+        $breaker = $this->breaker(
+            new ScriptedTransport(Delivery::delivered()),
+            new CircuitBreakerConfig(3, 1_000, configurationOpenDurationMs: 5_000),
+            $store,
+        );
+
+        self::assertTrue($breaker->isOpen());
+        self::assertEquals(new CircuitBreakerState(3, $this->clock->nowNs() + 5_000_000_000), $store->load());
+        self::assertSame(DeliveryStatus::Skipped, $this->send($breaker)->status);
+
+        $this->clock->advanceMs(5_000);
+        self::assertFalse($breaker->isOpen());
+        self::assertTrue($this->send($breaker)->isDelivered());
+    }
+
     public function testCountsFromZeroAfterASuccess(): void
     {
         $inner = new ScriptedTransport(Delivery::failed('1'), Delivery::delivered(), Delivery::failed('2'), Delivery::failed('3'));

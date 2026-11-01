@@ -74,6 +74,53 @@ final class FallbackCircuitBreakerStoreTest extends TestCase
                 ['warning: Tracewick could not persist the circuit breaker state to disk; using in-memory state for this process.'],
                 $logger->lines(),
             );
+
+            $updated = $store->update(static fn(CircuitBreakerState $state): CircuitBreakerState => new CircuitBreakerState(6, 30));
+            self::assertEquals(new CircuitBreakerState(6, 30), $updated);
+            self::assertEquals(new CircuitBreakerState(6, 30), $store->load());
+        } finally {
+            $directory->remove();
+        }
+    }
+
+    public function testUpdateUsesTheFileStoreWhenItPersists(): void
+    {
+        $directory = new TemporaryDirectory();
+
+        try {
+            $store = FallbackCircuitBreakerStore::forDestination($directory->path, 'http://pyroscope');
+            $updated = $store->update(static fn(CircuitBreakerState $state): CircuitBreakerState => new CircuitBreakerState(3, 40));
+
+            self::assertEquals(new CircuitBreakerState(3, 40), $updated);
+            self::assertEquals(new CircuitBreakerState(3, 40), $store->load());
+        } finally {
+            $directory->remove();
+        }
+    }
+
+    public function testUpdateFallsBackToMemoryWhenTheFileCannotBeWritten(): void
+    {
+        $directory = new TemporaryDirectory();
+        $logger = new RecordingLogger();
+
+        try {
+            file_put_contents($directory->path . '/blocked', 'x');
+            $file = new FileCircuitBreakerStore($directory->path . '/blocked/state');
+            $store = new FallbackCircuitBreakerStore(
+                $file,
+                new InMemoryCircuitBreakerStore(),
+                new DiagnosticLogger($logger, $directory->path . '/logs', clock: new ManualClock()),
+            );
+
+            $updated = $store->update(static fn(CircuitBreakerState $state): CircuitBreakerState => new CircuitBreakerState(7, 50));
+
+            self::assertEquals(new CircuitBreakerState(7, 50), $updated);
+            self::assertEquals(new CircuitBreakerState(7, 50), $store->load());
+            self::assertEquals(new CircuitBreakerState(), $file->load());
+            self::assertSame(
+                ['warning: Tracewick could not persist the circuit breaker state to disk; using in-memory state for this process.'],
+                $logger->lines(),
+            );
         } finally {
             $directory->remove();
         }

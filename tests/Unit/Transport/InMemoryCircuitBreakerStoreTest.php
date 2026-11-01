@@ -24,4 +24,15 @@ final class InMemoryCircuitBreakerStoreTest extends TestCase
 
         self::assertSame($state, $store->load());
     }
+
+    public function testUpdateAppliesTheUpdaterToTheCurrentState(): void
+    {
+        $store = new InMemoryCircuitBreakerStore();
+        $store->save(new CircuitBreakerState(1));
+
+        $updated = $store->update(static fn(CircuitBreakerState $state): CircuitBreakerState => new CircuitBreakerState($state->consecutiveFailures + 1, 9));
+
+        self::assertEquals(new CircuitBreakerState(2, 9), $updated);
+        self::assertEquals(new CircuitBreakerState(2, 9), $store->load());
+    }
 }

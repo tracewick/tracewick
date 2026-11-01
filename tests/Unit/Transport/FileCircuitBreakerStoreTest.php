@@ -127,6 +127,19 @@ final class FileCircuitBreakerStoreTest extends TestCase
         self::assertFileExists($this->directory->path . '/state.lock');
     }
 
+    public function testUpdateStillWorksWhenTheLockFileCannotBeOpened(): void
+    {
+        $path = $this->directory->path . '/state';
+        $store = new FileCircuitBreakerStore($path);
+        $store->save(new CircuitBreakerState(1));
+        mkdir($path . '.lock');
+
+        $state = $store->update(static fn(CircuitBreakerState $current): CircuitBreakerState => new CircuitBreakerState(3, 11));
+
+        self::assertEquals(new CircuitBreakerState(3, 11), $state);
+        self::assertEquals(new CircuitBreakerState(3, 11), $store->load());
+    }
+
     #[RequiresPhpExtension('pcntl')]
     public function testConcurrentUpdatesSerializeThroughTheLock(): void
     {
