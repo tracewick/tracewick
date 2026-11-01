@@ -15,8 +15,10 @@ lock readers to PHP.
 
 - Hand-off is a **spool directory**, one file per profile. Format: `docs/spool-format.md`,
   versioned, independent of the PHP API.
-- File = versioned header + payload (v1 payload is pprof, [ADR 4](0004-pprof-as-primary-format.md)).
-  Layout is specified in `docs/spool-format.md`.
+- File = versioned header + payload. v1 payload is pprof
+  ([ADR 4](0004-pprof-as-primary-format.md)). v2 replaces that payload with a compact stack→weight
+  encoding and moves pprof encoding to drain/agent
+  ([ADR 13](0013-spool-v2-compact-payload.md)); layout stays in `docs/spool-format.md`.
 - Writers write under a temporary name and `rename()` into place.
 - Max size and file count; on overflow drop and count; never block waiting for a reader.
 - PHP tests use shared fixtures under `tests/Fixtures/spool/`. A Go agent, when it exists, should

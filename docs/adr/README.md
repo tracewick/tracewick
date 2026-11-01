@@ -16,3 +16,5 @@ See [ADR 1](0001-record-architecture-decisions.md) for how and why we record dec
 | [9](0009-agent-hand-off.md)                     | Handing profiles to a local agent        | Accepted (spool); Proposed (unix socket) |
 | [10](0010-deferred-delivery.md)                 | Deferred delivery in the Runtime         | Accepted |
 | [11](0011-excimer-vm-interrupt-limits.md)       | Excimer VM-interrupt sampling limits     | Accepted |
+| [12](0012-aggregate-before-delivery.md)         | Aggregate profiles before delivery       | Accepted |
+| [13](0013-spool-v2-compact-payload.md)          | Spool v2: compact stacks on the hot path | Accepted |
