@@ -23,10 +23,15 @@ make stand-ci           # `make ci` inside the stand's PHP container, with ext-e
 make app-up             # reference app: Symfony Demo on PHP-FPM (:8081) and RoadRunner (:8082)
 ```
 
-`make ci` is required before you push, but it is **not** the full GitHub Actions matrix. CI also
-runs Codecov (coverage gate), Infection (MSI), and `go tool pprof` validation of pprof goldens.
-Those live in `.github/workflows/`; run them locally when you change encoders, coverage-sensitive
-code, or CI config.
+**Before every commit**, run locally what CI would catch on this change: at least
+`composer cs:check`, `composer rector:check`, `composer stan`, and the relevant tests
+(`make test-unit`; integration / `make stand-ci` when Excimer paths change). Prefer `make ci`.
+Do not push blind and fix style/stan/rector on GitHub.
+
+`make ci` is still **not** the full GitHub Actions matrix. CI also runs Codecov (coverage gate),
+Infection (MSI), and `go tool pprof` validation of pprof goldens. Those live in
+`.github/workflows/`; run them locally when you change encoders, coverage-sensitive code, or CI
+config.
 
 ## Layout
 
