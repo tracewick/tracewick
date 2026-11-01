@@ -372,6 +372,38 @@ final class ProfilerTest extends TestCase
         );
     }
 
+    public function testWarnsAboutADisabledSamplerSeparatelyWhenReset(): void
+    {
+        Profiler::resetInactiveSamplerWarning();
+        new Profiler(
+            new NullSampler(NullSamplerReason::Disabled, clock: new ManualClock()),
+            $this->sink,
+            logger: new DiagnosticLogger($this->logger, $this->logDirectory->path, clock: new ManualClock()),
+        );
+
+        self::assertSame(
+            ['warning: Tracewick profiling is disabled (TRACEWICK_ENABLED).'],
+            $this->logger->lines(),
+        );
+    }
+
+    public function testWarnsAboutAnInitializationFailureWithItsCause(): void
+    {
+        Profiler::resetInactiveSamplerWarning();
+        $cause = new \RuntimeException('Cannot create timer.');
+        new Profiler(
+            new NullSampler(NullSamplerReason::InitializationFailed, cause: $cause, clock: new ManualClock()),
+            $this->sink,
+            logger: new DiagnosticLogger($this->logger, $this->logDirectory->path, clock: new ManualClock()),
+        );
+
+        self::assertSame(
+            ['warning: Tracewick profiling is inactive: ExcimerProfiler failed to initialize.'],
+            $this->logger->lines(),
+        );
+        self::assertSame('Cannot create timer.', $this->logger->records[0]['context']['error'] ?? null);
+    }
+
     public function testStopsAndFlushesAtShutdown(): void
     {
         $profiler = $this->profiler();
