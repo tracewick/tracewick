@@ -15,6 +15,7 @@ use Tracewick\Runtime\DrainCommand;
 use Tracewick\Runtime\DrainOutcome;
 use Tracewick\Runtime\DrainResult;
 use Tracewick\Runtime\DrainSettings;
+use Tracewick\Runtime\SpoolAggregationWindow;
 use Tracewick\Runtime\SpoolDrainer;
 use Tracewick\Sampler\EventType;
 use Tracewick\Sink\ApplicationName;
@@ -44,6 +45,7 @@ use Tracewick\Transport\SpoolTransport;
 #[CoversClass(DrainCommand::class)]
 #[UsesClass(DrainSettings::class)]
 #[UsesClass(SpoolDrainer::class)]
+#[UsesClass(SpoolAggregationWindow::class)]
 #[UsesClass(DrainResult::class)]
 #[UsesClass(DrainOutcome::class)]
 #[UsesClass(DirectorySpoolSource::class)]
