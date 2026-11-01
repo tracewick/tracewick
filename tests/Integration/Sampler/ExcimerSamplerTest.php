@@ -234,7 +234,7 @@ final class ExcimerSamplerTest extends TestCase
         self::assertSame(1_030, $batch->endNs);
     }
 
-public function testNativeFlushCallbackFeedsTheAggregatorAndSegmentListener(): void
+    public function testNativeFlushCallbackFeedsTheAggregatorAndSegmentListener(): void
     {
         $hits = 0;
         $sampler = new ExcimerSampler(new SamplerConfig(periodNs: self::PERIOD_NS, maxSamples: 1));
@@ -255,7 +255,7 @@ public function testNativeFlushCallbackFeedsTheAggregatorAndSegmentListener(): v
     public function testSegmentListenerFailuresAreSwallowed(): void
     {
         $sampler = new ExcimerSampler(new SamplerConfig(periodNs: self::PERIOD_NS, maxSamples: 1));
-        $sampler->setSegmentListener(static function (): void {
+        $sampler->setSegmentListener(static function (): never {
             throw new \RuntimeException('Listener failed.');
         });
 
