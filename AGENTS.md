@@ -69,7 +69,8 @@ Cross-cutting helpers (`Clock`, `Diagnostics`, `Exception`) sit beside these lay
   by release-please; never edit it in a feature branch.
 - Follow git flow (see CONTRIBUTING.md): branch `feature/*` from `develop` and open pull requests
   into `develop`. Never push to `main` or `develop` directly.
-- After pushing a PR, check `gh pr checks` until required Checks finish. Tick the PR checklist item
-  for `make ci` only when those checks are green; leave it unchecked while red or pending, and fix
-  failures before claiming CI is done.
+- After opening or pushing a PR, babysit it: leave the `make ci` checklist item unchecked, poll
+  `gh pr checks` and Codecov until `Checks` and `codecov/patch` (when present) are green, fix real
+  failures and coverage gaps yourself, then tick the checklist. Do not ask the maintainer to watch
+  CI; only report when the PR is review-ready or when a secret/decision blocks you.
 - Write ADRs in plain language: Context, Decision, Consequences. Prefer short sentences over rhetoric.
