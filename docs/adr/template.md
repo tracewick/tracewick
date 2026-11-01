@@ -5,12 +5,13 @@
 
 ## Context
 
-What is the issue that motivates this decision or change?
+What problem forces a choice? Keep it short.
 
 ## Decision
 
-What is the change that we are proposing or doing?
+What we chose, in plain language. Mark parts that are not implemented yet as Proposed or list
+gaps under the decision.
 
 ## Consequences
 
-What becomes easier or more difficult because of this change?
+What gets easier or harder. No marketing.

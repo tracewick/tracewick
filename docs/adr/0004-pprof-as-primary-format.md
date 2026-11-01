@@ -2,37 +2,37 @@
 
 - Status: Accepted
 - Date: 2026-10-29
+- Updated: 2026-11-01
 
 ## Context
 
-Tracewick needs one format that carries everything the Profile model knows (weighted stacks,
-timestamps, period, sample type, labels) to backends and tools. Candidates:
+Tracewick needs one format that carries weighted stacks, period, sample type and labels to
+backends. Options:
 
-- **Collapsed stacks** (`a;b;c 42`) are simple and human-readable, but carry no timestamps, units
-  or labels; Pyroscope's legacy `/ingest` endpoint puts those into query parameters.
-- **Speedscope JSON** is good for local viewing, but no profiling backend ingests it.
-- **pprof** (gzip-compressed protobuf, `profile.proto`) is accepted by Grafana Pyroscope's push
-  API, by the OpenTelemetry Collector's pprof receiver, by `go tool pprof` and by most continuous
-  profiling vendors. Its schema has been stable for years.
-- **OTLP profiles** are the future standard, but the specification is still changing
-  (see [ADR 6](0006-otlp-profiles-experimental.md)).
+- **Collapsed stacks** — simple; no timestamps, units or labels in the payload.
+- **Speedscope JSON** — fine for local viewing; backends do not ingest it.
+- **pprof** (`profile.proto`) — accepted by Grafana Pyroscope (push and legacy ingest),
+  `go tool pprof`, and most continuous profilers. Schema is stable.
+- **OTLP profiles** — future standard; still changing ([ADR 6](0006-otlp-profiles-experimental.md)).
 
 ## Decision
 
-- pprof is the primary format: the format the Profile model maps to without loss, the default for
-  Pyroscope delivery, and the payload of the spool format for the agent
-  ([ADR 7](0007-language-neutral-spool-format.md)).
-- Collapsed stacks and Speedscope are secondary formats for local use, debugging and the legacy
-  Pyroscope `/ingest` API.
-- The pprof encoder is a small hand-written protobuf writer for the subset of `profile.proto` that
-  Tracewick needs, so the core does not depend on `google/protobuf` or the protobuf extension.
-- Every encoder has golden-file tests; pprof output is additionally validated with
+- pprof is the primary format for the Profile model and for production delivery to Pyroscope.
+- **Target delivery API:** Pyroscope's push API (`/push.v1.PusherService/Push`), with profile
+  labels as series labels. Today's `PyroscopeSink` still uses legacy `/ingest` with
+  `format=pprof`; moving to push is planned work in the core, not an optional add-on.
+- Collapsed stacks and Speedscope stay secondary (local use and debugging).
+- The encoder is a small hand-written protobuf writer for the subset we need, so the core does not
+  depend on `google/protobuf`.
+- Output is **uncompressed** protobuf. Callers or transports may gzip when a receiver requires it;
+  nothing in the core does that today.
+- Every encoder has golden-file tests; checked-in `.pb` goldens are also validated with
   `go tool pprof` in CI.
 
 ## Consequences
 
-- One lossless format to test thoroughly instead of several equal ones.
-- A hand-written encoder is a few hundred lines that we own and must test; in return installation
-  needs no extra package or extension.
-- If the pprof subset ever proves insufficient, switching the encoder to `google/protobuf` is an
-  internal change behind the Encoder interface.
+- One format to test carefully instead of several equal ones.
+- Hand-written encoder is a few hundred lines we own and must test.
+- Spool v1 currently stores pprof bytes; a later compact spool payload may move encoding to the
+  drain ([ADR 7](0007-language-neutral-spool-format.md)), without changing this decision that pprof
+  is what backends see.

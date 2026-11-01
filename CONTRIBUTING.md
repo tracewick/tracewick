@@ -76,35 +76,38 @@ The PHP container gets these addresses as `PYROSCOPE_URL`, `PYROSCOPE_TOXIC_URL`
 
 ### Reference application
 
-Profiles are only as convincing as the application they come from, so the stand includes a real
-one: the [Symfony Demo](https://github.com/symfony/demo) blog with PostgreSQL, served two ways:
+The stand includes the [Symfony Demo](https://github.com/symfony/demo) blog with PostgreSQL, served
+two ways, so wall-time waits (database and HTTP) can be exercised under load later:
 
-| Variant              | URL                     | What it exercises                                     |
-|----------------------|-------------------------|-------------------------------------------------------|
-| PHP-FPM behind nginx | http://127.0.0.1:8081   | Classic request-per-process lifecycle                 |
-| RoadRunner           | http://127.0.0.1:8082   | Long-running workers: flushing, memory over time      |
+| Variant              | URL                     | What it exercises                         |
+|----------------------|-------------------------|-------------------------------------------|
+| PHP-FPM behind nginx | http://127.0.0.1:8081   | Request-per-process lifecycle             |
+| RoadRunner           | http://127.0.0.1:8082   | Long-running workers                      |
 
 ```bash
 make app-up      # start the stand plus the reference app, load the demo fixtures
-make app-smoke   # check both variants
+make app-smoke   # check that both variants answer
 make stand-down  # stop everything
 ```
 
-Besides the demo pages (for example `/en/blog/`), `/reference/external` reads from PostgreSQL and
-calls an external HTTP service ([go-httpbin](https://github.com/mccutchen/go-httpbin)) through
-Toxiproxy (`toxiproxy:18080`), so wall-time profiles show both database and network waits; a
-Toxiproxy latency toxic on the `http-mock` proxy makes that wait longer. The app runs on PHP 8.4
-(the Symfony Demo requires it), with ext-excimer installed. The demo's code is downloaded at build
-time; only the files under `docker/reference-app/` belong to this repository.
+On `develop` today the images install ext-excimer and the demo endpoints (including
+`/reference/external` via Toxiproxy → go-httpbin), but they do **not** install Tracewick or run
+the profiler. Wiring Tracewick and asserting profiles in Pyroscope lives on
+[`feature/reference-app-profiling`](https://github.com/tracewick/tracewick/pull/29) until that
+pull request is merged. Until then, `app-smoke` only checks that the demo responds.
+
+The demo's code is downloaded at build time; only the files under `docker/reference-app/` belong
+to this repository.
 
 ### Toxiproxy and chaos tests
 
 [Toxiproxy](https://github.com/Shopify/toxiproxy) is a TCP proxy that can inject network faults on
 demand. In the stand it sits between PHP and the backends: `http://toxiproxy:14040` is Pyroscope
 and `http://toxiproxy:14318` is the Collector, but with whatever faults a test switches on through
-the API at `TOXIPROXY_URL`. Chaos tests use it to prove the fail-open promise (see
-[ADR 5](docs/adr/0005-fail-open-policy.md)): when a backend is slow, drops connections, returns
-errors or is down, the host application must not notice.
+the API at `TOXIPROXY_URL`. Integration chaos tests use it to check that **transports and sinks**
+fail within their time budgets and that the circuit breaker opens (see
+[ADR 5](docs/adr/0005-fail-open-policy.md)). They do not yet run a host application with
+`Profiler` under load; that remains a separate gate.
 
 Tests talk to the real backends through the plain URLs and to the faulty ones through the
 `toxiproxy` URLs. A test that adds a toxic must remove it when it ends, for example:

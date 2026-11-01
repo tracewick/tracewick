@@ -4,7 +4,6 @@ Copyright 2026 The Tracewick Authors
 This product includes software developed by The Tracewick Authors
 (https://github.com/tracewick/tracewick).
 
-Tracewick is an independent, clean-room implementation. Its design was
-inspired by Excimetry (https://github.com/excimetry/excimetry), which is
-licensed under the Apache License 2.0. No source code from Excimetry is
-included in this product.
+Tracewick is an independent implementation. Its design was informed by a review of
+Excimetry (https://github.com/excimetry/excimetry), which is licensed under the Apache
+License 2.0. No source code from Excimetry is included in this product.
