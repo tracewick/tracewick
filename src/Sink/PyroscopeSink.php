@@ -14,6 +14,7 @@ use Tracewick\Encoder\PprofEncoder;
 use Tracewick\Exception\LogicException;
 use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
+use Tracewick\Transport\CachingDnsResolver;
 use Tracewick\Transport\CircuitBreakerTransport;
 use Tracewick\Transport\Delivery;
 use Tracewick\Transport\HttpTransport;
@@ -123,10 +124,12 @@ final readonly class PyroscopeSink implements Sink, SpoolForwarder
     {
         $http = $config->httpConfig();
 
+        $clock = new SystemClock();
+
         return new CircuitBreakerTransport(
-            new HttpTransport($http),
+            new HttpTransport($http, $clock, new CachingDnsResolver(clock: $clock)),
             $config->circuitBreaker,
-            new SystemClock(),
+            $clock,
             $config->circuitBreaker->sharedStore($http->url . "\n" . $config->tenantId),
             new DiagnosticLogger($logger, $config->circuitBreaker->stateDirectory),
         );

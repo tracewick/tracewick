@@ -10,6 +10,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Exception\LogicException;
 use Tracewick\Runtime\DrainSettings;
+use Tracewick\Runtime\SpoolAggregationWindow;
 use Tracewick\Sink\ApplicationName;
 use Tracewick\Sink\PyroscopeConfig;
 use Tracewick\Transport\CircuitBreakerConfig;
@@ -18,6 +19,7 @@ use Tracewick\Transport\SpoolReaderConfig;
 
 #[CoversClass(DrainSettings::class)]
 #[UsesClass(SpoolReaderConfig::class)]
+#[UsesClass(SpoolAggregationWindow::class)]
 #[UsesClass(PyroscopeConfig::class)]
 #[UsesClass(ApplicationName::class)]
 #[UsesClass(HttpConfig::class)]

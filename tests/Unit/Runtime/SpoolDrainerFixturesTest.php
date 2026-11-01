@@ -13,6 +13,7 @@ use Tracewick\Encoder\Pprof\ProtobufReader;
 use Tracewick\Encoder\PprofEncoder;
 use Tracewick\Runtime\DrainOutcome;
 use Tracewick\Runtime\DrainResult;
+use Tracewick\Runtime\SpoolAggregationWindow;
 use Tracewick\Runtime\SpoolDrainer;
 use Tracewick\Sink\ApplicationName;
 use Tracewick\Sink\PyroscopeConfig;
@@ -37,6 +38,7 @@ use Tracewick\Transport\SpoolTransport;
 #[CoversClass(SpoolDrainer::class)]
 #[UsesClass(DrainResult::class)]
 #[UsesClass(DrainOutcome::class)]
+#[UsesClass(SpoolAggregationWindow::class)]
 #[UsesClass(DirectorySpoolSource::class)]
 #[UsesClass(ClaimedSpoolFile::class)]
 #[UsesClass(SpoolReaderConfig::class)]

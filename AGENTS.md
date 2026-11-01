@@ -66,6 +66,9 @@ Cross-cutting helpers (`Clock`, `Diagnostics`, `Exception`) sit beside these lay
   Library exceptions implement `Tracewick\Exception\TracewickException`.
 - PHPStan runs at level `max`. Do not add baseline entries or ignores without a justifying comment.
 - Never skip, disable, or delete a test to make CI green. Fix the cause.
+- Write real tests with the change: `#[CoversClass]` for new types, exercise new branches
+  (including fail/reject paths), and when pcov is available run `composer test:coverage` before
+  push so Codecov patch does not become the first coverage review.
 - Use typed value objects for configuration, not loosely-typed arrays.
 - Do not add runtime dependencies without discussing them in an issue; keep `require` minimal.
 - Everything in the repository is written in English: code, comments, commit messages, PR texts,

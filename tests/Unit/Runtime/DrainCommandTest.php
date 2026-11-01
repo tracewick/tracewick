@@ -15,6 +15,7 @@ use Tracewick\Runtime\DrainCommand;
 use Tracewick\Runtime\DrainOutcome;
 use Tracewick\Runtime\DrainResult;
 use Tracewick\Runtime\DrainSettings;
+use Tracewick\Runtime\SpoolAggregationWindow;
 use Tracewick\Runtime\SpoolDrainer;
 use Tracewick\Sampler\EventType;
 use Tracewick\Sink\ApplicationName;
@@ -27,6 +28,7 @@ use Tracewick\Tests\Support\ManualClock;
 use Tracewick\Tests\Support\ScriptedForwarder;
 use Tracewick\Tests\Support\TemporaryDirectory;
 use Tracewick\Transport\AtomicFile;
+use Tracewick\Transport\CachingDnsResolver;
 use Tracewick\Transport\CircuitBreakerConfig;
 use Tracewick\Transport\CircuitBreakerState;
 use Tracewick\Transport\CircuitBreakerTransport;
@@ -40,10 +42,12 @@ use Tracewick\Transport\HttpTransport;
 use Tracewick\Transport\InMemoryCircuitBreakerStore;
 use Tracewick\Transport\SpoolReaderConfig;
 use Tracewick\Transport\SpoolTransport;
+use Tracewick\Transport\SystemDnsResolver;
 
 #[CoversClass(DrainCommand::class)]
 #[UsesClass(DrainSettings::class)]
 #[UsesClass(SpoolDrainer::class)]
+#[UsesClass(SpoolAggregationWindow::class)]
 #[UsesClass(DrainResult::class)]
 #[UsesClass(DrainOutcome::class)]
 #[UsesClass(DirectorySpoolSource::class)]
@@ -59,6 +63,8 @@ use Tracewick\Transport\SpoolTransport;
 #[UsesClass(ApplicationName::class)]
 #[UsesClass(HttpConfig::class)]
 #[UsesClass(HttpTransport::class)]
+#[UsesClass(CachingDnsResolver::class)]
+#[UsesClass(SystemDnsResolver::class)]
 #[UsesClass(CircuitBreakerConfig::class)]
 #[UsesClass(CircuitBreakerTransport::class)]
 #[UsesClass(CircuitBreakerState::class)]
@@ -311,8 +317,8 @@ final class DrainCommandTest extends TestCase
         $exitCode = $command->run($this->required());
 
         self::assertSame(0, $exitCode);
-        self::assertSame("Delivered 1, rejected 0 spool files.\n", $this->read($this->output));
-        self::assertSame([self::SECOND], $this->spool->entries());
+        self::assertSame("Delivered 2, rejected 0 spool files.\n", $this->read($this->output));
+        self::assertSame([], $this->spool->entries());
     }
 
     public function testReadsTheSettingsFromTheEnvironment(): void
@@ -338,6 +344,23 @@ final class DrainCommandTest extends TestCase
         $command = new DrainCommand($this->output, $this->errors, $this->clock, $this->recordSleep(...));
 
         $exitCode = $command->run(['--once', ...$this->required()]);
+
+        self::assertSame(0, $exitCode);
+        self::assertSame("Delivered 0, rejected 0 spool files.\n", $this->read($this->output));
+    }
+
+    public function testDefaultPauseSleepsInShortStepsUntilTheTimeLimit(): void
+    {
+        $command = new DrainCommand(
+            $this->output,
+            $this->errors,
+            new SystemClock(),
+            null,
+            static fn(): int => 0,
+            static fn(): SpoolForwarder => new ScriptedForwarder(),
+        );
+
+        $exitCode = $command->run([...$this->required(), '--sleep=1', '--time-limit=1']);
 
         self::assertSame(0, $exitCode);
         self::assertSame("Delivered 0, rejected 0 spool files.\n", $this->read($this->output));

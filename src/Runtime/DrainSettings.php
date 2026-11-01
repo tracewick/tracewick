@@ -28,10 +28,11 @@ final readonly class DrainSettings
     private const PYROSCOPE_APPLICATION = 'tracewick-drain';
 
     /**
-     * @param ?int $limit            files to handle before exiting
-     * @param ?int $memoryLimit      bytes of memory above which the command exits
-     * @param ?int $timeLimitSeconds seconds to run before exiting
-     * @param int  $sleepSeconds     pause while the spool is empty
+     * @param ?int                   $limit              files to handle before exiting
+     * @param ?int                   $memoryLimit        bytes of memory above which the command exits
+     * @param ?int                   $timeLimitSeconds   seconds to run before exiting
+     * @param int                    $sleepSeconds       pause while the spool is empty
+     * @param SpoolAggregationWindow $aggregationWindow  merge window for compact-stacks files
      */
     public function __construct(
         public SpoolReaderConfig $reader,
@@ -41,6 +42,7 @@ final readonly class DrainSettings
         public ?int $memoryLimit,
         public ?int $timeLimitSeconds,
         public int $sleepSeconds,
+        public SpoolAggregationWindow $aggregationWindow = new SpoolAggregationWindow(),
     ) {}
 
     /**
@@ -61,6 +63,8 @@ final readonly class DrainSettings
         $limit = self::nonEmpty($options['limit'] ?? null);
         $timeLimit = self::nonEmpty($options['time-limit'] ?? null);
         $sleep = self::nonEmpty($options['sleep'] ?? null);
+        $window = self::nonEmpty($options['aggregation-window'] ?? null)
+            ?? self::nonEmpty($environment['TRACEWICK_AGGREGATION_WINDOW'] ?? null);
 
         return new self(
             null === $readerId ? new SpoolReaderConfig($directory) : new SpoolReaderConfig($directory, $readerId),
@@ -76,6 +80,14 @@ final readonly class DrainSettings
             null === $memoryLimit ? null : self::bytes($memoryLimit),
             null === $timeLimit ? null : self::integer('time-limit', $timeLimit, 1, \PHP_INT_MAX),
             null === $sleep ? self::DEFAULT_SLEEP_SECONDS : self::integer('sleep', $sleep, 0, self::MAX_SLEEP_SECONDS),
+            new SpoolAggregationWindow(
+                null === $window ? SpoolAggregationWindow::DEFAULT_SECONDS : self::integer(
+                    'aggregation-window',
+                    $window,
+                    SpoolAggregationWindow::MIN_SECONDS,
+                    SpoolAggregationWindow::MAX_SECONDS,
+                ),
+            ),
         );
     }
 
