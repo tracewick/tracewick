@@ -98,6 +98,9 @@ services:
   app-setup:
     build: &app-build
       context: docker/reference-app
+      # The Tracewick sources the app is profiled with.
+      additional_contexts:
+        tracewick: .
       target: fpm
       args:
         EXCIMER_VERSION: ${EXCIMER_VERSION:-1.2.6}
@@ -111,22 +114,47 @@ services:
       EXTERNAL_HTTP_URL: http://toxiproxy:18080
       PYROSCOPE_URL: http://pyroscope:4040
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      TRACEWICK_SPOOL_DIR: /var/spool/tracewick
     depends_on:
       postgres:
         condition: service_healthy
 
+  # PHP-FPM writes profiles to a spool directory, and app-drain sends them on to Pyroscope: the
+  # setup recommended for production.
   app-fpm:
     build: *app-build
     image: tracewick-reference-fpm
     profiles: [app]
-    environment: *app-env
+    environment:
+      <<: *app-env
+      TRACEWICK_RUNTIME: fpm
+      TRACEWICK_SINK: spool
+    volumes:
+      - app-spool:/var/spool/tracewick
     depends_on:
       postgres:
         condition: service_healthy
 
+  app-drain:
+    build: *app-build
+    image: tracewick-reference-fpm
+    profiles: [app]
+    user: www-data
+    command: [vendor/bin/tracewick-drain, --memory-limit=128M]
+    environment:
+      TRACEWICK_SPOOL_DIR: /var/spool/tracewick
+      TRACEWICK_PYROSCOPE_URL: http://pyroscope:4040
+    volumes:
+      - app-spool:/var/spool/tracewick
+    depends_on: [pyroscope]
+    restart: unless-stopped
+
   app-nginx:
     build:
       context: docker/reference-app
+      # The nginx image copies the public files of the app stage, which installs Tracewick.
+      additional_contexts:
+        tracewick: .
       target: nginx
     image: tracewick-reference-nginx
     profiles: [app]
@@ -138,6 +166,8 @@ services:
     build:
       context: docker/reference-app
       target: roadrunner
+      additional_contexts:
+        tracewick: .
       args:
         EXCIMER_VERSION: ${EXCIMER_VERSION:-1.2.6}
     image: tracewick-reference-roadrunner
@@ -145,6 +175,9 @@ services:
     environment:
       <<: *app-env
       APP_RUNTIME: 'Runtime\RoadRunnerSymfonyNyholm\Runtime'
+      # RoadRunner sends straight to Pyroscope from its workers, after each response.
+      TRACEWICK_RUNTIME: roadrunner
+      TRACEWICK_SINK: pyroscope
     depends_on:
       postgres:
         condition: service_healthy
@@ -153,3 +186,4 @@ services:
 
 volumes:
   composer-cache:
+  app-spool:

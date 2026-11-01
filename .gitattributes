@@ -9,6 +9,7 @@
 *.spool binary
 
 # Keep the Composer dist archive limited to runtime code and legal files.
+/.dockerignore                     export-ignore
 /.editorconfig                     export-ignore
 /.gitattributes                    export-ignore
 /.github/                          export-ignore
