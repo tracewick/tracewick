@@ -1,5 +1,10 @@
 # Spool format, version 1
 
+> **Note:** This document specifies **v1** (pprof payload). High-load production will move to
+> **v2** (compact stack→weight payload; pprof encoded in drain/agent) per
+> [ADR 13](adr/0013-spool-v2-compact-payload.md). v1 remains readable during dual-read; it is not
+> the final high-load contract. Aggregation before upload is [ADR 12](adr/0012-aggregate-before-delivery.md).
+
 The spool is how Tracewick hands profiles to a separate delivery process, such as
 [`tracewick-drain`](drain.md), a future `tracewick-agent`, Grafana Alloy or a sidecar of your own
 ([ADR 7](adr/0007-language-neutral-spool-format.md)).
