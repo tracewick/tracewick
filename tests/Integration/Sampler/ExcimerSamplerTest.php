@@ -17,6 +17,7 @@ use Tracewick\Sampler\Sample;
 use Tracewick\Sampler\SampleBatch;
 use Tracewick\Sampler\SamplerConfig;
 use Tracewick\Sampler\SamplerFactory;
+use Tracewick\Sampler\StackAggregator;
 use Tracewick\Tests\Support\SteppingClock;
 
 #[CoversClass(ExcimerSampler::class)]
@@ -27,6 +28,7 @@ use Tracewick\Tests\Support\SteppingClock;
 #[UsesClass(Sample::class)]
 #[UsesClass(Frame::class)]
 #[UsesClass(SystemClock::class)]
+#[UsesClass(StackAggregator::class)]
 #[RequiresPhpExtension('excimer')]
 final class ExcimerSamplerTest extends TestCase
 {
