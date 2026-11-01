@@ -287,7 +287,7 @@ final class ExcimerSamplerTest extends TestCase
     public function testSegmentListenerFailuresAreSwallowed(): void
     {
         $sampler = new ExcimerSampler(new SamplerConfig(periodNs: self::PERIOD_NS, maxSamples: 1));
-        $sampler->setSegmentListener(static function (): void {
+        $sampler->setSegmentListener(static function (): never {
             throw new \RuntimeException('Listener failed.');
         });
 
