@@ -21,6 +21,7 @@ final class SpoolReaderConfigTest extends TestCase
         self::assertSame(600_000, $config->staleClaimMs);
         self::assertSame(3_600_000, $config->staleTemporaryMs);
         self::assertSame(100, $config->maxRejectedFiles);
+        self::assertSame(4_194_304, $config->maxFileBytes);
     }
 
     public function testDerivesTheReaderIdFromTheHostAndTheProcess(): void

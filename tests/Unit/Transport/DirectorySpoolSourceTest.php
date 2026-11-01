@@ -54,11 +54,12 @@ final class DirectorySpoolSourceTest extends TestCase
         self::assertNotNull($file);
         self::assertSame(self::FIRST, $file->name);
         self::assertSame('first', $file->bytes);
-        self::assertSame($this->spool->path . '/.' . self::FIRST . '.claimed-reader-a', $file->handle);
-        self::assertSame(['.' . self::FIRST . '.claimed-reader-a', self::SECOND], $this->spool->entries());
+        $epoch = intdiv($this->clock->nowNs(), 1_000_000_000);
+        self::assertSame($this->spool->path . '/.' . self::FIRST . '.claimed-reader-a-' . $epoch, $file->handle);
+        self::assertSame(['.' . self::FIRST . '.claimed-reader-a-' . $epoch, self::SECOND], $this->spool->entries());
     }
 
-    public function testMarksTheClaimWithTheCurrentTime(): void
+    public function testEmbedsTheClaimTimeInTheClaimedName(): void
     {
         $this->write(self::FIRST, 'first', time() - 3_600);
         $this->clock->advanceMs(5_000);
@@ -66,8 +67,7 @@ final class DirectorySpoolSourceTest extends TestCase
         $file = $this->source()->claim();
 
         self::assertNotNull($file);
-        clearstatcache();
-        self::assertSame(intdiv($this->clock->nowNs(), 1_000_000_000), filemtime($file->handle));
+        self::assertStringEndsWith('.claimed-reader-' . intdiv($this->clock->nowNs(), 1_000_000_000), $file->handle);
     }
 
     public function testReturnsNullWhenTheSpoolIsEmpty(): void
@@ -185,7 +185,7 @@ final class DirectorySpoolSourceTest extends TestCase
             umask($umask);
         }
 
-        self::assertSame(0o777, fileperms($this->spool->path . '/rejected') & 0o777);
+        self::assertSame(0o700, fileperms($this->spool->path . '/rejected') & 0o777);
     }
 
     public function testKeepsRejectedFilesUpToTheLimitAndOtherFilesThere(): void
@@ -293,18 +293,21 @@ final class DirectorySpoolSourceTest extends TestCase
         $file = $this->source('reader-alive')->claim();
 
         self::assertSame(self::FIRST, $file?->name);
-        self::assertSame(['.' . self::FIRST . '.claimed-reader-alive'], $this->spool->entries());
+        $epoch = intdiv($this->clock->nowNs(), 1_000_000_000);
+        self::assertSame(['.' . self::FIRST . '.claimed-reader-alive-' . $epoch], $this->spool->entries());
     }
 
     public function testLeavesAnActiveClaimAlone(): void
     {
         $this->write(self::FIRST, 'first');
-        self::assertNotNull($this->source('reader-busy')->claim());
+        $busy = $this->source('reader-busy');
+        self::assertNotNull($busy->claim());
+        $claimedAt = intdiv($this->clock->nowNs(), 1_000_000_000);
         // Exactly the stale-claim age: not abandoned yet.
         $this->clock->advanceMs(600_000);
 
         self::assertNull($this->source('reader-other')->claim());
-        self::assertSame(['.' . self::FIRST . '.claimed-reader-busy'], $this->spool->entries());
+        self::assertSame(['.' . self::FIRST . '.claimed-reader-busy-' . $claimedAt], $this->spool->entries());
     }
 
     public function testIgnoresClaimMarkersOnOtherFiles(): void
@@ -324,6 +327,34 @@ final class DirectorySpoolSourceTest extends TestCase
         $this->source()->claim();
 
         self::assertSame(['.' . self::SECOND . '.tmp'], $this->spool->entries());
+    }
+
+    public function testRejectsAFileLargerThanTheSizeCeiling(): void
+    {
+        $this->write(self::FIRST, str_repeat('x', 2_048));
+        $this->write(self::SECOND, 'ok');
+        $source = new DirectorySpoolSource(
+            new SpoolReaderConfig($this->spool->path, 'reader', maxFileBytes: 1_024),
+            $this->clock,
+        );
+
+        $file = $source->claim();
+
+        self::assertSame(self::SECOND, $file?->name);
+        self::assertSame([self::FIRST], $this->spool->entries('/rejected'));
+        self::assertSame(['.' . self::SECOND . '.claimed-reader-' . intdiv($this->clock->nowNs(), 1_000_000_000), 'rejected'], $this->spool->entries());
+    }
+
+    public function testClaimsFromAShardDirectory(): void
+    {
+        mkdir($this->spool->path . '/ab', 0o700);
+        $this->write('ab/' . self::FIRST, 'sharded');
+
+        $file = $this->source()->claim();
+
+        self::assertNotNull($file);
+        self::assertSame('ab/' . self::FIRST, $file->name);
+        self::assertSame('sharded', $file->bytes);
     }
 
     private function source(string $readerId = 'reader', int $maxRejectedFiles = 100): DirectorySpoolSource

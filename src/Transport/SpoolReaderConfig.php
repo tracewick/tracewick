@@ -19,6 +19,8 @@ final readonly class SpoolReaderConfig
 
     public const DEFAULT_MAX_REJECTED_FILES = 100;
 
+    public const DEFAULT_MAX_FILE_BYTES = SpoolConfig::DEFAULT_MAX_FILE_BYTES;
+
     private const READER_ID_PATTERN = '/^[A-Za-z0-9._-]{1,64}$/D';
 
     private const MAX_AGE_MS = 7 * 24 * 3_600_000;
@@ -33,6 +35,7 @@ final readonly class SpoolReaderConfig
      *                                  is returned to the spool; longer than one delivery takes
      * @param int     $staleTemporaryMs age after which a writer's temporary file is deleted
      * @param int     $maxRejectedFiles rejected files kept for inspection; older ones are deleted
+     * @param int     $maxFileBytes     files larger than this are rejected without being forwarded
      *
      * @throws LogicException when a value is invalid
      */
@@ -42,6 +45,7 @@ final readonly class SpoolReaderConfig
         public int $staleClaimMs = self::DEFAULT_STALE_CLAIM_MS,
         public int $staleTemporaryMs = self::DEFAULT_STALE_TEMPORARY_MS,
         public int $maxRejectedFiles = self::DEFAULT_MAX_REJECTED_FILES,
+        public int $maxFileBytes = self::DEFAULT_MAX_FILE_BYTES,
     ) {
         if ('' === $directory || str_contains($directory, "\0")) {
             throw new LogicException('The spool directory must be a non-empty path.');
@@ -64,6 +68,10 @@ final readonly class SpoolReaderConfig
 
         if ($maxRejectedFiles < 0 || $maxRejectedFiles > 100_000) {
             throw new LogicException(\sprintf('The number of rejected files to keep must be between 0 and 100000, got %d.', $maxRejectedFiles));
+        }
+
+        if ($maxFileBytes < 1_024 || $maxFileBytes > 256 * 1024 * 1024) {
+            throw new LogicException(\sprintf('The maximum spool file size must be between 1024 and %d bytes, got %d.', 256 * 1024 * 1024, $maxFileBytes));
         }
     }
 

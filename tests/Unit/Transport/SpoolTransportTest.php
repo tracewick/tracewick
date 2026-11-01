@@ -9,16 +9,20 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Clock\SystemClock;
+use Tracewick\Sink\SpoolAggregationKey;
 use Tracewick\Tests\Support\ManualClock;
 use Tracewick\Tests\Support\TemporaryDirectory;
 use Tracewick\Transport\Delivery;
 use Tracewick\Transport\DeliveryStatus;
 use Tracewick\Transport\Payload;
+use Tracewick\Transport\SpoolAdmissionState;
 use Tracewick\Transport\SpoolConfig;
 use Tracewick\Transport\SpoolTransport;
 
 #[CoversClass(SpoolTransport::class)]
 #[UsesClass(SpoolConfig::class)]
+#[UsesClass(SpoolAdmissionState::class)]
+#[UsesClass(SpoolAggregationKey::class)]
 #[UsesClass(Delivery::class)]
 #[UsesClass(Payload::class)]
 #[UsesClass(SystemClock::class)]
@@ -47,6 +51,23 @@ final class SpoolTransportTest extends TestCase
         self::assertCount(1, $entries);
         self::assertMatchesRegularExpression('/^01798000000123456789-[0-9a-f]{16}\.spool$/D', $entries[0]);
         self::assertSame("TWSP\x01profile", file_get_contents($this->spool->path . '/' . $entries[0]));
+        self::assertSame(0o600, fileperms($this->spool->path . '/' . $entries[0]) & 0o777);
+    }
+
+    public function testShardsByAggregationKeyHash(): void
+    {
+        $transport = new SpoolTransport($this->config(), new ManualClock(1_798_000_000_123_456_789));
+        $hash = 'abcdef0123456789';
+
+        $delivery = $transport->send(new Payload('body', 'application/vnd.tracewick.spool', [
+            SpoolTransport::PARAM_AGGREGATION_KEY_HASH => $hash,
+        ]));
+
+        self::assertTrue($delivery->isDelivered());
+        self::assertSame(['ab'], $this->spool->entries());
+        $entries = $this->spool->entries('/ab');
+        self::assertCount(1, $entries);
+        self::assertMatchesRegularExpression('/^01798000000123456789-abcdef0123456789-[0-9a-f]{16}\.spool$/D', $entries[0]);
     }
 
     public function testGivesEveryFileItsOwnName(): void
@@ -69,7 +90,7 @@ final class SpoolTransportTest extends TestCase
         self::assertCount(1, $this->spool->entries('/a/b'));
     }
 
-    public function testCreatesTheDirectoryWithFullPermissionsLeftToTheUmask(): void
+    public function testCreatesTheDirectoryWithOwnerOnlyPermissions(): void
     {
         $transport = new SpoolTransport(new SpoolConfig($this->spool->path . '/spool', 10, 1_024, 0));
         $umask = umask(0);
@@ -80,7 +101,7 @@ final class SpoolTransportTest extends TestCase
             umask($umask);
         }
 
-        self::assertSame(0o777, fileperms($this->spool->path . '/spool') & 0o777);
+        self::assertSame(0o700, fileperms($this->spool->path . '/spool') & 0o777);
     }
 
     public function testWritesNothingOutsideTheDirectory(): void

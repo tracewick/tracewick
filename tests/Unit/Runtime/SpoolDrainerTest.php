@@ -203,7 +203,10 @@ final class SpoolDrainerTest extends TestCase
                 throw new \RuntimeException('The store is down.');
             }
 
-            public function acknowledge(ClaimedSpoolFile $file): void {}
+            public function acknowledge(ClaimedSpoolFile $file): bool
+            {
+                return true;
+            }
 
             public function release(ClaimedSpoolFile $file): void {}
 

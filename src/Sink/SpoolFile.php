@@ -7,10 +7,11 @@ namespace Tracewick\Sink;
 use Tracewick\Sampler\EventType;
 
 /**
- * One file of the spool format, version 1: a JSON header describing the profile and the payload.
+ * One file of the spool format: a JSON header describing the profile and the payload.
  *
- * {@see toBytes()} produces the exact bytes a writer puts in the spool directory; {@see fromBytes()}
- * reads them back and rejects anything a reader must not deliver.
+ * Version 1 carries a pprof payload. Version 2 carries a compact stack→weight payload
+ * ([ADR 13](../../docs/adr/0013-spool-v2-compact-payload.md)). {@see toBytes()} produces the
+ * exact bytes a writer puts in the spool directory; {@see fromBytes()} reads them back.
  *
  * @see https://github.com/tracewick/tracewick/blob/main/docs/spool-format.md
  */
@@ -18,9 +19,16 @@ final readonly class SpoolFile
 {
     public const MAGIC = 'TWSP';
 
-    public const VERSION = 1;
+    public const VERSION_1 = 1;
+
+    public const VERSION_2 = 2;
+
+    /** @deprecated use VERSION_1 */
+    public const VERSION = self::VERSION_1;
 
     public const FORMAT_PPROF = 'pprof';
+
+    public const FORMAT_COMPACT_STACKS = 'compact-stacks';
 
     public const MAX_HEADER_BYTES = 1024 * 1024;
 
@@ -36,6 +44,7 @@ final readonly class SpoolFile
      * @param array<string, string> $labels      labels of the whole profile
      * @param string                $format      format of the payload, such as {@see FORMAT_PPROF}
      * @param string                $payload     the encoded profile
+     * @param int                   $version     spool file version ({@see VERSION_1} or {@see VERSION_2})
      */
     public function __construct(
         public string $application,
@@ -46,12 +55,13 @@ final readonly class SpoolFile
         public array $labels,
         public string $format,
         public string $payload,
+        public int $version = self::VERSION_1,
     ) {}
 
     /**
      * Reads a spool file.
      *
-     * @throws SpoolFileException when the bytes are not a valid version 1 spool file
+     * @throws SpoolFileException when the bytes are not a valid version 1 or 2 spool file
      */
     public static function fromBytes(string $bytes): self
     {
@@ -60,7 +70,7 @@ final readonly class SpoolFile
         }
 
         $version = \ord($bytes[4]);
-        if (self::VERSION !== $version) {
+        if (self::VERSION_1 !== $version && self::VERSION_2 !== $version) {
             throw new SpoolFileException(\sprintf('Spool format version %d is not supported.', $version));
         }
 
@@ -113,6 +123,7 @@ final readonly class SpoolFile
             self::labels($header),
             self::string($header, 'format'),
             $payload,
+            $version,
         );
     }
 
@@ -136,7 +147,7 @@ final readonly class SpoolFile
             'payload_size' => \strlen($this->payload),
         ], \JSON_THROW_ON_ERROR | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE);
 
-        return self::MAGIC . \chr(self::VERSION) . pack('N', \strlen($header)) . $header . $this->payload;
+        return self::MAGIC . \chr($this->version) . pack('N', \strlen($header)) . $header . $this->payload;
     }
 
     /**

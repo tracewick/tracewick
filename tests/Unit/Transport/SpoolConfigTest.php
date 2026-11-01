@@ -18,7 +18,7 @@ final class SpoolConfigTest extends TestCase
         $config = new SpoolConfig('/var/spool/tracewick');
 
         self::assertSame('/var/spool/tracewick', $config->directory);
-        self::assertSame(1_000, $config->maxFiles);
+        self::assertSame(500, $config->maxFiles);
         self::assertSame(4_194_304, $config->maxFileBytes);
         self::assertSame(67_108_864, $config->minFreeBytes);
     }
@@ -26,10 +26,10 @@ final class SpoolConfigTest extends TestCase
     public function testAcceptsTheBounds(): void
     {
         $lower = new SpoolConfig('spool', 1, 1_024, 0);
-        $upper = new SpoolConfig('spool', 1_000_000, 268_435_456, \PHP_INT_MAX);
+        $upper = new SpoolConfig('spool', 50_000, 268_435_456, \PHP_INT_MAX);
 
         self::assertSame([1, 1_024, 0], [$lower->maxFiles, $lower->maxFileBytes, $lower->minFreeBytes]);
-        self::assertSame([1_000_000, 268_435_456, \PHP_INT_MAX], [$upper->maxFiles, $upper->maxFileBytes, $upper->minFreeBytes]);
+        self::assertSame([50_000, 268_435_456, \PHP_INT_MAX], [$upper->maxFiles, $upper->maxFileBytes, $upper->minFreeBytes]);
     }
 
     /**
@@ -40,7 +40,7 @@ final class SpoolConfigTest extends TestCase
         yield 'empty directory' => ['', 1_000, 4_096, 0];
         yield 'directory with a NUL byte' => ["/var/spool\0x", 1_000, 4_096, 0];
         yield 'no files' => ['spool', 0, 4_096, 0];
-        yield 'too many files' => ['spool', 1_000_001, 4_096, 0];
+        yield 'too many files' => ['spool', 50_001, 4_096, 0];
         yield 'files too small' => ['spool', 1_000, 1_023, 0];
         yield 'files too large' => ['spool', 1_000, 268_435_457, 0];
         yield 'negative free space' => ['spool', 1_000, 4_096, -1];

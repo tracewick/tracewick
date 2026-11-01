@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tracewick\Sink;
 
-use Tracewick\Encoder\PprofEncoder;
+use Tracewick\Encoder\CompactStacksCodec;
 use Tracewick\Exception\LogicException;
 use Tracewick\Profile\Profile;
 use Tracewick\Transport\Delivery;
@@ -16,11 +16,10 @@ use Tracewick\Transport\Transport;
 /**
  * Writes profiles to a local spool directory, from which a separate process delivers them.
  *
- * This is the recommended setup for high-load services: writing a file takes microseconds and
+ * This is the recommended setup for high-load services: writing a file is a local rename and
  * does not depend on the backend being reachable (ADR 5, ADR 7). Each profile becomes one spool
- * file holding pprof and a header with the application name, the labels and the time window.
- * Labels are stored as the application set them; the process that delivers the file applies the
- * rules of its backend.
+ * v2 file with a compact stack→weight payload ([ADR 13](../../docs/adr/0013-spool-v2-compact-payload.md)).
+ * The file name carries a hash of the aggregation key ([ADR 12](../../docs/adr/0012-aggregate-before-delivery.md)).
  *
  * By default files are written by a {@see SpoolTransport}.
  *
@@ -32,7 +31,7 @@ final readonly class SpoolSink implements Sink
 
     private Transport $transport;
 
-    private PprofEncoder $encoder;
+    private CompactStacksCodec $codec;
 
     /**
      * @param string      $applicationName becomes the service name of every profile
@@ -48,7 +47,7 @@ final readonly class SpoolSink implements Sink
     ) {
         ApplicationName::assertValid($applicationName);
         $this->transport = $transport ?? new SpoolTransport($config);
-        $this->encoder = new PprofEncoder();
+        $this->codec = new CompactStacksCodec();
     }
 
     public function send(Profile $profile): Delivery
@@ -58,18 +57,27 @@ final readonly class SpoolSink implements Sink
                 return Delivery::skipped('The profile has no samples.');
             }
 
+            $labels = $profile->labels->toArray();
             $file = new SpoolFile(
                 $this->applicationName,
                 $profile->eventType,
                 $profile->periodNs,
                 $profile->startNs,
                 $profile->endNs,
-                $profile->labels->toArray(),
-                SpoolFile::FORMAT_PPROF,
-                $this->encoder->encode($profile),
+                $labels,
+                SpoolFile::FORMAT_COMPACT_STACKS,
+                $this->codec->encode($profile),
+                SpoolFile::VERSION_2,
             );
 
-            return $this->transport->send(new Payload($file->toBytes(), self::MEDIA_TYPE));
+            return $this->transport->send(new Payload($file->toBytes(), self::MEDIA_TYPE, [
+                SpoolTransport::PARAM_AGGREGATION_KEY_HASH => SpoolAggregationKey::hash(
+                    $this->applicationName,
+                    $labels,
+                    $profile->eventType,
+                    $profile->periodNs,
+                ),
+            ]));
         } catch (\Throwable $e) {
             return Delivery::failed(\sprintf('Cannot write the profile to the spool: %s', $e->getMessage()));
         }

@@ -10,12 +10,14 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Clock\SystemClock;
 use Tracewick\Diagnostics\DiagnosticLogger;
+use Tracewick\Encoder\CompactStacksCodec;
 use Tracewick\Encoder\Pprof\LabelKeyRewriter;
 use Tracewick\Encoder\Pprof\ProtobufException;
 use Tracewick\Encoder\Pprof\ProtobufReader;
 use Tracewick\Encoder\Pprof\ProtobufWriter;
 use Tracewick\Encoder\Pprof\StringTable;
 use Tracewick\Encoder\PprofEncoder;
+use Tracewick\Encoder\ProfileParts;
 use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
 use Tracewick\Profile\Stack;
@@ -59,6 +61,8 @@ use Tracewick\Transport\Payload;
 #[UsesClass(Payload::class)]
 #[UsesClass(SystemClock::class)]
 #[UsesClass(PprofEncoder::class)]
+#[UsesClass(CompactStacksCodec::class)]
+#[UsesClass(ProfileParts::class)]
 #[UsesClass(ProtobufWriter::class)]
 #[UsesClass(ProtobufReader::class)]
 #[UsesClass(ProtobufException::class)]
@@ -257,6 +261,31 @@ final class PyroscopeSinkTest extends TestCase
         $sink->forward($file);
 
         self::assertSame($file->payload, $transport->payload()->body);
+    }
+
+    public function testForwardsACompactStacksPayloadAsPprof(): void
+    {
+        $transport = new ScriptedTransport(Delivery::delivered());
+        $sink = new PyroscopeSink(new PyroscopeConfig('http://pyroscope:4040', 'drain'), $transport);
+        $profile = $this->profile(10_000_000, self::START_NS + 200_000_000)->withLabels(new Labels(['http.route' => '/posts/{id}']));
+        $file = new SpoolFile(
+            'shop',
+            $profile->eventType,
+            $profile->periodNs,
+            $profile->startNs,
+            $profile->endNs,
+            $profile->labels->toArray(),
+            SpoolFile::FORMAT_COMPACT_STACKS,
+            (new CompactStacksCodec())->encode($profile),
+            SpoolFile::VERSION_2,
+        );
+
+        $delivery = $sink->forward($file);
+
+        self::assertTrue($delivery->isDelivered());
+        self::assertSame('application/x-protobuf', $transport->payload()->contentType);
+        $expected = (new PprofEncoder())->encode($profile->withLabels(new Labels(['http_route' => '/posts/{id}'])));
+        self::assertSame($expected, $transport->payload()->body);
     }
 
     /**

@@ -9,20 +9,22 @@ use Tracewick\Exception\LogicException;
 /**
  * Where a {@see SpoolTransport} writes files and how much it may write.
  *
- * The directory never holds more than `maxFiles × maxFileBytes` bytes of spool files, and a write
- * never leaves less than {@see $minFreeBytes} free on the file system.
+ * The directory never holds more than `maxFiles × maxFileBytes` bytes of spool files (soft under
+ * concurrent writers), and a write never leaves less than {@see $minFreeBytes} free on the file
+ * system. Files are stored under two-hex shard directories when an aggregation-key hash is provided.
  *
  * @see https://github.com/tracewick/tracewick/blob/main/docs/spool-format.md
  */
 final readonly class SpoolConfig
 {
-    public const DEFAULT_MAX_FILES = 1_000;
+    public const DEFAULT_MAX_FILES = 500;
 
     public const DEFAULT_MAX_FILE_BYTES = 4 * 1024 * 1024;
 
     public const DEFAULT_MIN_FREE_BYTES = 64 * 1024 * 1024;
 
-    private const MAX_MAX_FILES = 1_000_000;
+    /** Hard ceiling after aggregation + sharding; thousands of files are no longer required. */
+    public const MAX_MAX_FILES = 50_000;
 
     private const MIN_MAX_FILE_BYTES = 1_024;
 
@@ -30,7 +32,7 @@ final readonly class SpoolConfig
 
     /**
      * @param string $directory    spool directory; created on the first write when it does not exist
-     * @param int    $maxFiles     spool files the directory may hold
+     * @param int    $maxFiles     spool files the directory tree may hold
      * @param int    $maxFileBytes size of one spool file
      * @param int    $minFreeBytes free space that must remain on the file system after a write
      *

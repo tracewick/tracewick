@@ -9,9 +9,8 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Clock\SystemClock;
-use Tracewick\Encoder\Pprof\ProtobufWriter;
-use Tracewick\Encoder\Pprof\StringTable;
-use Tracewick\Encoder\PprofEncoder;
+use Tracewick\Encoder\CompactStacksCodec;
+use Tracewick\Encoder\ProfileParts;
 use Tracewick\Exception\LogicException;
 use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
@@ -21,6 +20,7 @@ use Tracewick\Sampler\Frame;
 use Tracewick\Sampler\Sample;
 use Tracewick\Sampler\SampleBatch;
 use Tracewick\Sink\ApplicationName;
+use Tracewick\Sink\SpoolAggregationKey;
 use Tracewick\Sink\SpoolFile;
 use Tracewick\Sink\SpoolSink;
 use Tracewick\Tests\Support\GoldenFile;
@@ -41,9 +41,9 @@ use Tracewick\Transport\SpoolTransport;
 #[UsesClass(Delivery::class)]
 #[UsesClass(Payload::class)]
 #[UsesClass(SystemClock::class)]
-#[UsesClass(PprofEncoder::class)]
-#[UsesClass(ProtobufWriter::class)]
-#[UsesClass(StringTable::class)]
+#[UsesClass(CompactStacksCodec::class)]
+#[UsesClass(ProfileParts::class)]
+#[UsesClass(SpoolAggregationKey::class)]
 #[UsesClass(Profile::class)]
 #[UsesClass(Stack::class)]
 #[UsesClass(Labels::class)]
@@ -65,10 +65,17 @@ final class SpoolSinkTest extends TestCase
         self::assertTrue($delivery->isDelivered());
         $payload = $transport->payload();
         self::assertSame('application/vnd.tracewick.spool', $payload->contentType);
-        self::assertSame([], $payload->parameters);
+        self::assertArrayHasKey(SpoolTransport::PARAM_AGGREGATION_KEY_HASH, $payload->parameters);
+        self::assertSame(
+            SpoolAggregationKey::hash('blog', ['http.route' => '/posts/{id}'], EventType::Cpu, 20_000_000),
+            $payload->parameters[SpoolTransport::PARAM_AGGREGATION_KEY_HASH],
+        );
+        $file = SpoolFile::fromBytes($payload->body);
+        self::assertSame(SpoolFile::VERSION_2, $file->version);
+        self::assertSame(SpoolFile::FORMAT_COMPACT_STACKS, $file->format);
         self::assertEquals(
-            new SpoolFile('blog', EventType::Cpu, 20_000_000, self::START_NS, self::START_NS + 300, ['http.route' => '/posts/{id}'], 'pprof', (new PprofEncoder())->encode($profile)),
-            SpoolFile::fromBytes($payload->body),
+            new SpoolFile('blog', EventType::Cpu, 20_000_000, self::START_NS, self::START_NS + 300, ['http.route' => '/posts/{id}'], SpoolFile::FORMAT_COMPACT_STACKS, (new CompactStacksCodec())->encode($profile), SpoolFile::VERSION_2),
+            $file,
         );
     }
 
@@ -123,7 +130,7 @@ final class SpoolSinkTest extends TestCase
     }
 
     /**
-     * The valid fixtures shared with other readers are what the sink writes by default.
+     * The valid v2 fixtures shared with other readers are what the sink writes by default.
      *
      * @param \Closure(): Profile $profile
      */
@@ -136,9 +143,14 @@ final class SpoolSinkTest extends TestCase
             $sink = new SpoolSink('blog', new SpoolConfig($spool->path, 10, 1_024 * 1_024, 0));
 
             self::assertTrue($sink->send($profile())->isDelivered());
-            $entries = $spool->entries();
+            $shards = $spool->entries();
+            self::assertCount(1, $shards);
+            $entries = $spool->entries('/' . $shards[0]);
             self::assertCount(1, $entries);
-            GoldenFile::assertMatches(__DIR__ . '/../../Fixtures/spool/v1/' . $fixture, (string) file_get_contents($spool->path . '/' . $entries[0]));
+            GoldenFile::assertMatches(
+                __DIR__ . '/../../Fixtures/spool/v2/' . $fixture,
+                (string) file_get_contents($spool->path . '/' . $shards[0] . '/' . $entries[0]),
+            );
         } finally {
             $spool->remove();
         }

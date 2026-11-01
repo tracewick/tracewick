@@ -27,8 +27,10 @@ interface SpoolSource
 
     /**
      * The file was delivered: removes it from the spool.
+     *
+     * @return bool false when the file could not be removed (caller should count an ack failure)
      */
-    public function acknowledge(ClaimedSpoolFile $file): void;
+    public function acknowledge(ClaimedSpoolFile $file): bool;
 
     /**
      * Delivery failed for a reason that may pass: returns the file to the spool for a later try.
