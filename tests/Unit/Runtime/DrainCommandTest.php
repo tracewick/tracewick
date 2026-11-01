@@ -10,7 +10,11 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Clock\SystemClock;
 use Tracewick\Diagnostics\DiagnosticLogger;
+use Tracewick\Encoder\CompactStacksCodec;
 use Tracewick\Encoder\PprofEncoder;
+use Tracewick\Profile\Labels;
+use Tracewick\Profile\Profile;
+use Tracewick\Profile\Stack;
 use Tracewick\Runtime\DrainCommand;
 use Tracewick\Runtime\DrainOutcome;
 use Tracewick\Runtime\DrainResult;
@@ -18,6 +22,7 @@ use Tracewick\Runtime\DrainSettings;
 use Tracewick\Runtime\SpoolAggregationWindow;
 use Tracewick\Runtime\SpoolDrainer;
 use Tracewick\Sampler\EventType;
+use Tracewick\Sampler\Frame;
 use Tracewick\Sink\ApplicationName;
 use Tracewick\Sink\PyroscopeConfig;
 use Tracewick\Sink\PyroscopeSink;
@@ -160,7 +165,7 @@ final class DrainCommandTest extends TestCase
         $exitCode = $this->command($forwarder)->run(['--once', ...$this->required()]);
 
         self::assertSame(0, $exitCode);
-        self::assertSame(['first', 'second'], $forwarder->payloads());
+        self::assertSame(['first', 'second'], array_map(static fn(SpoolFile $file): string => $file->labels['id'] ?? '', $forwarder->forwarded));
         self::assertSame("Delivered 1, rejected 1 spool files.\n", $this->read($this->output));
         self::assertSame('Rejected ' . self::SECOND . ": Bad request.\n", $this->read($this->errors));
         self::assertSame([], $this->sleeps);
@@ -202,7 +207,7 @@ final class DrainCommandTest extends TestCase
 
         $command->run($this->required());
 
-        self::assertSame(['first'], $forwarder->payloads());
+        self::assertSame(['first'], array_map(static fn(SpoolFile $file): string => $file->labels['id'] ?? '', $forwarder->forwarded));
         self::assertSame([1_000, 1_000], $this->sleeps);
     }
 
@@ -412,9 +417,28 @@ final class DrainCommandTest extends TestCase
         return ['--spool-dir=' . $this->spool->path, '--pyroscope-url=http://pyroscope:4040', '--reader-id=drain'];
     }
 
-    private function write(string $name, string $payload): void
+    private function write(string $name, string $id): void
     {
-        $file = new SpoolFile('blog', EventType::Wall, 10_000_000, 1_798_000_000_000_000_000, 1_798_000_000_100_000_000, [], SpoolFile::FORMAT_PPROF, $payload);
+        $profile = new Profile(
+            EventType::Wall,
+            10_000_000,
+            1_000_000_000,
+            1_100_000_000,
+            [new Frame('work')],
+            [new Stack([0], 1)],
+            new Labels(['id' => $id]),
+        );
+        $file = new SpoolFile(
+            'blog',
+            EventType::Wall,
+            10_000_000,
+            1_000_000_000,
+            1_100_000_000,
+            ['id' => $id],
+            SpoolFile::FORMAT_COMPACT_STACKS,
+            (new CompactStacksCodec())->encode($profile),
+            SpoolFile::VERSION_2,
+        );
         file_put_contents($this->spool->path . '/' . $name, $file->toBytes());
     }
 

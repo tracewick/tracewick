@@ -12,7 +12,6 @@ use Tracewick\Profile\Profile;
 use Tracewick\Profile\ProfileMerger;
 use Tracewick\Sink\SpoolAggregationKey;
 use Tracewick\Sink\SpoolFile;
-use Tracewick\Sink\SpoolFileException;
 use Tracewick\Sink\SpoolFileName;
 use Tracewick\Sink\SpoolForwarder;
 use Tracewick\Transport\ClaimedSpoolFile;
@@ -23,10 +22,10 @@ use Tracewick\Transport\SpoolSource;
 /**
  * Delivers the files of a spool to a backend, one pass at a time.
  *
- * Compact-stacks (v2) files that share an aggregation key and fall into the same closed
- * wall-clock window are merged into one pprof POST ([ADR 12](../../docs/adr/0012-aggregate-before-delivery.md)).
- * v1 pprof files are still forwarded one by one. Invalid files are rejected; a failed send
- * releases every claimed file still held and ends the pass.
+ * Compact-stacks files that share an aggregation key and fall into the same closed wall-clock
+ * window are merged into one pprof POST ([ADR 12](../../docs/adr/0012-aggregate-before-delivery.md)).
+ * Invalid files are rejected; a failed send releases every claimed file still held and ends the
+ * pass.
  *
  * The drainer runs in a process of its own, never inside a request, and never throws.
  *
@@ -75,30 +74,12 @@ final readonly class SpoolDrainer
             $nowNs = $this->clock->nowNs();
             /** @var array<string, non-empty-list<array{ClaimedSpoolFile, SpoolFile, Profile}>> $groups */
             $groups = [];
-            /** @var list<array{ClaimedSpoolFile, SpoolFile}> $singles */
-            $singles = [];
             /** @var list<ClaimedSpoolFile> $openWindow */
             $openWindow = [];
 
             foreach ($batch as $claimed) {
                 try {
                     $file = SpoolFile::fromBytes($claimed->bytes);
-                } catch (SpoolFileException $e) {
-                    $this->source->reject($claimed);
-                    $held = $this->without($held, $claimed);
-                    ++$rejected;
-                    $lastRejection = \sprintf('%s: %s', $claimed->name, $e->getMessage());
-
-                    continue;
-                }
-
-                if (SpoolFile::FORMAT_COMPACT_STACKS !== $file->format) {
-                    $singles[] = [$claimed, $file];
-
-                    continue;
-                }
-
-                try {
                     $profile = $this->profileFromCompact($file);
                 } catch (\Throwable $e) {
                     $this->source->reject($claimed);
@@ -118,35 +99,6 @@ final readonly class SpoolDrainer
 
                 $groupKey = $this->groupKey($claimed->name, $file) . "\0" . $windowId;
                 $groups[$groupKey][] = [$claimed, $file, $profile];
-            }
-
-            foreach ($singles as [$claimed, $file]) {
-                $delivery = $this->forwardFile($file);
-                if ($delivery->isDelivered()) {
-                    if (!$this->source->acknowledge($claimed)) {
-                        ++$ackFailures;
-                    }
-                    $held = $this->without($held, $claimed);
-                    ++$delivered;
-
-                    continue;
-                }
-
-                if (
-                    DeliveryStatus::Rejected === $delivery->status
-                    || DeliveryStatus::Configuration === $delivery->status
-                ) {
-                    $this->source->reject($claimed);
-                    $held = $this->without($held, $claimed);
-                    ++$rejected;
-                    $lastRejection = \sprintf('%s: %s', $claimed->name, $delivery->reason);
-
-                    continue;
-                }
-
-                $this->releaseAll($held);
-
-                return new DrainResult(DrainOutcome::Failed, $delivered, $rejected, $lastRejection, $delivery->reason, $ackFailures);
             }
 
             foreach ($groups as $members) {

@@ -15,18 +15,18 @@ lock readers to PHP.
 
 - Hand-off is a **spool directory**, one file per profile. Format: `docs/spool-format.md`,
   versioned, independent of the PHP API.
-- File = versioned header + payload. v1 payload is pprof
-  ([ADR 4](0004-pprof-as-primary-format.md)). v2 replaces that payload with a compact stack→weight
-  encoding and moves pprof encoding to drain/agent
-  ([ADR 13](0013-spool-v2-compact-payload.md)); layout stays in `docs/spool-format.md`.
+- File = versioned header + payload. The supported version is **v2**: compact stack→weight
+  payload; pprof is produced in drain/agent ([ADR 13](0013-spool-v2-compact-payload.md),
+  [ADR 4](0004-pprof-as-primary-format.md)). Layout stays in `docs/spool-format.md`.
 - Writers write under a temporary name and `rename()` into place.
 - Max size and file count; on overflow drop and count; never block waiting for a reader.
-- PHP tests use shared fixtures under `tests/Fixtures/spool/`. A Go agent, when it exists, should
-  use the same fixtures; that is not wired yet.
+- PHP tests use shared fixtures under `tests/Fixtures/spool/v2/`. A Go agent, when it exists,
+  should use the same fixtures; that is not wired yet.
 - Directory must be local FS ([ADR 9](0009-agent-hand-off.md)).
 
 ## Consequences
 
 - Other languages can implement readers from the spec and fixtures.
-- Format changes need a new version; keep old readers working for at least one minor release.
+- Format changes need a new version. Dual-read of older versions is not promised until Tracewick
+  has public installs that need a migration window.
 - No writable local disk → proposed unix socket ([ADR 9](0009-agent-hand-off.md)), not implemented.

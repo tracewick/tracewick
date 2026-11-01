@@ -6,13 +6,12 @@ The spool is how Tracewick hands profiles to a separate delivery process, such a
 The application writes each profile to a directory and continues; the delivery process reads the
 directory, sends the profiles to a backend and removes them.
 
-**v2** (compact stack→weight payload; pprof encoded in drain/agent) is the production writer
-format ([ADR 13](adr/0013-spool-v2-compact-payload.md)). **v1** (pprof payload) remains readable.
-Aggregation before upload is [ADR 12](adr/0012-aggregate-before-delivery.md).
+**v2** (compact stack→weight payload; pprof encoded in drain/agent) is the only supported
+on-disk format ([ADR 13](adr/0013-spool-v2-compact-payload.md)). Version 1 (pprof payload) is
+not read or written. Aggregation before upload is [ADR 12](adr/0012-aggregate-before-delivery.md).
 
 This document is a public contract, independent of the PHP API. Readers and writers are checked
-against [`tests/Fixtures/spool/v1`](../tests/Fixtures/spool/v1) and
-[`tests/Fixtures/spool/v2`](../tests/Fixtures/spool/v2).
+against [`tests/Fixtures/spool/v2`](../tests/Fixtures/spool/v2).
 
 The key words MUST, MUST NOT, SHOULD and MAY are used as described in RFC 2119.
 
@@ -63,10 +62,10 @@ All integers are unsigned and big-endian.
 | Offset | Size     | Field          | Value                                              |
 |--------|----------|----------------|----------------------------------------------------|
 | 0      | 4        | magic          | ASCII `TWSP` (`54 57 53 50`)                       |
-| 4      | 1        | version        | `1` (pprof payload) or `2` (compact-stacks payload)|
+| 4      | 1        | version        | `2` (compact-stacks payload)                       |
 | 5      | 4        | header length  | `H`, the size of the header in bytes, at most 1 MiB |
 | 9      | `H`      | header         | UTF-8 JSON object, described below                 |
-| 9 + H  | the rest | payload        | the profile, in the format the header names        |
+| 9 + H  | the rest | payload        | compact-stacks bytes (see below)                   |
 
 ### Header
 
@@ -84,14 +83,13 @@ All integers are unsigned and big-endian.
 All keys are required. Integers fit in a signed 64-bit integer. Readers MUST ignore keys they do
 not know.
 
-### Payload formats
+### Payload format
 
 | `format`          | Version | Payload |
 |-------------------|---------|---------|
-| `pprof`           | 1       | Uncompressed [profile.proto](https://github.com/google/pprof/blob/main/proto/profile.proto). |
 | `compact-stacks`  | 2       | Compact stack→weight encoding (schema below). Drain/agent encode pprof from it. |
 
-Readers MUST NOT deliver a payload whose format they do not support.
+Readers MUST reject any other `version` or `format`.
 
 #### `compact-stacks` schema version 1
 
@@ -132,10 +130,9 @@ the file system only ([ADR 9](adr/0009-agent-hand-off.md)).
 
 ## Versioning
 
-Readers support the previous version side by side with the new one for at least one minor release
-of Tracewick.
+Only version 2 is defined. A future version bump may introduce dual-read if Tracewick has
+public installs by then; until then readers reject unknown versions.
 
 ## Fixtures
 
-- [`tests/Fixtures/spool/v1`](../tests/Fixtures/spool/v1) — version 1 / `pprof`
 - [`tests/Fixtures/spool/v2`](../tests/Fixtures/spool/v2) — version 2 / `compact-stacks`
