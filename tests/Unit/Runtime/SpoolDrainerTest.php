@@ -347,6 +347,178 @@ final class SpoolDrainerTest extends TestCase
         self::assertCount(1, $forwarder->forwarded);
     }
 
+    public function testRejectsCompactStacksFilesWithAnInvalidPayload(): void
+    {
+        $hash = SpoolAggregationKey::hash('blog', ['env' => 'prod'], EventType::Wall, 10_000_000);
+        $name = '01798000000000000001-' . $hash . '-0000000000000001.spool';
+        $file = new SpoolFile(
+            'blog',
+            EventType::Wall,
+            10_000_000,
+            1_000_000_000,
+            1_100_000_000,
+            ['env' => 'prod'],
+            SpoolFile::FORMAT_COMPACT_STACKS,
+            "\x02",
+            SpoolFile::VERSION_2,
+        );
+        file_put_contents($this->spool->path . '/' . $name, $file->toBytes());
+        $forwarder = new ScriptedForwarder();
+
+        $result = $this->drainer($forwarder, new SpoolAggregationWindow(10), new ManualClock(20_000_000_000))->drain();
+
+        self::assertSame(DrainOutcome::Empty, $result->outcome);
+        self::assertSame(1, $result->rejected);
+        self::assertStringContainsString($name . ':', $result->lastRejection);
+        self::assertSame([], $forwarder->forwarded);
+        self::assertSame([$name], $this->spool->entries('/rejected'));
+    }
+
+    public function testGroupsCompactStacksByFileContentsWhenTheNameHasNoHash(): void
+    {
+        $this->writeCompact('01798000000000000001-0000000000000001.spool', 1_000_000_000, 1_100_000_000, 2);
+        $this->writeCompact('01798000000000000002-0000000000000002.spool', 1_200_000_000, 1_300_000_000, 3);
+        $forwarder = new ScriptedForwarder(Delivery::delivered());
+
+        $result = $this->drainer($forwarder, new SpoolAggregationWindow(10), new ManualClock(20_000_000_000))->drain();
+
+        self::assertSame(2, $result->delivered);
+        self::assertCount(1, $forwarder->forwarded);
+    }
+
+    public function testRejectsAMergedGroupTheBackendRefused(): void
+    {
+        $hash = SpoolAggregationKey::hash('blog', ['env' => 'prod'], EventType::Wall, 10_000_000);
+        $first = '01798000000000000001-' . $hash . '-0000000000000001.spool';
+        $second = '01798000000000000002-' . $hash . '-0000000000000002.spool';
+        $this->writeCompact($first, 1_000_000_000, 1_100_000_000, 2);
+        $this->writeCompact($second, 1_200_000_000, 1_300_000_000, 3);
+        $forwarder = new ScriptedForwarder(Delivery::rejected('Bad request.'));
+
+        $result = $this->drainer($forwarder, new SpoolAggregationWindow(10), new ManualClock(20_000_000_000))->drain();
+
+        self::assertSame(DrainOutcome::Empty, $result->outcome);
+        self::assertSame(0, $result->delivered);
+        self::assertSame(2, $result->rejected);
+        self::assertSame($first . ': Bad request.', $result->lastRejection);
+        self::assertSame([$first, $second], $this->spool->entries('/rejected'));
+    }
+
+    public function testRejectsAMergedGroupWhenTheBackendReportsAConfigurationError(): void
+    {
+        $hash = SpoolAggregationKey::hash('blog', ['env' => 'prod'], EventType::Wall, 10_000_000);
+        $name = '01798000000000000001-' . $hash . '-0000000000000001.spool';
+        $this->writeCompact($name, 1_000_000_000, 1_100_000_000, 2);
+        $forwarder = new ScriptedForwarder(Delivery::configuration('HTTP 401'));
+
+        $result = $this->drainer($forwarder, new SpoolAggregationWindow(10), new ManualClock(20_000_000_000))->drain();
+
+        self::assertSame(1, $result->rejected);
+        self::assertSame($name . ': HTTP 401', $result->lastRejection);
+        self::assertSame([$name], $this->spool->entries('/rejected'));
+    }
+
+    public function testEndsThePassWhenAMergedGroupFailsToSend(): void
+    {
+        $hash = SpoolAggregationKey::hash('blog', ['env' => 'prod'], EventType::Wall, 10_000_000);
+        $first = '01798000000000000001-' . $hash . '-0000000000000001.spool';
+        $second = '01798000000000000002-' . $hash . '-0000000000000002.spool';
+        $this->writeCompact($first, 1_000_000_000, 1_100_000_000, 2);
+        $this->writeCompact($second, 1_200_000_000, 1_300_000_000, 3);
+        $forwarder = new ScriptedForwarder(Delivery::failed('Timeout.'));
+
+        $result = $this->drainer($forwarder, new SpoolAggregationWindow(10), new ManualClock(20_000_000_000))->drain();
+
+        self::assertSame(DrainOutcome::Failed, $result->outcome);
+        self::assertSame('Timeout.', $result->failure);
+        self::assertSame([$first, $second], $this->spool->entries());
+    }
+
+    public function testCountsAcknowledgeFailuresForAMergedGroup(): void
+    {
+        $hash = SpoolAggregationKey::hash('blog', ['env' => 'prod'], EventType::Wall, 10_000_000);
+        $first = '01798000000000000001-' . $hash . '-0000000000000001.spool';
+        $this->writeCompact($first, 1_000_000_000, 1_100_000_000, 2);
+        $source = new class ($this->spool->path) implements SpoolSource {
+            private ?ClaimedSpoolFile $claimed = null;
+
+            public function __construct(private readonly string $directory) {}
+
+            public function claim(): ?ClaimedSpoolFile
+            {
+                if ($this->claimed instanceof ClaimedSpoolFile) {
+                    return null;
+                }
+
+                $entries = scandir($this->directory);
+                if (false === $entries) {
+                    return null;
+                }
+
+                foreach ($entries as $name) {
+                    if (!str_ends_with($name, '.spool')) {
+                        continue;
+                    }
+
+                    $path = $this->directory . '/' . $name;
+                    $this->claimed = new ClaimedSpoolFile($name, (string) file_get_contents($path), $path);
+
+                    return $this->claimed;
+                }
+
+                return null;
+            }
+
+            public function acknowledge(ClaimedSpoolFile $file): bool
+            {
+                return false;
+            }
+
+            public function release(ClaimedSpoolFile $file): void {}
+
+            public function reject(ClaimedSpoolFile $file): void {}
+        };
+
+        $result = (new SpoolDrainer(
+            $source,
+            new ScriptedForwarder(Delivery::delivered()),
+            new SpoolAggregationWindow(10),
+            new ManualClock(20_000_000_000),
+        ))->drain();
+
+        self::assertSame(1, $result->delivered);
+        self::assertSame(1, $result->ackFailures);
+    }
+
+    public function testTreatsAMergeFailureAsAFailedDelivery(): void
+    {
+        $hash = '0123456789abcdef';
+        $this->writeCompact(
+            '01798000000000000001-' . $hash . '-0000000000000001.spool',
+            1_000_000_000,
+            1_100_000_000,
+            2,
+            EventType::Wall,
+            10_000_000,
+        );
+        $this->writeCompact(
+            '01798000000000000002-' . $hash . '-0000000000000002.spool',
+            1_200_000_000,
+            1_300_000_000,
+            3,
+            EventType::Cpu,
+            10_000_000,
+        );
+        $forwarder = new ScriptedForwarder();
+
+        $result = $this->drainer($forwarder, new SpoolAggregationWindow(10), new ManualClock(20_000_000_000))->drain();
+
+        self::assertSame(DrainOutcome::Failed, $result->outcome);
+        self::assertStringContainsString('event type', $result->failure);
+        self::assertSame([], $forwarder->forwarded);
+        self::assertCount(2, $this->spool->entries());
+    }
+
     private function drainer(
         ScriptedForwarder $forwarder,
         SpoolAggregationWindow $window = new SpoolAggregationWindow(),
@@ -366,13 +538,19 @@ final class SpoolDrainerTest extends TestCase
         file_put_contents($this->spool->path . '/' . $name, $file->toBytes());
     }
 
-    private function writeCompact(string $name, int $startNs, int $endNs, int $weight): void
-    {
-        $profile = new Profile(EventType::Wall, 10_000_000, $startNs, $endNs, [new Frame('work')], [new Stack([0], $weight)], new Labels(['env' => 'prod']));
+    private function writeCompact(
+        string $name,
+        int $startNs,
+        int $endNs,
+        int $weight,
+        EventType $eventType = EventType::Wall,
+        int $periodNs = 10_000_000,
+    ): void {
+        $profile = new Profile($eventType, $periodNs, $startNs, $endNs, [new Frame('work')], [new Stack([0], $weight)], new Labels(['env' => 'prod']));
         $file = new SpoolFile(
             'blog',
-            EventType::Wall,
-            10_000_000,
+            $eventType,
+            $periodNs,
             $startNs,
             $endNs,
             ['env' => 'prod'],

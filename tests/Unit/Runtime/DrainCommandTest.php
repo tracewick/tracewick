@@ -349,6 +349,23 @@ final class DrainCommandTest extends TestCase
         self::assertSame("Delivered 0, rejected 0 spool files.\n", $this->read($this->output));
     }
 
+    public function testDefaultPauseSleepsInShortStepsUntilTheTimeLimit(): void
+    {
+        $command = new DrainCommand(
+            $this->output,
+            $this->errors,
+            new SystemClock(),
+            null,
+            static fn(): int => 0,
+            static fn(): SpoolForwarder => new ScriptedForwarder(),
+        );
+
+        $exitCode = $command->run([...$this->required(), '--sleep=1', '--time-limit=1']);
+
+        self::assertSame(0, $exitCode);
+        self::assertSame("Delivered 0, rejected 0 spool files.\n", $this->read($this->output));
+    }
+
     /**
      * @param ?\Closure(int): void $onSleep called with the number of sleeps so far
      */

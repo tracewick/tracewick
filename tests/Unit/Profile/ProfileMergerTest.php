@@ -59,4 +59,27 @@ final class ProfileMergerTest extends TestCase
 
         (new ProfileMerger())->merge([$a, $b]);
     }
+
+    public function testKeepsTruncatedStacksSeparateFromFullOnes(): void
+    {
+        $frame = new Frame('work');
+        $full = new Profile(EventType::Wall, 1, 1, 2, [$frame], [new Stack([0], 2)]);
+        $truncated = new Profile(EventType::Wall, 1, 1, 2, [$frame], [new Stack([0], 3, truncated: true)]);
+
+        $merged = (new ProfileMerger())->merge([$full, $truncated]);
+
+        self::assertCount(2, $merged->stacks);
+        self::assertSame(5, $merged->eventCount());
+        self::assertTrue($merged->stacks[0]->truncated || $merged->stacks[1]->truncated);
+    }
+
+    public function testRejectsStacksThatReferenceMissingFrames(): void
+    {
+        $profile = new Profile(EventType::Wall, 1, 1, 2, [new Frame('a')], [new Stack([99], 1)]);
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('Stack references missing frame 99.');
+
+        (new ProfileMerger())->merge([$profile]);
+    }
 }

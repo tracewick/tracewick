@@ -143,10 +143,8 @@ final class DrainCommand
             // Memory limits are checked between passes; keep passes to one file when set.
             $batchSize = null === $settings->memoryLimit ? self::BATCH_SIZE : 1;
             if (null !== $settings->limit) {
-                $batchSize = min($batchSize, max(0, $settings->limit - $handled));
-                if (0 === $batchSize) {
-                    break;
-                }
+                // limitReached already ends the loop when handled >= limit; remaining is always > 0 here.
+                $batchSize = min($batchSize, $settings->limit - $handled);
             }
 
             $result = $drainer->drain($batchSize, $settings->once);

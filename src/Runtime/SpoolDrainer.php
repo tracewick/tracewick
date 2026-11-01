@@ -73,7 +73,7 @@ final readonly class SpoolDrainer
 
             $held = $batch;
             $nowNs = $this->clock->nowNs();
-            /** @var array<string, list<array{ClaimedSpoolFile, SpoolFile, Profile}>> $groups */
+            /** @var array<string, non-empty-list<array{ClaimedSpoolFile, SpoolFile, Profile}>> $groups */
             $groups = [];
             /** @var list<array{ClaimedSpoolFile, SpoolFile}> $singles */
             $singles = [];
@@ -150,10 +150,6 @@ final readonly class SpoolDrainer
             }
 
             foreach ($groups as $members) {
-                if ([] === $members) {
-                    continue;
-                }
-
                 $claimedFiles = [];
                 $profiles = [];
                 foreach ($members as [$claimed, $file, $profile]) {
@@ -201,7 +197,7 @@ final readonly class SpoolDrainer
                         $held = $this->without($held, $claimed);
                         ++$rejected;
                     }
-                    $lastRejection = \sprintf('%s: %s', $claimedFiles[0]->name, $delivery->reason);
+                    $lastRejection = \sprintf('%s: %s', $members[0][0]->name, $delivery->reason);
 
                     continue;
                 }
