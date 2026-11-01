@@ -173,7 +173,7 @@ final readonly class ExcimerTraceConverter
 
         $scope = substr($inner, 0, $colon);
         $line = substr($inner, $colon + 1);
-        if ('' === $line || !ctype_digit($line)) {
+        if ('' === $line || \strlen($line) !== strspn($line, '0123456789')) {
             return $function;
         }
 

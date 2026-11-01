@@ -78,7 +78,7 @@ final readonly class Frame
 
         $scope = substr($inner, 0, $colon);
         $linePart = substr($inner, $colon + 1);
-        if ('' === $linePart || !ctype_digit($linePart)) {
+        if ('' === $linePart || \strlen($linePart) !== strspn($linePart, '0123456789')) {
             return $function;
         }
 
