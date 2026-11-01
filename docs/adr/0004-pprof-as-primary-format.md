@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-10-29
-- Updated: 2026-11-01
+- Updated: 2026-11-02
 
 ## Context
 
@@ -18,9 +18,10 @@ backends. Options:
 ## Decision
 
 - pprof is the primary format for the Profile model and for production delivery to Pyroscope.
-- **Target delivery API:** Pyroscope's push API (`/push.v1.PusherService/Push`), with profile
-  labels as series labels. Today's `PyroscopeSink` still uses legacy `/ingest` with
-  `format=pprof`; moving to push is planned work in the core, not an optional add-on.
+- **Delivery API:** Pyroscope's push API (`/push.v1.PusherService/Push`). Profile labels become
+  series labels on the push request. The pprof payload carries a single sample type
+  (`wall` or `cpu` in nanoseconds). Sample labels inside pprof are reserved for `span_id` when
+  a tracing model exists; they are not used for series identity.
 - Collapsed stacks and Speedscope stay secondary (local use and debugging).
 - The encoder is a small hand-written protobuf writer for the subset we need, so the core does not
   depend on `google/protobuf`.
@@ -33,6 +34,5 @@ backends. Options:
 
 - One format to test carefully instead of several equal ones.
 - Hand-written encoder is a few hundred lines we own and must test.
-- Spool v1 currently stores pprof bytes; a later compact spool payload may move encoding to the
-  drain ([ADR 7](0007-language-neutral-spool-format.md)), without changing this decision that pprof
-  is what backends see.
+- Compact spool stores stacks; drain encodes pprof and wraps it in a push request
+  ([ADR 7](0007-language-neutral-spool-format.md), [ADR 13](0013-spool-v2-compact-payload.md)).

@@ -51,7 +51,7 @@ final readonly class PyroscopeConfig
     }
 
     /**
-     * Settings for the HTTP transport that posts to the server's /ingest endpoint.
+     * Settings for the HTTP transport that posts to the server's push API.
      */
     public function httpConfig(): HttpConfig
     {
@@ -65,6 +65,11 @@ final readonly class PyroscopeConfig
             $headers['X-Scope-OrgID'] = $this->tenantId;
         }
 
-        return new HttpConfig(rtrim($this->serverUrl, '/') . '/ingest', $this->connectTimeoutMs, $this->timeoutMs, $headers);
+        return new HttpConfig(
+            rtrim($this->serverUrl, '/') . PyroscopePushRequest::PATH,
+            $this->connectTimeoutMs,
+            $this->timeoutMs,
+            $headers,
+        );
     }
 }

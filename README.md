@@ -17,8 +17,8 @@ meant to run continuously in production.
   (see [ADR 5](docs/adr/0005-fail-open-policy.md)).
 - **Correct profiles.** Wall-time and CPU sampling with sample weights and timestamps that match
   Excimer where we have tests for it.
-- **Open formats.** Collapsed stacks, Speedscope and pprof. Delivery today targets Grafana
-  Pyroscope (`/ingest`). The intended production path is pprof over Pyroscope's push API; OpenTelemetry
+- **Open formats.** Collapsed stacks, Speedscope and pprof. Production delivery uses pprof over
+  Grafana Pyroscope's push API ([ADR 4](docs/adr/0004-pprof-as-primary-format.md)). OpenTelemetry
   Profiles export is planned and experimental ([ADR 6](docs/adr/0006-otlp-profiles-experimental.md)).
 - **Where PHP runs.** Designed for PHP-FPM, CLI and long-running workers. The public facade today is
   request- or unit-of-work oriented. Continuous process-level profiling (for example under Swoole or

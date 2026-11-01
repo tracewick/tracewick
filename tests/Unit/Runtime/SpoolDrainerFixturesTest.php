@@ -24,12 +24,14 @@ use Tracewick\Runtime\SpoolDrainer;
 use Tracewick\Sampler\Frame;
 use Tracewick\Sink\ApplicationName;
 use Tracewick\Sink\PyroscopeConfig;
+use Tracewick\Sink\PyroscopePushRequest;
 use Tracewick\Sink\PyroscopeSink;
 use Tracewick\Sink\SpoolAggregationKey;
 use Tracewick\Sink\SpoolFile;
 use Tracewick\Sink\SpoolFileException;
 use Tracewick\Sink\SpoolFileName;
 use Tracewick\Tests\Support\ManualClock;
+use Tracewick\Tests\Support\ProtobufMessage;
 use Tracewick\Tests\Support\ScriptedTransport;
 use Tracewick\Tests\Support\TemporaryDirectory;
 use Tracewick\Transport\CachingDnsResolver;
@@ -60,6 +62,7 @@ use Tracewick\Transport\SystemDnsResolver;
 #[UsesClass(SpoolFileException::class)]
 #[UsesClass(PyroscopeSink::class)]
 #[UsesClass(PyroscopeConfig::class)]
+#[UsesClass(PyroscopePushRequest::class)]
 #[UsesClass(ApplicationName::class)]
 #[UsesClass(HttpConfig::class)]
 #[UsesClass(CircuitBreakerConfig::class)]
@@ -116,7 +119,20 @@ final class SpoolDrainerFixturesTest extends TestCase
         self::assertSame(3, $result->delivered);
         self::assertSame(9, $result->rejected);
         self::assertCount(2, $transport->sent);
-        self::assertSame(['blog', 'blog'], array_map(static fn(Payload $payload): ?string => $payload->parameters['name'] ?? null, $transport->sent));
+        self::assertSame(['blog', 'blog'], array_map(
+            static function (Payload $payload): string {
+                $series = ProtobufMessage::decode($payload->body)->messages(1)[0] ?? null;
+                self::assertNotNull($series);
+                foreach ($series->messages(1) as $label) {
+                    if ('service_name' === $label->string(1)) {
+                        return $label->string(2);
+                    }
+                }
+
+                self::fail('Push request has no service_name label.');
+            },
+            $transport->sent,
+        ));
         self::assertSame(['rejected'], $this->spool->entries());
         self::assertSame([
             'bad-magic.spool',

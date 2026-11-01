@@ -11,6 +11,7 @@ use PHPUnit\Framework\TestCase;
 use Tracewick\Exception\LogicException;
 use Tracewick\Sink\ApplicationName;
 use Tracewick\Sink\PyroscopeConfig;
+use Tracewick\Sink\PyroscopePushRequest;
 use Tracewick\Transport\CircuitBreakerConfig;
 use Tracewick\Transport\HttpConfig;
 
@@ -18,6 +19,7 @@ use Tracewick\Transport\HttpConfig;
 #[UsesClass(ApplicationName::class)]
 #[UsesClass(CircuitBreakerConfig::class)]
 #[UsesClass(HttpConfig::class)]
+#[UsesClass(PyroscopePushRequest::class)]
 final class PyroscopeConfigTest extends TestCase
 {
     public function testDefaults(): void
@@ -25,20 +27,20 @@ final class PyroscopeConfigTest extends TestCase
         $config = new PyroscopeConfig('http://pyroscope:4040', 'blog');
         $http = $config->httpConfig();
 
-        self::assertSame('http://pyroscope:4040/ingest', $http->url);
-        self::assertSame('/ingest', $http->target);
+        self::assertSame('http://pyroscope:4040' . PyroscopePushRequest::PATH, $http->url);
+        self::assertSame(PyroscopePushRequest::PATH, $http->target);
         self::assertSame(200, $http->connectTimeoutMs);
         self::assertSame(1_000, $http->timeoutMs);
         self::assertSame([], $http->headers);
         self::assertEquals(new CircuitBreakerConfig(), $config->circuitBreaker);
     }
 
-    public function testBuildsTheIngestUrlUnderABasePath(): void
+    public function testBuildsThePushUrlUnderABasePath(): void
     {
         $config = new PyroscopeConfig('https://profiles.example.com/prefix/', 'blog', connectTimeoutMs: 100, timeoutMs: 300);
         $http = $config->httpConfig();
 
-        self::assertSame('https://profiles.example.com/prefix/ingest', $http->url);
+        self::assertSame('https://profiles.example.com/prefix' . PyroscopePushRequest::PATH, $http->url);
         self::assertSame(100, $http->connectTimeoutMs);
         self::assertSame(300, $http->timeoutMs);
     }
@@ -120,7 +122,7 @@ final class PyroscopeConfigTest extends TestCase
     public function testValidatesTheUrl(): void
     {
         $this->expectException(LogicException::class);
-        $this->expectExceptionMessage('The URL must be an absolute http or https URL, got "pyroscope:4040/ingest".');
+        $this->expectExceptionMessage('The URL must be an absolute http or https URL, got "pyroscope:4040' . PyroscopePushRequest::PATH . '".');
 
         new PyroscopeConfig('pyroscope:4040', 'blog');
     }

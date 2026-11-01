@@ -19,6 +19,7 @@ use Tracewick\Sampler\EventType;
 use Tracewick\Sampler\Frame;
 use Tracewick\Sink\ApplicationName;
 use Tracewick\Sink\PyroscopeConfig;
+use Tracewick\Sink\PyroscopePushRequest;
 use Tracewick\Sink\PyroscopeSink;
 use Tracewick\Transport\AtomicFile;
 use Tracewick\Transport\CircuitBreakerConfig;
@@ -37,6 +38,7 @@ use Tracewick\Transport\Payload;
  */
 #[CoversClass(PyroscopeSink::class)]
 #[UsesClass(PyroscopeConfig::class)]
+#[UsesClass(PyroscopePushRequest::class)]
 #[UsesClass(ApplicationName::class)]
 #[UsesClass(HttpConfig::class)]
 #[UsesClass(HttpTransport::class)]

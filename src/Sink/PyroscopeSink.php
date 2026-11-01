@@ -11,6 +11,7 @@ use Tracewick\Encoder\CompactStacksCodec;
 use Tracewick\Encoder\PprofEncoder;
 use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
+use Tracewick\Sampler\EventType;
 use Tracewick\Transport\CachingDnsResolver;
 use Tracewick\Transport\CircuitBreakerTransport;
 use Tracewick\Transport\Delivery;
@@ -19,27 +20,27 @@ use Tracewick\Transport\Payload;
 use Tracewick\Transport\Transport;
 
 /**
- * Sends profiles to Grafana Pyroscope as pprof through its /ingest endpoint.
+ * Sends profiles to Grafana Pyroscope as pprof through its push API.
  *
- * The application name becomes the service_name label. Profile labels travel inside the pprof
- * file as sample labels, which Pyroscope turns into series labels without any escaping; dots in
- * label keys become underscores, because Pyroscope silently drops keys that contain dots. The
- * profile type (wall or CPU) comes from the pprof sample types.
+ * The application name becomes the service_name series label. Other profile labels travel on the
+ * same series (dots in keys become underscores). The pprof payload itself carries a single sample
+ * type (wall or cpu in nanoseconds) and, when present, only a span_id sample label. The profile
+ * type name on the series is wall or process_cpu.
  *
  * By default payloads go through an {@see HttpTransport} behind a {@see CircuitBreakerTransport},
  * whose state the processes of a host share per server and tenant. Use this sink from drain,
  * CLI, staging, or long-running workers — not from PHP-FPM request handlers. Under FPM prefer
  * {@see SpoolSink} and `tracewick-drain`, so the worker never waits on the network.
  *
- * @see https://grafana.com/docs/pyroscope/latest/configure-server/about-server-api/
+ * @see https://grafana.com/docs/pyroscope/latest/reference-server-api/
  */
 final readonly class PyroscopeSink implements Sink, SpoolForwarder
 {
-    private const SPY_NAME = 'tracewick';
-
     private Transport $transport;
 
     private PprofEncoder $encoder;
+
+    private PyroscopePushRequest $push;
 
     /**
      * @param ?Transport       $transport replaces the default HTTP transport and circuit breaker
@@ -49,6 +50,7 @@ final readonly class PyroscopeSink implements Sink, SpoolForwarder
     {
         $this->transport = $transport ?? $this->defaultTransport($config, $logger);
         $this->encoder = new PprofEncoder();
+        $this->push = new PyroscopePushRequest();
     }
 
     public function send(Profile $profile): Delivery
@@ -58,9 +60,12 @@ final readonly class PyroscopeSink implements Sink, SpoolForwarder
                 return Delivery::skipped('The profile has no samples.');
             }
 
-            $body = $this->encoder->encode($profile->withLabels($this->labels($profile->labels)));
-
-            return $this->transport->send($this->payload($this->config->applicationName, $body, $profile->startNs, $profile->endNs, $profile->periodNs));
+            return $this->transport->send($this->payload(
+                $this->config->applicationName,
+                $profile->eventType,
+                $profile->labels->toArray(),
+                $this->encoder->encode($profile),
+            ));
         } catch (\Throwable $e) {
             return Delivery::failed(\sprintf('Cannot send the profile to Pyroscope: %s', $e->getMessage()));
         }
@@ -70,10 +75,8 @@ final readonly class PyroscopeSink implements Sink, SpoolForwarder
      * Sends a profile read from the spool, as a {@see SpoolSink} wrote it.
      *
      * The application name comes from the file, so that one sink can forward the spool of several
-     * applications; the configured name is not used. Label keys inside the pprof payload are
-     * renamed by the same rule as in {@see send()}; when no key needs it, the payload is sent as
-     * it is, without being parsed. A file that Pyroscope could never accept is reported as
-     * rejected.
+     * applications; the configured name is not used. A file that Pyroscope could never accept is
+     * reported as rejected.
      */
     public function forward(SpoolFile $file): Delivery
     {
@@ -89,7 +92,12 @@ final readonly class PyroscopeSink implements Sink, SpoolForwarder
                 return Delivery::rejected($e->getMessage());
             }
 
-            return $this->transport->send($this->payload($file->application, $body, $file->startNs, $file->endNs, $file->periodNs));
+            return $this->transport->send($this->payload(
+                $file->application,
+                $file->eventType,
+                $file->labels,
+                $body,
+            ));
         } catch (\Throwable $e) {
             return Delivery::failed(\sprintf('Cannot send the profile to Pyroscope: %s', $e->getMessage()));
         }
@@ -105,7 +113,7 @@ final readonly class PyroscopeSink implements Sink, SpoolForwarder
             $file->endNs,
             $parts->frames,
             $parts->stacks,
-            $this->labels(new Labels($file->labels)),
+            new Labels($file->labels),
         );
 
         return $this->encoder->encode($profile);
@@ -126,34 +134,14 @@ final readonly class PyroscopeSink implements Sink, SpoolForwarder
         );
     }
 
-    private function payload(string $applicationName, string $body, int $startNs, int $endNs, int $periodNs): Payload
-    {
-        return new Payload($body, $this->encoder->mediaType(), [
-            'name' => $applicationName,
-            'format' => 'pprof',
-            // Pyroscope takes whole seconds; round outwards so the window covers the profile.
-            'from' => (string) intdiv($startNs, 1_000_000_000),
-            'until' => (string) intdiv($endNs + 999_999_999, 1_000_000_000),
-            'spyName' => self::SPY_NAME,
-            'sampleRate' => (string) max(1, intdiv(1_000_000_000 + intdiv($periodNs, 2), $periodNs)),
-        ]);
-    }
-
-    private function labels(Labels $labels): Labels
-    {
-        $mapped = [];
-        foreach ($labels as $key => $value) {
-            $mapped[$this->labelKey($key)] = $value;
-        }
-
-        return new Labels($mapped);
-    }
-
     /**
-     * Pyroscope silently drops label keys that contain dots.
+     * @param array<string, string> $profileLabels
      */
-    private function labelKey(string $key): string
+    private function payload(string $applicationName, EventType $eventType, array $profileLabels, string $rawProfile): Payload
     {
-        return str_replace('.', '_', $key);
+        return new Payload(
+            $this->push->encode($applicationName, $eventType, $profileLabels, $rawProfile, $this->push->newSampleId()),
+            PyroscopePushRequest::MEDIA_TYPE,
+        );
     }
 }
