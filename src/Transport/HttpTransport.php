@@ -14,8 +14,9 @@ use Tracewick\Clock\SystemClock;
  * {@see HttpConfig::$timeoutMs}; connecting alone within {@see HttpConfig::$connectTimeoutMs}.
  * After the TCP connection is open the socket is non-blocking and every wait goes through
  * stream_select() with the remaining time, so a destination that accepts the connection and
- * then stalls costs at most the timeout. Name resolution happens before the connect timeout
- * starts and is not bounded by it.
+ * then stalls costs at most the timeout. A `stream_select()` interrupted by a signal (EINTR) is
+ * retried against the same deadline; the signal itself is not a delivery failure. Name resolution
+ * happens before the connect timeout starts and is not bounded by it.
  *
  * Payload parameters become the query string. Only the status code of the response is read:
  * 2xx is delivered; 408, 429 and 5xx are transient failures; 401, 403, 404 and 413 are
@@ -184,25 +185,42 @@ final readonly class HttpTransport implements Transport
     /**
      * Waits until the socket is ready, or throws when the deadline passes first.
      *
+     * Retries when `stream_select()` fails because a signal interrupted the call (EINTR).
+     *
      * @param resource $socket
      */
     private function wait($socket, bool $forWrite, int $deadlineNs): void
     {
-        $remainingUs = intdiv($deadlineNs - $this->clock->nowNs(), 1_000);
-        if ($remainingUs <= 0) {
-            throw new TransportException(\sprintf('Timed out after %d ms talking to %s', $this->config->timeoutMs, $this->config->authority()));
-        }
+        while (true) {
+            $remainingUs = intdiv($deadlineNs - $this->clock->nowNs(), 1_000);
+            if ($remainingUs <= 0) {
+                throw new TransportException(\sprintf('Timed out after %d ms talking to %s', $this->config->timeoutMs, $this->config->authority()));
+            }
 
-        $read = $forWrite ? null : [$socket];
-        $write = $forWrite ? [$socket] : null;
-        $except = null;
-        $ready = @stream_select($read, $write, $except, intdiv($remainingUs, 1_000_000), $remainingUs % 1_000_000);
-        if (false === $ready) {
-            throw new TransportException(\sprintf('Waiting for %s failed', $this->config->authority()));
-        }
+            $read = $forWrite ? null : [$socket];
+            $write = $forWrite ? [$socket] : null;
+            $except = null;
+            $ready = @stream_select($read, $write, $except, intdiv($remainingUs, 1_000_000), $remainingUs % 1_000_000);
+            if (false === $ready) {
+                if ($this->wasInterruptedBySignal()) {
+                    continue;
+                }
 
-        if (0 === $ready) {
-            throw new TransportException(\sprintf('Timed out after %d ms talking to %s', $this->config->timeoutMs, $this->config->authority()));
+                throw new TransportException(\sprintf('Waiting for %s failed', $this->config->authority()));
+            }
+
+            if (0 === $ready) {
+                throw new TransportException(\sprintf('Timed out after %d ms talking to %s', $this->config->timeoutMs, $this->config->authority()));
+            }
+
+            return;
         }
+    }
+
+    private function wasInterruptedBySignal(): bool
+    {
+        $error = error_get_last();
+
+        return null !== $error && str_contains($error['message'], 'Interrupted system call');
     }
 }

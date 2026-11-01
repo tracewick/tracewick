@@ -99,8 +99,11 @@ HTTP method (`method`) and the variant (`runtime`: `fpm` or `roadrunner`), and d
 
 | Variant    | Sink              | Path to Pyroscope                                                   |
 |------------|-------------------|---------------------------------------------------------------------|
-| PHP-FPM    | `SpoolSink`       | Spool volume, then the `app-drain` service running `tracewick-drain` |
+| PHP-FPM    | `SpoolSink` only  | Spool volume, then the `app-drain` service running `tracewick-drain` |
 | RoadRunner | `PyroscopeSink`   | Straight from the worker, after each response                       |
+
+Do not wire `PyroscopeSink` into PHP-FPM request handlers: even with short timeouts the worker
+blocks on the network. Spool locally and let drain (or a future agent) send.
 
 Besides the demo pages (for example `/en/blog/`), `/reference/external` reads from PostgreSQL and
 calls an external HTTP service through Toxiproxy, so wall-time profiles show database and network

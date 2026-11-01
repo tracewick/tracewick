@@ -66,10 +66,11 @@ separate process sends the files ([`tracewick-drain`](drain.md); a Go agent is p
 the recommended setup in production. Put the spool on a **local** filesystem
 ([spool format](spool-format.md)).
 
-A `PyroscopeSink` sends over the network from the PHP process itself. Prefer it for staging and
-debugging, not for high-load FPM: timeouts and the circuit breaker bound time spent, but the
-worker still pays that time, and DNS for hostnames is outside the socket deadline
-([ADR 8](adr/0008-own-http-transport.md)).
+A `PyroscopeSink` sends over the network from the PHP process itself. Use it from `tracewick-drain`,
+CLI, staging, or long-running workers — **not** from PHP-FPM request handlers. Timeouts default to
+200 ms connect / 1 s total (raise them only outside the request path) and the circuit breaker
+bounds retries, but the worker still pays that time, and DNS for hostnames is outside the socket
+deadline ([ADR 8](adr/0008-own-http-transport.md)). Production FPM should use `SpoolSink` only.
 
 The circuit breaker classifies outcomes: transient failures (timeouts, 5xx) open after a few in a
 row (default 3) for 30 seconds; configuration errors (401/403/404/413) open at once for 5 minutes;

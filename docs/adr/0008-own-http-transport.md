@@ -28,9 +28,12 @@ is the only part of the response that matters.
 
 - The core ships `HttpTransport`, a transport of our own built on `stream_socket_client()`.
   It needs no extension beyond those PHP always has, plus ext-openssl for HTTPS.
-- One deadline covers the whole request. The connection is opened with a connect timeout, then
-  the socket is switched to non-blocking mode, and the TLS handshake, the write and the read of
-  the status line all wait through `stream_select()` against the time left until the deadline.
+- One deadline covers the whole request. Defaults for request-path delivery are 200 ms to connect
+  and 1 s for the whole request; drain and other out-of-band senders may raise them. The
+  connection is opened with a connect timeout, then the socket is switched to non-blocking mode,
+  and the TLS handshake, the write and the read of the status line all wait through
+  `stream_select()` against the time left until the deadline. An `EINTR` from `stream_select()` is
+  retried; a signal is not treated as a delivery failure.
 - Only the status line is read. 2xx means delivered. 408, 429 and 5xx mean transient failures,
   which the circuit breaker counts. 401, 403, 404 and 413 mean a configuration error: the breaker
   opens at once for a longer pause. Any other non-2xx status means the payload was rejected and
