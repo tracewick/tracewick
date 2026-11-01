@@ -18,8 +18,8 @@ use Tracewick\Clock\SystemClock;
  * starts and is not bounded by it.
  *
  * Payload parameters become the query string. Only the status code of the response is read:
- * 2xx is delivered; 408, 429 and 5xx are failures worth retrying later; other statuses mean the
- * payload was rejected.
+ * 2xx is delivered; 408, 429 and 5xx are transient failures; 401, 403, 404 and 413 are
+ * configuration errors; other non-2xx statuses mean the payload was rejected.
  */
 final readonly class HttpTransport implements Transport
 {
@@ -82,11 +82,17 @@ final readonly class HttpTransport implements Transport
             return Delivery::delivered();
         }
 
+        $reason = \sprintf('HTTP %d from %s', $status, $this->config->authority());
+
         if (408 === $status || 429 === $status || $status >= 500) {
-            return Delivery::failed(\sprintf('HTTP %d from %s', $status, $this->config->authority()));
+            return Delivery::failed($reason);
         }
 
-        return Delivery::rejected(\sprintf('HTTP %d from %s', $status, $this->config->authority()));
+        if (401 === $status || 403 === $status || 404 === $status || 413 === $status) {
+            return Delivery::configuration($reason);
+        }
+
+        return Delivery::rejected($reason);
     }
 
     private function request(Payload $payload): string

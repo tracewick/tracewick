@@ -31,8 +31,10 @@ is the only part of the response that matters.
 - One deadline covers the whole request. The connection is opened with a connect timeout, then
   the socket is switched to non-blocking mode, and the TLS handshake, the write and the read of
   the status line all wait through `stream_select()` against the time left until the deadline.
-- Only the status line is read. 2xx means delivered. 408, 429 and 5xx mean failed, which the
-  circuit breaker counts. Any other status means rejected. Redirects are not followed.
+- Only the status line is read. 2xx means delivered. 408, 429 and 5xx mean transient failures,
+  which the circuit breaker counts. 401, 403, 404 and 413 mean a configuration error: the breaker
+  opens at once for a longer pause. Any other non-2xx status means the payload was rejected and
+  does not change the breaker. Redirects are not followed.
 - TLS verifies the peer and its name, with SNI, using PHP's default CA settings.
 - A `CircuitBreakerTransport` wraps the HTTP transport, so a backend that keeps failing is not
   contacted again until a cool-down has passed.

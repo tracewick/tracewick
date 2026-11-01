@@ -25,6 +25,7 @@ final class DeliveryTest extends TestCase
     {
         foreach ([
             [Delivery::rejected('bad'), DeliveryStatus::Rejected],
+            [Delivery::configuration('auth'), DeliveryStatus::Configuration],
             [Delivery::failed('down'), DeliveryStatus::Failed],
             [Delivery::skipped('open'), DeliveryStatus::Skipped],
         ] as [$delivery, $status]) {
@@ -34,6 +35,7 @@ final class DeliveryTest extends TestCase
         }
 
         self::assertSame('bad', Delivery::rejected('bad')->reason);
+        self::assertSame('auth', Delivery::configuration('auth')->reason);
         self::assertSame('down', Delivery::failed('down')->reason);
         self::assertSame('open', Delivery::skipped('open')->reason);
     }

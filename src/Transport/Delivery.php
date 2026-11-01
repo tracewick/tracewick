@@ -24,6 +24,11 @@ final readonly class Delivery
         return new self(DeliveryStatus::Rejected, $reason);
     }
 
+    public static function configuration(string $reason): self
+    {
+        return new self(DeliveryStatus::Configuration, $reason);
+    }
+
     public static function failed(string $reason): self
     {
         return new self(DeliveryStatus::Failed, $reason);

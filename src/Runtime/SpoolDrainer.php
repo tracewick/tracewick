@@ -53,7 +53,10 @@ final readonly class SpoolDrainer
                 if ($delivery->isDelivered()) {
                     $this->source->acknowledge($claimed);
                     ++$delivered;
-                } elseif (DeliveryStatus::Rejected === $delivery->status) {
+                } elseif (
+                    DeliveryStatus::Rejected === $delivery->status
+                    || DeliveryStatus::Configuration === $delivery->status
+                ) {
                     $this->source->reject($claimed);
                     ++$rejected;
                     $lastRejection = \sprintf('%s: %s', $claimed->name, $delivery->reason);

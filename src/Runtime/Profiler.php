@@ -410,6 +410,16 @@ final class Profiler
 
                 break;
 
+            case DeliveryStatus::Configuration:
+                ++$this->rejectedProfiles;
+                $this->logger->log(
+                    LogLevel::WARNING,
+                    'Tracewick could not deliver a profile because of a configuration error: {reason}',
+                    $context,
+                );
+
+                break;
+
             case DeliveryStatus::Failed:
                 ++$this->failedProfiles;
                 $this->logger->log(LogLevel::WARNING, 'Tracewick could not deliver a profile: {reason}', $context);
