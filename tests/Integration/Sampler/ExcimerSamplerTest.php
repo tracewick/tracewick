@@ -234,6 +234,40 @@ final class ExcimerSamplerTest extends TestCase
         self::assertSame(1_030, $batch->endNs);
     }
 
+public function testNativeFlushCallbackFeedsTheAggregatorAndSegmentListener(): void
+    {
+        $hits = 0;
+        $sampler = new ExcimerSampler(new SamplerConfig(periodNs: self::PERIOD_NS, maxSamples: 1));
+        $sampler->setSegmentListener(static function () use (&$hits): void {
+            ++$hits;
+        });
+
+        $sampler->start();
+        self::busyWait(40_000_000);
+        $sampler->stop();
+        $batch = $sampler->flush();
+
+        self::assertGreaterThan(0, $hits);
+        self::assertFalse($batch->isEmpty());
+        self::assertSame(0, $sampler->failureCount());
+    }
+
+    public function testSegmentListenerFailuresAreSwallowed(): void
+    {
+        $sampler = new ExcimerSampler(new SamplerConfig(periodNs: self::PERIOD_NS, maxSamples: 1));
+        $sampler->setSegmentListener(static function (): void {
+            throw new \RuntimeException('Listener failed.');
+        });
+
+        $sampler->start();
+        self::busyWait(40_000_000);
+        $sampler->stop();
+        $sampler->flush();
+
+        self::assertGreaterThan(0, $sampler->failureCount());
+        self::assertSame('Listener failed.', $sampler->lastFailure()?->getMessage());
+    }
+
     private static function busyWait(int $durationNs): void
     {
         $deadline = hrtime(true) + $durationNs;
