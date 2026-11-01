@@ -1,0 +1,7 @@
+# Settings of the Tracewick wiring added to the Symfony Demo (src/EventSubscriber/TracewickSubscriber.php).
+# compose.yaml sets them per service; these defaults apply when it does not.
+parameters:
+    env(TRACEWICK_RUNTIME): unknown
+    env(TRACEWICK_SINK): spool
+    env(TRACEWICK_SPOOL_DIR): /var/spool/tracewick
+    env(PYROSCOPE_URL): http://pyroscope:4040

@@ -4,6 +4,9 @@
 # PHP-FPM behind nginx and by RoadRunner, with ext-excimer installed so that Tracewick can profile
 # it. Build arguments pin every version so that a rebuild is reproducible.
 #
+# Tracewick itself is installed from this repository through the "tracewick" build context
+# (compose.yaml points it at the repository root), so the app always runs the code under review.
+#
 # Targets: fpm (PHP-FPM), nginx (static files and FastCGI proxy), roadrunner (long-running workers).
 
 ARG PHP_VERSION=8.4
@@ -22,7 +25,7 @@ ARG RUNTIME_ROADRUNNER_VERSION=1.0.0
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git unzip libicu-dev libpq-dev \
     && rm -rf /var/lib/apt/lists/* \
-    && docker-php-ext-install -j"$(nproc)" intl opcache pdo_pgsql sockets \
+    && docker-php-ext-install -j"$(nproc)" intl opcache pcntl pdo_pgsql sockets \
     && pecl install "excimer-${EXCIMER_VERSION}" \
     && docker-php-ext-enable excimer \
     && rm -rf /tmp/pear
@@ -37,6 +40,17 @@ RUN composer create-project --no-interaction --no-progress \
     && composer require --no-interaction --no-progress \
         "runtime/roadrunner-symfony-nyholm:${RUNTIME_ROADRUNNER_VERSION}" \
     && composer clear-cache
+
+# Installed after the demo so that a change to Tracewick does not download the demo again.
+COPY --from=tracewick composer.json LICENSE NOTICE /opt/tracewick/
+COPY --from=tracewick bin/ /opt/tracewick/bin/
+COPY --from=tracewick src/ /opt/tracewick/src/
+RUN cd /srv/app \
+    && composer config repositories.tracewick \
+        '{"type": "path", "url": "/opt/tracewick", "options": {"symlink": false}}' \
+    && composer require --no-interaction --no-progress "tracewick/tracewick:*@dev" \
+    && composer clear-cache \
+    && install -d -o www-data -g www-data /var/spool/tracewick
 
 WORKDIR /srv/app
 

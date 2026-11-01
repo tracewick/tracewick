@@ -77,7 +77,8 @@ The PHP container gets these addresses as `PYROSCOPE_URL`, `PYROSCOPE_TOXIC_URL`
 ### Reference application
 
 The stand includes the [Symfony Demo](https://github.com/symfony/demo) blog with PostgreSQL, served
-two ways, so wall-time waits (database and HTTP) can be exercised under load later:
+two ways. Both variants are profiled by Tracewick built from the working tree (`make app-build`
+picks up changes to `src/`):
 
 | Variant              | URL                     | What it exercises                         |
 |----------------------|-------------------------|-------------------------------------------|
@@ -85,19 +86,30 @@ two ways, so wall-time waits (database and HTTP) can be exercised under load lat
 | RoadRunner           | http://127.0.0.1:8082   | Long-running workers                      |
 
 ```bash
-make app-up      # start the stand plus the reference app, load the demo fixtures
-make app-smoke   # check that both variants answer
-make stand-down  # stop everything
+make app-up        # start the stand plus the reference app, load the demo fixtures
+make app-smoke     # check that both variants answer
+make app-profiles  # send requests and check that their profiles reach Pyroscope
+make stand-down    # stop everything
 ```
 
-On `develop` today the images install ext-excimer and the demo endpoints (including
-`/reference/external` via Toxiproxy → go-httpbin), but they do **not** install Tracewick or run
-the profiler. Wiring Tracewick and asserting profiles in Pyroscope lives on
-[`feature/reference-app-profiling`](https://github.com/tracewick/tracewick/pull/29) until that
-pull request is merged. Until then, `app-smoke` only checks that the demo responds.
+`TracewickSubscriber` (in `docker/reference-app/overlay/src/EventSubscriber/`) wires the library by
+hand: it starts a profile on every main request, labels it with the Symfony route (`route`), the
+HTTP method (`method`) and the variant (`runtime`: `fpm` or `roadrunner`), and delivers it on
+`kernel.terminate`, after the response has gone out.
 
-The demo's code is downloaded at build time; only the files under `docker/reference-app/` belong
-to this repository.
+| Variant    | Sink              | Path to Pyroscope                                                   |
+|------------|-------------------|---------------------------------------------------------------------|
+| PHP-FPM    | `SpoolSink`       | Spool volume, then the `app-drain` service running `tracewick-drain` |
+| RoadRunner | `PyroscopeSink`   | Straight from the worker, after each response                       |
+
+Besides the demo pages (for example `/en/blog/`), `/reference/external` reads from PostgreSQL and
+calls an external HTTP service through Toxiproxy, so wall-time profiles show database and network
+waits. The demo's code is downloaded at build time; only the files under `docker/reference-app/`
+belong to this repository.
+
+Profiles appear in Grafana as the `symfony-demo` service (Drilldown → Profiles, or Explore with
+the Pyroscope data source). Group or filter by `route` or `runtime` to compare endpoints and
+variants.
 
 ### Toxiproxy and chaos tests
 

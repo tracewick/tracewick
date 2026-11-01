@@ -1,0 +1,6 @@
+# Build contexts that take the repository root, such as the reference app
+# images' "tracewick" context, need only the library sources.
+/.git/
+/vendor/
+/build/
+/composer.lock

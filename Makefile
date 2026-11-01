@@ -9,7 +9,7 @@ STAND_RUN = $(STAND_ENV) docker compose run --rm php
 
 .PHONY: help install lint cs-fix stan rector rector-fix deps test test-unit test-integration coverage infection audit ci \
 	stand-build stand-up stand-down stand-smoke stand-shell stand-install stand-test stand-ci \
-	app-build app-up app-smoke
+	app-build app-up app-smoke app-profiles
 
 help: ## Show available targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-18s %s\n", $$1, $$2}'
@@ -95,3 +95,6 @@ app-up: stand-up app-build ## Start the reference app with PostgreSQL and load i
 
 app-smoke: ## Check that the reference app answers on PHP-FPM and RoadRunner
 	docker/reference-app/smoke-test.sh
+
+app-profiles: ## Check that the reference app's profiles reach Pyroscope with route labels
+	docker/reference-app/check-profiles.sh
