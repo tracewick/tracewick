@@ -49,6 +49,8 @@ use Tracewick\Transport\Payload;
 #[UsesClass(ApplicationName::class)]
 #[UsesClass(HttpConfig::class)]
 #[UsesClass(HttpTransport::class)]
+#[UsesClass(\Tracewick\Transport\CachingDnsResolver::class)]
+#[UsesClass(\Tracewick\Transport\SystemDnsResolver::class)]
 #[UsesClass(CircuitBreakerConfig::class)]
 #[UsesClass(CircuitBreakerTransport::class)]
 #[UsesClass(CircuitBreakerState::class)]

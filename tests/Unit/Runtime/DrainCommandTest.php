@@ -311,8 +311,8 @@ final class DrainCommandTest extends TestCase
         $exitCode = $command->run($this->required());
 
         self::assertSame(0, $exitCode);
-        self::assertSame("Delivered 1, rejected 0 spool files.\n", $this->read($this->output));
-        self::assertSame([self::SECOND], $this->spool->entries());
+        self::assertSame("Delivered 2, rejected 0 spool files.\n", $this->read($this->output));
+        self::assertSame([], $this->spool->entries());
     }
 
     public function testReadsTheSettingsFromTheEnvironment(): void

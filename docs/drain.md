@@ -10,9 +10,10 @@ drains, or a drain and an agent, can read the same directory at the same time; e
 exactly one of them ([ADR 9](adr/0009-agent-hand-off.md)).
 
 `PyroscopeSink::forward()` encodes pprof from compact spool v2 payloads
-([ADR 13](adr/0013-spool-v2-compact-payload.md)) and still accepts v1 pprof files. Planned (not
-shipped yet): merge files by aggregation key over a 10–15 s window before upload
-([ADR 12](adr/0012-aggregate-before-delivery.md)). Today each file is still one POST.
+([ADR 13](adr/0013-spool-v2-compact-payload.md)) and still accepts v1 pprof files. Compact-stacks
+files that share an aggregation key are merged over a 10–15 s window (default 15) before upload
+([ADR 12](adr/0012-aggregate-before-delivery.md)); only closed windows are sent in the long-running
+loop, while `--once` also flushes the open window. v1 files are still one POST each.
 
 ## What it does with each file
 
@@ -57,6 +58,7 @@ vendor/bin/tracewick-drain --spool-dir=/var/spool/tracewick --pyroscope-url=http
 | `--memory-limit=SIZE`   |                                | Exit when the process uses more memory, such as `128M`         |
 | `--time-limit=SECONDS`  |                                | Exit after running for SECONDS                                 |
 | `--sleep=SECONDS`       |                                | Pause while the spool is empty; default 1                      |
+| `--aggregation-window=S`| `TRACEWICK_AGGREGATION_WINDOW` | Merge window for compact-stacks files, 10–15; default 15       |
 
 An option wins over its environment variable. The password has no option, so that it does not
 show up in the process list.

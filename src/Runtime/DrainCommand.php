@@ -29,6 +29,9 @@ final class DrainCommand
 {
     public const MAX_BACKOFF_SECONDS = 30;
 
+    /** Files claimed per pass so closed aggregation windows can merge. */
+    public const BATCH_SIZE = 256;
+
     /** Exit code for a failed --once pass. */
     public const EXIT_FAILURE = 1;
 
@@ -52,11 +55,13 @@ final class DrainCommand
           --memory-limit=SIZE      exit when the process uses more memory, such as 128M
           --time-limit=SECONDS     exit after running for SECONDS
           --sleep=SECONDS          pause while the spool is empty (default: 1)
+          --aggregation-window=S   merge window for compact-stacks files, 10–15 (default: 15;
+                                   env TRACEWICK_AGGREGATION_WINDOW)
           --help                   show this help
 
         TEXT;
 
-    private const OPTIONS = ['spool-dir', 'pyroscope-url', 'pyroscope-user', 'pyroscope-tenant', 'reader-id', 'limit', 'memory-limit', 'time-limit', 'sleep'];
+    private const OPTIONS = ['spool-dir', 'pyroscope-url', 'pyroscope-user', 'pyroscope-tenant', 'reader-id', 'limit', 'memory-limit', 'time-limit', 'sleep', 'aggregation-window'];
 
     private const FLAGS = ['once', 'help'];
 
@@ -113,6 +118,7 @@ final class DrainCommand
         return $this->loop($settings, new SpoolDrainer(
             new DirectorySpoolSource($settings->reader),
             ($this->forwarder ?? static fn(PyroscopeConfig $config): SpoolForwarder => new PyroscopeSink($config))($settings->pyroscope),
+            $settings->aggregationWindow,
         ));
     }
 
@@ -133,16 +139,28 @@ final class DrainCommand
         $exitCode = 0;
 
         while (!$this->stopping && !$this->limitReached($settings, $delivered + $rejected, $startNs)) {
-            $result = $drainer->drain(1);
+            $handled = $delivered + $rejected;
+            // Memory limits are checked between passes; keep passes to one file when set.
+            $batchSize = null === $settings->memoryLimit ? self::BATCH_SIZE : 1;
+            if (null !== $settings->limit) {
+                $batchSize = min($batchSize, max(0, $settings->limit - $handled));
+                if (0 === $batchSize) {
+                    break;
+                }
+            }
+
+            $result = $drainer->drain($batchSize, $settings->once);
             $delivered += $result->delivered;
             $rejected += $result->rejected;
             if (0 < $result->rejected) {
                 fwrite($this->errors, \sprintf("Rejected %s\n", $result->lastRejection));
             }
 
-            if (DrainOutcome::LimitReached === $result->outcome) {
+            if ($result->delivered > 0 || $result->rejected > 0) {
                 $backoff = 0;
+            }
 
+            if (DrainOutcome::LimitReached === $result->outcome) {
                 continue;
             }
 

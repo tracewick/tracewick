@@ -8,12 +8,23 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Clock\SystemClock;
+use Tracewick\Encoder\CompactStacksCodec;
+use Tracewick\Encoder\ProfileParts;
+use Tracewick\Profile\Labels;
+use Tracewick\Profile\Profile;
+use Tracewick\Profile\ProfileMerger;
+use Tracewick\Profile\Stack;
 use Tracewick\Runtime\DrainOutcome;
 use Tracewick\Runtime\DrainResult;
+use Tracewick\Runtime\SpoolAggregationWindow;
 use Tracewick\Runtime\SpoolDrainer;
 use Tracewick\Sampler\EventType;
+use Tracewick\Sampler\Frame;
+use Tracewick\Sink\SpoolAggregationKey;
 use Tracewick\Sink\SpoolFile;
 use Tracewick\Sink\SpoolFileException;
+use Tracewick\Sink\SpoolFileName;
+use Tracewick\Tests\Support\ManualClock;
 use Tracewick\Tests\Support\ScriptedForwarder;
 use Tracewick\Tests\Support\TemporaryDirectory;
 use Tracewick\Transport\ClaimedSpoolFile;
@@ -34,6 +45,17 @@ use Tracewick\Transport\SpoolTransport;
 #[UsesClass(SpoolFile::class)]
 #[UsesClass(SpoolFileException::class)]
 #[UsesClass(Delivery::class)]
+#[UsesClass(CompactStacksCodec::class)]
+#[UsesClass(ProfileParts::class)]
+#[UsesClass(Profile::class)]
+#[UsesClass(ProfileMerger::class)]
+#[UsesClass(Stack::class)]
+#[UsesClass(Labels::class)]
+#[UsesClass(Frame::class)]
+#[UsesClass(SpoolAggregationKey::class)]
+#[UsesClass(SpoolFileName::class)]
+#[UsesClass(SpoolAggregationWindow::class)]
+#[UsesClass(ManualClock::class)]
 final class SpoolDrainerTest extends TestCase
 {
     private const FIRST = '01798000000000000001-0000000000000000.spool';
@@ -275,14 +297,89 @@ final class SpoolDrainerTest extends TestCase
         self::assertSame('Timeout.', $result->failure);
     }
 
-    private function drainer(ScriptedForwarder $forwarder): SpoolDrainer
+    public function testMergesCompactStacksFilesInAClosedWindow(): void
     {
-        return new SpoolDrainer(new DirectorySpoolSource(new SpoolReaderConfig($this->spool->path, 'drainer')), $forwarder);
+        $hash = SpoolAggregationKey::hash('blog', ['env' => 'prod'], EventType::Wall, 10_000_000);
+        $this->writeCompact('01798000000000000001-' . $hash . '-0000000000000001.spool', 1_000_000_000, 1_100_000_000, 2);
+        $this->writeCompact('01798000000000000002-' . $hash . '-0000000000000002.spool', 1_200_000_000, 1_300_000_000, 3);
+        $forwarder = new ScriptedForwarder(Delivery::delivered());
+        $clock = new ManualClock(20_000_000_000);
+
+        $result = $this->drainer($forwarder, new SpoolAggregationWindow(10), $clock)->drain();
+
+        self::assertSame(DrainOutcome::Empty, $result->outcome);
+        self::assertSame(2, $result->delivered);
+        self::assertCount(1, $forwarder->forwarded);
+        $merged = SpoolFile::fromBytes($forwarder->forwarded[0]->toBytes());
+        $parts = (new CompactStacksCodec())->decode($merged->payload);
+        self::assertSame(1_000_000_000, $merged->startNs);
+        self::assertSame(1_300_000_000, $merged->endNs);
+        self::assertNotSame([], $parts->stacks);
+        self::assertSame(5, $parts->stacks[0]->count);
+        self::assertSame([], $this->spool->entries());
+    }
+
+    public function testLeavesAnOpenAggregationWindowInTheSpool(): void
+    {
+        $hash = SpoolAggregationKey::hash('blog', ['env' => 'prod'], EventType::Wall, 10_000_000);
+        $this->writeCompact('01798000000000000001-' . $hash . '-0000000000000001.spool', 10_000_000_000, 10_100_000_000, 2);
+        $forwarder = new ScriptedForwarder();
+        $clock = new ManualClock(10_500_000_000);
+
+        $result = $this->drainer($forwarder, new SpoolAggregationWindow(10), $clock)->drain();
+
+        self::assertSame(DrainOutcome::Empty, $result->outcome);
+        self::assertSame(0, $result->delivered);
+        self::assertSame([], $forwarder->forwarded);
+        self::assertCount(1, $this->spool->entries());
+    }
+
+    public function testFlushesAnOpenWindowWhenAsked(): void
+    {
+        $hash = SpoolAggregationKey::hash('blog', ['env' => 'prod'], EventType::Wall, 10_000_000);
+        $this->writeCompact('01798000000000000001-' . $hash . '-0000000000000001.spool', 10_000_000_000, 10_100_000_000, 2);
+        $forwarder = new ScriptedForwarder(Delivery::delivered());
+        $clock = new ManualClock(10_500_000_000);
+
+        $result = $this->drainer($forwarder, new SpoolAggregationWindow(10), $clock)->drain(includeOpenWindows: true);
+
+        self::assertSame(1, $result->delivered);
+        self::assertCount(1, $forwarder->forwarded);
+    }
+
+    private function drainer(
+        ScriptedForwarder $forwarder,
+        SpoolAggregationWindow $window = new SpoolAggregationWindow(),
+        ?ManualClock $clock = null,
+    ): SpoolDrainer {
+        return new SpoolDrainer(
+            new DirectorySpoolSource(new SpoolReaderConfig($this->spool->path, 'drainer')),
+            $forwarder,
+            $window,
+            $clock ?? new SystemClock(),
+        );
     }
 
     private function write(string $name, string $payload): void
     {
         $file = new SpoolFile('blog', EventType::Wall, 10_000_000, 1_798_000_000_000_000_000, 1_798_000_000_100_000_000, [], SpoolFile::FORMAT_PPROF, $payload);
+        file_put_contents($this->spool->path . '/' . $name, $file->toBytes());
+    }
+
+    private function writeCompact(string $name, int $startNs, int $endNs, int $weight): void
+    {
+        $profile = new Profile(EventType::Wall, 10_000_000, $startNs, $endNs, [new Frame('work')], [new Stack([0], $weight)], new Labels(['env' => 'prod']));
+        $file = new SpoolFile(
+            'blog',
+            EventType::Wall,
+            10_000_000,
+            $startNs,
+            $endNs,
+            ['env' => 'prod'],
+            SpoolFile::FORMAT_COMPACT_STACKS,
+            (new CompactStacksCodec())->encode($profile),
+            SpoolFile::VERSION_2,
+        );
         file_put_contents($this->spool->path . '/' . $name, $file->toBytes());
     }
 }

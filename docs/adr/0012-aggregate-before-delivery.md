@@ -35,8 +35,7 @@ agent; the PHP drain path needs the same rule, or high-load FPM never reaches a 
 - **Cardinality:** a host-wide cap on distinct keys (via the planned `CounterStore`) may collapse
   excess keys into an `other` bucket; that limit is separate work.
 
-Implementation (hash in names, aggregating drain pipeline) is **not** in the tree yet; this ADR
-fixes the contract those PRs must follow.
+Hash-in-name landed with the spool v2 writer; the aggregating drain pipeline follows this contract.
 
 ## Consequences
 

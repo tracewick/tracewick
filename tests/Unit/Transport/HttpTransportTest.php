@@ -12,11 +12,13 @@ use PHPUnit\Framework\TestCase;
 use Tracewick\Clock\SystemClock;
 use Tracewick\Tests\Support\FakeHttpServer;
 use Tracewick\Tests\Support\ScriptedClock;
+use Tracewick\Transport\CachingDnsResolver;
 use Tracewick\Transport\Delivery;
 use Tracewick\Transport\DeliveryStatus;
 use Tracewick\Transport\HttpConfig;
 use Tracewick\Transport\HttpTransport;
 use Tracewick\Transport\Payload;
+use Tracewick\Transport\SystemDnsResolver;
 use Tracewick\Transport\TransportException;
 
 /**
@@ -28,6 +30,8 @@ use Tracewick\Transport\TransportException;
 #[UsesClass(Payload::class)]
 #[UsesClass(TransportException::class)]
 #[UsesClass(SystemClock::class)]
+#[UsesClass(CachingDnsResolver::class)]
+#[UsesClass(SystemDnsResolver::class)]
 final class HttpTransportTest extends TestCase
 {
     public function testSendsAPostRequest(): void

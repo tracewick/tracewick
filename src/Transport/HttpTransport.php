@@ -16,7 +16,8 @@ use Tracewick\Clock\SystemClock;
  * stream_select() with the remaining time, so a destination that accepts the connection and
  * then stalls costs at most the timeout. A `stream_select()` interrupted by a signal (EINTR) is
  * retried against the same deadline; the signal itself is not a delivery failure. Name resolution
- * happens before the connect timeout starts and is not bounded by it.
+ * runs through {@see DnsResolver} before the connect timeout starts and is not bounded by it;
+ * {@see CachingDnsResolver} is the default so drain does not look up the host on every POST.
  *
  * Payload parameters become the query string. Only the status code of the response is read:
  * 2xx is delivered; 408, 429 and 5xx are transient failures; 401, 403, 404 and 413 are
@@ -26,13 +27,19 @@ final readonly class HttpTransport implements Transport
 {
     private const MAX_STATUS_LINE_BYTES = 8_192;
 
+    private DnsResolver $dns;
+
     /**
      * @param Clock $clock measures the time limits; {@see SystemClock} never goes backwards
      */
     public function __construct(
         private HttpConfig $config,
         private Clock $clock = new SystemClock(),
-    ) {}
+        ?DnsResolver $dns = null,
+    ) {
+        // Cache TTL must not share a scripted request clock: lookups would burn the deadline.
+        $this->dns = $dns ?? new CachingDnsResolver();
+    }
 
     public function send(Payload $payload): Delivery
     {
@@ -56,7 +63,7 @@ final readonly class HttpTransport implements Transport
         $errorCode = 0;
         $errorMessage = '';
         $socket = @stream_socket_client(
-            \sprintf('tcp://%s:%d', $this->config->host, $this->config->port),
+            \sprintf('tcp://%s:%d', $this->dns->resolve($this->config->host), $this->config->port),
             $errorCode,
             $errorMessage,
             $this->config->connectTimeoutMs / 1_000,
