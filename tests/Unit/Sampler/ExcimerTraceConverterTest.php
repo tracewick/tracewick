@@ -10,10 +10,12 @@ use PHPUnit\Framework\TestCase;
 use Tracewick\Sampler\ExcimerTraceConverter;
 use Tracewick\Sampler\Frame;
 use Tracewick\Sampler\Sample;
+use Tracewick\Sampler\StackAggregator;
 
 #[CoversClass(ExcimerTraceConverter::class)]
 #[UsesClass(Frame::class)]
 #[UsesClass(Sample::class)]
+#[UsesClass(StackAggregator::class)]
 final class ExcimerTraceConverterTest extends TestCase
 {
     private const ORIGIN_NS = 1_700_000_000_000_000_000;
@@ -122,6 +124,18 @@ final class ExcimerTraceConverterTest extends TestCase
         self::assertNotNull($sample);
         self::assertEquals([new Frame('caller'), new Frame('leaf')], $sample->frames);
         self::assertTrue($sample->truncated);
+    }
+
+    public function testIngestsEntriesIntoAStackAggregator(): void
+    {
+        $aggregator = new StackAggregator(10);
+        $this->converter()->ingestEntry([['function' => 'handle']], 3, $aggregator);
+        $this->converter()->ingestEntry([['function' => 'handle']], 0, $aggregator);
+
+        $samples = $aggregator->toSamples(0);
+        self::assertCount(1, $samples);
+        self::assertSame(3, $samples[0]->count);
+        self::assertSame('handle', $samples[0]->frames[0]->function);
     }
 
     private function converter(): ExcimerTraceConverter
