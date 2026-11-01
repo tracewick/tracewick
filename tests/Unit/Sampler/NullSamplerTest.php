@@ -42,6 +42,16 @@ final class NullSamplerTest extends TestCase
 
         self::assertSame(NullSamplerReason::InitializationFailed, $sampler->reason);
         self::assertSame($cause, $sampler->cause);
+        self::assertSame(0, $sampler->failureCount());
+        self::assertSame($cause, $sampler->lastFailure());
+    }
+
+    public function testReportsNoFailuresWithoutACause(): void
+    {
+        $sampler = new NullSampler(NullSamplerReason::Disabled);
+
+        self::assertSame(0, $sampler->failureCount());
+        self::assertNull($sampler->lastFailure());
     }
 
     public function testBatchesDescribeTheConfiguredSamplingAndFollowEachOther(): void

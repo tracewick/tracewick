@@ -7,8 +7,11 @@ namespace Tracewick\Runtime;
 use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
 use Tracewick\Diagnostics\DiagnosticLogger;
+use Tracewick\Exception\LogicException;
 use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
+use Tracewick\Sampler\NullSampler;
+use Tracewick\Sampler\NullSamplerReason;
 use Tracewick\Sampler\Sampler;
 use Tracewick\Sampler\SamplerConfig;
 use Tracewick\Sampler\SamplerFactory;
@@ -35,6 +38,8 @@ use Tracewick\Transport\DeliveryStatus;
  */
 final class Profiler
 {
+    private static bool $inactiveSamplerWarned = false;
+
     /** @var list<Profile> */
     private array $buffer = [];
 
@@ -60,6 +65,8 @@ final class Profiler
 
     private ?\Throwable $lastFailure = null;
 
+    private readonly ?NullSamplerReason $inactiveSampler;
+
     /** @var \Closure(): void */
     private readonly \Closure $finishRequest;
 
@@ -84,6 +91,7 @@ final class Profiler
         private readonly DiagnosticLogger $logger = new DiagnosticLogger(),
     ) {
         $this->labels = $config->labels;
+        $this->inactiveSampler = $sampler instanceof NullSampler ? $sampler->reason : null;
         $this->finishRequest = $finishRequest ?? static function (): void {
             if (\function_exists('fastcgi_finish_request')) {
                 fastcgi_finish_request();
@@ -93,6 +101,7 @@ final class Profiler
             register_shutdown_function($callback);
         };
         $this->random = $random ?? static fn(): float => mt_rand() / (mt_getrandmax() + 1);
+        $this->warnAboutInactiveSampler();
     }
 
     /**
@@ -113,28 +122,42 @@ final class Profiler
     }
 
     /**
-     * Starts a profile, unless the sample rate leaves this unit of work out. Calling it while a
-     * profile is running has no effect.
+     * Starts a profile, unless the sample rate leaves this unit of work out.
      *
-     * @param array<string, string> $labels labels of this profile only, such as the route
+     * Calling it while a profile is already running ends that profile first (rotate), then starts
+     * the new one. Labels are applied before the sampler starts; a non-string key or value is
+     * skipped, and an invalid label is ignored. {@see $started} becomes true only after the
+     * sampler has started.
+     *
+     * @param array<mixed, mixed> $labels labels of this profile only, such as the route
      */
     public function start(array $labels = []): void
     {
         try {
-            if ($this->started || !$this->sampled()) {
+            if ($this->started) {
+                $this->stop();
+            }
+
+            if (!$this->sampled()) {
                 return;
             }
 
-            $this->labels = $this->config->labels;
-            $this->started = true;
-            foreach ($labels as $key => $value) {
-                $this->label($key, $value);
-            }
+            $prepared = $this->prepareLabels($labels);
 
             // Samples taken before the start belong to no profile.
             $this->sampler->flush();
             $this->sampler->start();
+
+            if (!$this->inactiveSampler instanceof NullSamplerReason && !$this->sampler->isRunning()) {
+                $this->swallow($this->sampler->lastFailure() ?? new \RuntimeException('Tracewick sampler failed to start.'));
+
+                return;
+            }
+
+            $this->labels = $prepared;
+            $this->started = true;
         } catch (\Throwable $e) {
+            $this->started = false;
             $this->swallow($e);
         }
     }
@@ -179,6 +202,7 @@ final class Profiler
                 $this->logger->log(LogLevel::NOTICE, 'Tracewick dropped a profile because {count} profiles already wait for the flush.', ['count' => \count($this->buffer)]);
             }
         } catch (\Throwable $e) {
+            $this->started = false;
             $this->swallow($e);
         }
     }
@@ -261,6 +285,8 @@ final class Profiler
             $this->failedProfiles,
             $this->skippedProfiles,
             $this->swallowedErrors,
+            $this->inactiveSampler,
+            $this->sampler->failureCount(),
         );
     }
 
@@ -270,6 +296,39 @@ final class Profiler
     public function lastFailure(): ?\Throwable
     {
         return $this->lastFailure;
+    }
+
+    /**
+     * Resets the once-per-process inactive-sampler warning. For tests only.
+     *
+     * @internal
+     */
+    public static function resetInactiveSamplerWarning(): void
+    {
+        self::$inactiveSamplerWarned = false;
+    }
+
+    /**
+     * @param array<mixed, mixed> $labels
+     */
+    private function prepareLabels(array $labels): Labels
+    {
+        $prepared = $this->config->labels;
+        foreach ($labels as $key => $value) {
+            if (!\is_string($key) || !\is_string($value)) {
+                $this->swallow(new LogicException('Profile labels must be string keys and string values.'));
+
+                continue;
+            }
+
+            try {
+                $prepared = $prepared->with($key, $value);
+            } catch (\Throwable $e) {
+                $this->swallow($e);
+            }
+        }
+
+        return $prepared;
     }
 
     /**
@@ -317,5 +376,31 @@ final class Profiler
         ++$this->swallowedErrors;
         $this->lastFailure = $error;
         $this->logger->log(LogLevel::WARNING, 'Tracewick ignored an error: {error}', ['error' => $error->getMessage(), 'exception' => $error]);
+    }
+
+    private function warnAboutInactiveSampler(): void
+    {
+        if (!$this->inactiveSampler instanceof NullSamplerReason || self::$inactiveSamplerWarned) {
+            return;
+        }
+
+        self::$inactiveSamplerWarned = true;
+        $message = match ($this->inactiveSampler) {
+            NullSamplerReason::Disabled => 'Tracewick profiling is disabled (TRACEWICK_ENABLED).',
+            NullSamplerReason::ExtensionMissing => 'Tracewick profiling is inactive: ext-excimer is not loaded.',
+            NullSamplerReason::InitializationFailed => 'Tracewick profiling is inactive: ExcimerProfiler failed to initialize.',
+        };
+        $context = ['reason' => $this->inactiveSampler->value];
+        if ($this->sampler instanceof NullSampler && $this->sampler->cause instanceof \Throwable) {
+            $context['error'] = $this->sampler->cause->getMessage();
+            $context['exception'] = $this->sampler->cause;
+        }
+
+        if ($this->logger->hasLogger()) {
+            $this->logger->log(LogLevel::WARNING, $message, $context);
+        } else {
+            $suffix = isset($context['error']) ? ': ' . $context['error'] : '';
+            error_log($message . $suffix);
+        }
     }
 }

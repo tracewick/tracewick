@@ -30,4 +30,14 @@ interface Sampler
     public function flush(): SampleBatch;
 
     public function isRunning(): bool;
+
+    /**
+     * Number of failures swallowed since construction.
+     */
+    public function failureCount(): int;
+
+    /**
+     * The last failure swallowed by this sampler, if any.
+     */
+    public function lastFailure(): ?\Throwable;
 }

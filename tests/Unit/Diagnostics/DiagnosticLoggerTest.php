@@ -42,9 +42,17 @@ final class DiagnosticLoggerTest extends TestCase
 
     public function testDoesNothingWithoutALogger(): void
     {
-        (new DiagnosticLogger(directory: $this->directory->path))->log(LogLevel::WARNING, 'Failed.');
+        $logger = new DiagnosticLogger(directory: $this->directory->path);
+
+        self::assertFalse($logger->hasLogger());
+        $logger->log(LogLevel::WARNING, 'Failed.');
 
         self::assertSame([], $this->directory->entries());
+    }
+
+    public function testReportsWhetherALoggerIsConfigured(): void
+    {
+        self::assertTrue($this->diagnosticLogger()->hasLogger());
     }
 
     public function testPassesTheMessageWithItsContext(): void

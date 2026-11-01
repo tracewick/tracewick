@@ -19,19 +19,22 @@ $profiler = Profiler::create(
 
 `Profiler::create()` picks the best sampler for the process. Without ext-excimer, or with
 `TRACEWICK_ENABLED=0`, the profiler collects and sends nothing, and the application runs as usual.
+The first profiler constructed in the process logs a warning once (to the PSR-3 logger when given,
+otherwise to `error_log`) that names the reason: disabled, missing extension, or init failure.
 
 ## The lifecycle
 
 | Call                     | What it does                                                                 |
 |--------------------------|------------------------------------------------------------------------------|
-| `start(['route' => …])`  | Starts sampling; the labels apply to this profile only                       |
+| `start(['route' => …])`  | Starts sampling; the labels apply to this profile only. A second `start()` ends the running profile first (rotate). |
 | `label('route', …)`      | Sets a label of the running profile, for values known only later            |
 | `stop()`                 | Stops sampling and keeps the profile in a buffer in memory                  |
 | `flush()`                | Hands the buffered profiles to the sink                                      |
 | `registerShutdown()`     | Makes PHP call `stop()` and `flush()` when it shuts down                     |
 
-None of these methods throws. An invalid label is ignored, a failure costs only the profile it
-concerns, and `lastFailure()` returns the last error swallowed. See [Diagnostics](#diagnostics).
+None of these methods throws. Non-string or invalid labels are ignored, a failure costs only the
+profile it concerns, and `lastFailure()` returns the last error swallowed. `start()` marks the
+profiler running only after the sampler has started. See [Diagnostics](#diagnostics).
 
 The buffer holds `maxBufferedProfiles` profiles, 16 by default. A profile that does not fit is
 dropped and counted; it is never sent from inside the work.
@@ -91,19 +94,24 @@ why the option is off by default. See [ADR 10](adr/0010-deferred-delivery.md).
 ## Long-running workers
 
 In RoadRunner, Swoole, FrankenPHP worker mode or a queue consumer, PHP does not shut down between
-requests. Start and stop a profile around each unit of work and flush after it:
+requests. Start and stop a profile around each unit of work and flush after it. Always stop in a
+`finally` block so an exception from the handler cannot leave a profile running:
 
 ```php
 while ($request = $worker->waitRequest()) {
     $profiler->start(['route' => routeOf($request)]);
-    $worker->respond(handle($request));
-    $profiler->stop();
-    $profiler->flush();
+    try {
+        $worker->respond(handle($request));
+    } finally {
+        $profiler->stop();
+        $profiler->flush();
+    }
 }
 ```
 
 Call `registerShutdown()` once as well, so that profiles still buffered when the worker exits are
-not lost.
+not lost. A forgotten `stop()` is also healed by the next `start()`, which rotates the running
+profile into the buffer first.
 
 ## Console commands
 
@@ -117,10 +125,11 @@ The same as PHP-FPM: the profile covers the command and is flushed when the scri
 ## Diagnostics
 
 `diagnostics()` counts what the profiler has done: profiles collected, dropped from a full buffer,
-delivered, rejected by the backend, failed, skipped (an open circuit breaker or a full spool), and
-errors swallowed. Under PHP-FPM a profiler lives for one request, so the numbers cover that
-request; in a long-running worker they add up, and can be exported to the metrics of the
-application. Host-wide metrics will come from `tracewick-agent`.
+delivered, rejected by the backend, failed, skipped (an open circuit breaker or a full spool),
+errors swallowed, whether the sampler is a no-op and why (`inactiveSampler`), and how many
+failures the sampler itself swallowed (`samplerFailures`). Under PHP-FPM a profiler lives for one
+request, so the numbers cover that request; in a long-running worker they add up, and can be
+exported to the metrics of the application. Host-wide metrics will come from `tracewick-agent`.
 
 Give a PSR-3 logger to see problems as they happen:
 
@@ -131,6 +140,7 @@ $profiler = Profiler::create($sink, $config, logger: $logger);
 
 | Level   | Message                                                                     |
 |---------|-----------------------------------------------------------------------------|
+| warning | Profiling is inactive (disabled, missing ext-excimer, or init failure); once per process |
 | warning | A profile could not be delivered, or the backend rejected it                |
 | warning | The circuit breaker opened; logged once per host, by the process that opened it |
 | warning | An error was swallowed; the exception is in the context                     |
