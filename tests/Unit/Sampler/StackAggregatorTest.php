@@ -80,4 +80,21 @@ final class StackAggregatorTest extends TestCase
 
         self::assertSame(2, $aggregator->uniqueStackCount());
     }
+
+    public function testKeepsTruncatedStacksApartFromCompleteOnes(): void
+    {
+        $aggregator = new StackAggregator(10);
+        $frames = [new Frame('handle')];
+
+        $aggregator->add($frames, 1, false);
+        $aggregator->add($frames, 2, true);
+        $aggregator->add($frames, 4, true);
+
+        $samples = $aggregator->toSamples(0);
+        self::assertCount(2, $samples);
+        self::assertSame(1, $samples[0]->count);
+        self::assertFalse($samples[0]->truncated);
+        self::assertSame(6, $samples[1]->count);
+        self::assertTrue($samples[1]->truncated);
+    }
 }
