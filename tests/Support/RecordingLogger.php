@@ -15,10 +15,13 @@ final class RecordingLogger extends AbstractLogger
     public array $records = [];
 
     /**
-     * @param mixed        $level
-     * @param array<mixed> $context
+     * Signature stays compatible with psr/log 1.x (prefer-lowest) and 2.x/3.x.
+     *
+     * @param mixed                $level
+     * @param string|\Stringable   $message
+     * @param array<mixed>         $context
      */
-    public function log($level, string|\Stringable $message, array $context = []): void
+    public function log($level, $message, array $context = []): void
     {
         $this->records[] = ['level' => $level, 'message' => (string) $message, 'context' => $context];
     }
