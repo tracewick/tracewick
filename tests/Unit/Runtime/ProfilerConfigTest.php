@@ -22,7 +22,8 @@ final class ProfilerConfigTest extends TestCase
 
         self::assertTrue($config->labels->isEmpty());
         self::assertSame(ProfilerConfig::DEFAULT_MAX_BUFFERED_PROFILES, $config->maxBufferedProfiles);
-        self::assertSame(1.0, $config->sampleRate);
+        self::assertSame(ProfilerConfig::DEFAULT_SAMPLE_RATE, $config->sampleRate);
+        self::assertSame(0.1, $config->sampleRate);
         self::assertFalse($config->finishRequest);
         self::assertSame(0, $config->maxProfileDurationSeconds);
     }

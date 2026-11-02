@@ -13,7 +13,7 @@ use Tracewick\Diagnostics\DiagnosticLogger;
 use Tracewick\Diagnostics\HostCounterKeys;
 use Tracewick\Diagnostics\NullCounterStore;
 use Tracewick\Exception\LogicException;
-use Tracewick\Profile\LabelPiiHeuristics;
+use Tracewick\Profile\LabelPolicy;
 use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
 use Tracewick\Profile\Stack;
@@ -60,7 +60,7 @@ use Tracewick\Transport\Delivery;
 #[UsesClass(AtomicFile::class)]
 #[UsesClass(NullCounterStore::class)]
 #[UsesClass(HostCounterKeys::class)]
-#[UsesClass(LabelPiiHeuristics::class)]
+#[UsesClass(LabelPolicy::class)]
 final class UnitOfWorkProfilerTest extends TestCase
 {
     private ScriptedSampler $sampler;
@@ -126,7 +126,7 @@ final class UnitOfWorkProfilerTest extends TestCase
 
     public function testCombinesConfiguredAndRequestLabels(): void
     {
-        $profiler = $this->profiler(new ProfilerConfig(new Labels(['service' => 'blog', 'env' => 'prod'])));
+        $profiler = $this->profiler(new ProfilerConfig(new Labels(['service' => 'blog', 'env' => 'prod']), sampleRate: 1.0));
         $this->sampler->willSample('handle')->willSample('handle');
 
         $profiler->start(['env' => 'staging', 'route' => 'post_show']);
@@ -152,6 +152,30 @@ final class UnitOfWorkProfilerTest extends TestCase
 
         self::assertSame(['route' => 'home'], $this->labelsOf(0));
         self::assertInstanceOf(LogicException::class, $profiler->lastFailure());
+    }
+
+    public function testDropsDeniedLabelKeysAndUnsafeValues(): void
+    {
+        $profiler = $this->profiler(new ProfilerConfig(
+            new Labels(['service' => 'blog', 'email' => 'a@b.co']),
+            sampleRate: 1.0,
+        ));
+        $this->sampler->willSample('handle');
+
+        $profiler->start([
+            'route' => 'home',
+            'user_id' => '42',
+            'note' => 'user@example.com',
+        ]);
+        $profiler->label('path', '/secret');
+        $profiler->stop();
+        $profiler->flush();
+
+        self::assertSame(['route' => 'home', 'service' => 'blog'], $this->labelsOf(0));
+        self::assertNotEmpty(array_filter(
+            $this->logger->records,
+            static fn(array $r): bool => str_contains($r['message'], 'denied by the label policy'),
+        ));
     }
 
     public function testIgnoresLabelsOutsideAProfile(): void
@@ -233,25 +257,26 @@ final class UnitOfWorkProfilerTest extends TestCase
         self::assertEquals(new Diagnostics(emptyProfiles: 1), $profiler->diagnostics());
     }
 
-    public function testWarnsOnceAboutLabelValuesThatLookLikePii(): void
+    public function testDropsPiiShapedValuesInsteadOfOnlyWarning(): void
     {
         $profiler = $this->profiler();
         $this->sampler->willSample('x');
 
-        $profiler->start(['email' => 'user@example.com']);
-        $profiler->label('email', 'other@example.com');
+        $profiler->start(['customer' => 'user@example.com', 'route' => 'home']);
+        $profiler->label('customer', 'other@example.com');
         $profiler->stop();
+        $profiler->flush();
 
-        self::assertSame(1, $profiler->bufferedProfiles());
+        self::assertSame(['route' => 'home'], $this->labelsOf(0));
         self::assertCount(1, array_filter(
             $this->logger->records,
-            static fn(array $r): bool => str_contains($r['message'], 'looks like personal data'),
+            static fn(array $r): bool => str_contains($r['message'], 'denied by the label policy'),
         ));
     }
 
     public function testDropsProfilesThatDoNotFitIntoTheBuffer(): void
     {
-        $profiler = $this->profiler(new ProfilerConfig(maxBufferedProfiles: 2));
+        $profiler = $this->profiler(new ProfilerConfig(maxBufferedProfiles: 2, sampleRate: 1.0));
         $this->sampler->willSample('first')->willSample('second')->willSample('third');
 
         for ($i = 0; $i < 3; ++$i) {
@@ -269,7 +294,7 @@ final class UnitOfWorkProfilerTest extends TestCase
 
     public function testCountsAndReportsWhatHappensToEachProfile(): void
     {
-        $profiler = $this->profiler(new ProfilerConfig(maxBufferedProfiles: 6));
+        $profiler = $this->profiler(new ProfilerConfig(maxBufferedProfiles: 6, sampleRate: 1.0));
         $this->sink->deliveries = [
             Delivery::delivered(),
             Delivery::rejected('Bad request.'),
@@ -477,7 +502,7 @@ final class UnitOfWorkProfilerTest extends TestCase
         $profiler = new UnitOfWorkProfiler(
             $this->sampler,
             $this->sink,
-            new ProfilerConfig(maxProfileDurationSeconds: 1),
+            new ProfilerConfig(sampleRate: 1.0, maxProfileDurationSeconds: 1),
             function (): void {
                 $this->events[] = 'finish request';
             },
@@ -511,7 +536,7 @@ final class UnitOfWorkProfilerTest extends TestCase
         $profiler = new UnitOfWorkProfiler(
             $this->sampler,
             $this->sink,
-            new ProfilerConfig(maxProfileDurationSeconds: 10),
+            new ProfilerConfig(sampleRate: 1.0, maxProfileDurationSeconds: 10),
             null,
             null,
             null,
@@ -553,7 +578,7 @@ final class UnitOfWorkProfilerTest extends TestCase
 
     public function testEndsTheResponseBeforeDeliveringWhenConfigured(): void
     {
-        $profiler = $this->profiler(new ProfilerConfig(finishRequest: true));
+        $profiler = $this->profiler(new ProfilerConfig(sampleRate: 1.0, finishRequest: true));
         $this->sink->onSend[] = function (): void {
             $this->events[] = 'send';
         };
@@ -567,7 +592,7 @@ final class UnitOfWorkProfilerTest extends TestCase
 
     public function testDoesNotEndTheResponseWithoutProfiles(): void
     {
-        $profiler = $this->profiler(new ProfilerConfig(finishRequest: true));
+        $profiler = $this->profiler(new ProfilerConfig(sampleRate: 1.0, finishRequest: true));
         $profiler->start();
 
         $profiler->shutdown();
@@ -577,7 +602,7 @@ final class UnitOfWorkProfilerTest extends TestCase
 
     public function testDeliversWhenEndingTheResponseFails(): void
     {
-        $profiler = new UnitOfWorkProfiler($this->sampler, $this->sink, new ProfilerConfig(finishRequest: true), static function (): never {
+        $profiler = new UnitOfWorkProfiler($this->sampler, $this->sink, new ProfilerConfig(sampleRate: 1.0, finishRequest: true), static function (): never {
             throw new \RuntimeException('Headers already sent.');
         });
         $this->sampler->willSample('handle');
@@ -633,20 +658,14 @@ final class UnitOfWorkProfilerTest extends TestCase
         self::assertNull($profiler->lastFailure());
     }
 
-    public function testDrawsAUniformNumberBelowOneByDefault(): void
+    public function testDefaultRandomDrawDoesNotThrowForAPartialRate(): void
     {
-        mt_srand(7);
-        $draw = mt_rand() / (mt_getrandmax() + 1);
-        self::assertGreaterThan(0.0, $draw);
-
-        try {
-            // The unit of work is profiled only when the draw is below the rate, so a rate equal
-            // to the draw and one just above it pin the draw down exactly.
-            self::assertFalse($this->startWithSeededDraw($draw));
-            self::assertTrue($this->startWithSeededDraw($draw * (1 + 1e-12)));
-        } finally {
-            mt_srand();
-        }
+        UnitOfWorkProfiler::resetInactiveSamplerWarning();
+        $profiler = new UnitOfWorkProfiler(new ScriptedSampler(), $this->sink, new ProfilerConfig(sampleRate: 0.5));
+        $profiler->start();
+        // Outcome is random; only the draw path must stay fail-open.
+        self::assertNull($profiler->lastFailure());
+        $profiler->stop();
     }
 
     public function testDecidesForEveryUnitOfWork(): void
@@ -669,7 +688,11 @@ final class UnitOfWorkProfilerTest extends TestCase
 
     public function testCreatesAProfilerWithTheAvailableSampler(): void
     {
-        $profiler = UnitOfWorkProfiler::create($this->sink, logger: $this->logger);
+        $profiler = UnitOfWorkProfiler::create(
+            $this->sink,
+            new ProfilerConfig(sampleRate: 1.0),
+            logger: $this->logger,
+        );
 
         $profiler->start();
         self::assertTrue($profiler->isRunning());
@@ -677,15 +700,6 @@ final class UnitOfWorkProfilerTest extends TestCase
 
         self::assertFalse($profiler->isRunning());
         self::assertNull($profiler->lastFailure());
-    }
-
-    private function startWithSeededDraw(float $rate): bool
-    {
-        mt_srand(7);
-        $profiler = new UnitOfWorkProfiler(new ScriptedSampler(), $this->sink, new ProfilerConfig(sampleRate: $rate));
-        $profiler->start();
-
-        return $profiler->isRunning();
     }
 
     /**
@@ -699,7 +713,7 @@ final class UnitOfWorkProfilerTest extends TestCase
     /**
      * @param ?\Closure(): float $random
      */
-    private function profiler(ProfilerConfig $config = new ProfilerConfig(), ?\Closure $random = null): UnitOfWorkProfiler
+    private function profiler(ProfilerConfig $config = new ProfilerConfig(sampleRate: 1.0), ?\Closure $random = null): UnitOfWorkProfiler
     {
         return new UnitOfWorkProfiler(
             $this->sampler,

@@ -17,6 +17,11 @@ final readonly class ProfilerConfig
     public const MAX_MAX_BUFFERED_PROFILES = 1_000;
 
     /**
+     * Default share of units of work that are profiled (alpha-safe; override to 1.0 only when intentional).
+     */
+    public const DEFAULT_SAMPLE_RATE = 0.1;
+
+    /**
      * Upper bound for a single profile window before the profiler rotates (stop + start).
      */
     public const MAX_MAX_PROFILE_DURATION_SECONDS = 86_400;
@@ -27,7 +32,8 @@ final readonly class ProfilerConfig
      * @param int    $maxBufferedProfiles        profiles kept in memory until the next flush; a profile
      *                                           that does not fit is dropped
      * @param float  $sampleRate                 share of units of work that are profiled, from 0 (none) to
-     *                                           1 (all); the others run without the sampler
+     *                                           1 (all); default {@see self::DEFAULT_SAMPLE_RATE} (10%);
+     *                                           the others run without the sampler
      * @param bool   $finishRequest              whether to end the PHP-FPM response before delivering at
      *                                           shutdown, so that the client does not wait for it; output
      *                                           of shutdown functions that run later is then lost
@@ -39,7 +45,7 @@ final readonly class ProfilerConfig
     public function __construct(
         public Labels $labels = new Labels(),
         public int $maxBufferedProfiles = self::DEFAULT_MAX_BUFFERED_PROFILES,
-        public float $sampleRate = 1.0,
+        public float $sampleRate = self::DEFAULT_SAMPLE_RATE,
         public bool $finishRequest = false,
         public int $maxProfileDurationSeconds = 0,
     ) {

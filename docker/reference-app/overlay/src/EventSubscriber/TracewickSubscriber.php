@@ -28,8 +28,9 @@ use Tracewick\Transport\SpoolConfig;
  * the request, and is delivered on kernel.terminate, after the response has been sent: Symfony
  * calls fastcgi_finish_request() under PHP-FPM, and RoadRunner has already answered the client.
  *
- * TRACEWICK_SINK picks the sink: "spool" writes files that tracewick-drain sends on, "pyroscope"
- * sends from the PHP process itself. Defaults are in config/packages/tracewick.yaml.
+ * TRACEWICK_SINK picks the sink: "spool" (recommended) writes files that tracewick-drain sends on;
+ * "pyroscope" sends from the PHP process itself and is only for experiments outside the default stand.
+ * Defaults are in config/packages/tracewick.yaml. The stand uses spool for both FPM and RoadRunner.
  */
 final class TracewickSubscriber implements EventSubscriberInterface
 {
@@ -50,7 +51,7 @@ final class TracewickSubscriber implements EventSubscriberInterface
     ) {
         $this->profiler = UnitOfWorkProfiler::create(
             $this->sink($sink, $spoolDir, $pyroscopeUrl, $logger),
-            new ProfilerConfig(new Labels(['runtime' => $runtime])),
+            new ProfilerConfig(new Labels(['runtime' => $runtime]), sampleRate: 0.1),
             logger: $logger,
         );
         // Delivers what is still running or buffered if PHP exits before kernel.terminate.

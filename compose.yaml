@@ -175,9 +175,11 @@ services:
     environment:
       <<: *app-env
       APP_RUNTIME: 'Runtime\RoadRunnerSymfonyNyholm\Runtime'
-      # RoadRunner sends straight to Pyroscope from its workers, after each response.
+      # Same as FPM: write spool files; app-drain delivers to Pyroscope (not from the worker).
       TRACEWICK_RUNTIME: roadrunner
-      TRACEWICK_SINK: pyroscope
+      TRACEWICK_SINK: spool
+    volumes:
+      - app-spool:/var/spool/tracewick
     depends_on:
       postgres:
         condition: service_healthy

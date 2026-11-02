@@ -11,7 +11,7 @@ use Tracewick\Clock\SystemClock;
 use Tracewick\Diagnostics\DiagnosticLogger;
 use Tracewick\Diagnostics\HostCounterKeys;
 use Tracewick\Diagnostics\NullCounterStore;
-use Tracewick\Profile\LabelPiiHeuristics;
+use Tracewick\Profile\LabelPolicy;
 use Tracewick\Profile\Labels;
 use Tracewick\Runtime\Diagnostics;
 use Tracewick\Runtime\ProcessProfiler;
@@ -43,7 +43,7 @@ use Tracewick\Tests\Support\RecordingSink;
 #[UsesClass(DiagnosticLogger::class)]
 #[UsesClass(NullCounterStore::class)]
 #[UsesClass(HostCounterKeys::class)]
-#[UsesClass(LabelPiiHeuristics::class)]
+#[UsesClass(LabelPolicy::class)]
 final class ProcessProfilerTest extends TestCase
 {
     protected function setUp(): void
