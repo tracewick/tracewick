@@ -25,10 +25,12 @@ declare(strict_types=1);
  *
  * Optional:
  *
- * - TRACEWICK_ENV           — static `env` label on every profile
- * - TRACEWICK_PROJECT_ROOT  — strip this prefix from frame paths
- * - TRACEWICK_AUTOLOAD      — absolute path to Composer `autoload.php` when the default
- *                             vendor layout does not apply
+ * - TRACEWICK_ENV             — static `env` label on every profile
+ * - TRACEWICK_PROJECT_ROOT    — strip this prefix from frame paths
+ * - TRACEWICK_SAMPLE_RATE     — 0..1 (default 0.1)
+ * - TRACEWICK_LABEL_RAW_PATH  — `1`/`true` to put the request path on `route` (default: unmatched)
+ * - TRACEWICK_AUTOLOAD        — absolute path to Composer `autoload.php` when the default
+ *                               vendor layout does not apply
  *
  * Install ext-excimer separately (PIE recommended: pie install wikimedia/excimer — see
  * docs/install-excimer.md). Runtime details: docs/runtime.md

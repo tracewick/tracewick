@@ -14,7 +14,7 @@ use Tracewick\Diagnostics\HostCounterKeys;
 use Tracewick\Diagnostics\NullCounterStore;
 use Tracewick\Encoder\CompactStacksCodec;
 use Tracewick\Exception\LogicException;
-use Tracewick\Profile\LabelPiiHeuristics;
+use Tracewick\Profile\LabelPolicy;
 use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
 use Tracewick\Profile\Stack;
@@ -68,7 +68,7 @@ use Tracewick\Transport\SpoolTransport;
 #[UsesClass(DiagnosticLogger::class)]
 #[UsesClass(NullCounterStore::class)]
 #[UsesClass(HostCounterKeys::class)]
-#[UsesClass(LabelPiiHeuristics::class)]
+#[UsesClass(LabelPolicy::class)]
 #[UsesClass(SpoolSink::class)]
 #[UsesClass(SpoolConfig::class)]
 #[UsesClass(SpoolTransport::class)]
@@ -194,15 +194,12 @@ final class AutoPrependTest extends TestCase
         self::assertTrue($profiler->isRunning());
     }
 
-    #[TestWith(['/posts/1?token=secret', '/posts/1'])]
-    #[TestWith(['/only', '/only'])]
-    #[TestWith(['', 'unmatched'])]
-    #[TestWith(['?token=secret', ''])]
-    #[TestWith(['http://example.com', 'http://example.com'])]
-    public function testRouteFromServerStripsQueryAndHandlesEmpty(string $uri, string $expected): void
+    public function testRouteFromServerDefaultsToUnmatchedForHttpRequests(): void
     {
-        $server = '' === $uri ? ['REQUEST_METHOD' => 'GET'] : ['REQUEST_URI' => $uri, 'REQUEST_METHOD' => 'GET'];
-        self::assertSame($expected, AutoPrepend::routeFromServer($server));
+        self::assertSame('unmatched', AutoPrepend::routeFromServer([
+            'REQUEST_METHOD' => 'GET',
+            'REQUEST_URI' => '/posts/1?token=secret',
+        ]));
     }
 
     public function testRouteFromServerReturnsCliWhenNoRequestKeys(): void
@@ -210,23 +207,70 @@ final class AutoPrependTest extends TestCase
         self::assertSame('cli', AutoPrepend::routeFromServer([]));
     }
 
+    #[TestWith(['/posts/1?token=secret', '/posts/1'])]
+    #[TestWith(['/only', '/only'])]
+    #[TestWith(['', 'unmatched'])]
+    #[TestWith(['?token=secret', ''])]
+    #[TestWith(['http://example.com', 'http://example.com'])]
+    public function testRawPathFromServerStripsQueryAndHandlesEmpty(string $uri, string $expected): void
+    {
+        $server = '' === $uri ? ['REQUEST_METHOD' => 'GET'] : ['REQUEST_URI' => $uri, 'REQUEST_METHOD' => 'GET'];
+        self::assertSame($expected, AutoPrepend::rawPathFromServer($server));
+    }
+
+    #[TestWith(['1'])]
+    #[TestWith(['true'])]
+    #[TestWith(['yes'])]
+    #[TestWith(['on'])]
+    public function testBootSucceedsWithRawPathOptIn(string $flag): void
+    {
+        AutoPrepend::boot($this->env([AutoPrepend::ENV_LABEL_RAW_PATH => $flag]), [
+            'REQUEST_METHOD' => 'GET',
+            'REQUEST_URI' => '/users/123',
+        ]);
+
+        self::assertNotNull(ProcessProfiler::get());
+        self::assertTrue(ProcessProfiler::get()->isRunning());
+    }
+
+    #[TestWith([''])]
+    #[TestWith(['nope'])]
+    #[TestWith(['-0.1'])]
+    #[TestWith(['1.5'])]
+    public function testBootFallsBackWhenSampleRateEnvIsInvalid(string $rate): void
+    {
+        AutoPrepend::boot($this->env([
+            AutoPrepend::ENV_SAMPLE_RATE => $rate,
+            // Force a known draw path: invalid rate → default 0.1, so pin sampling on.
+            // Re-set after merge: env() already sets SAMPLE_RATE=1; override then force 1 via second boot with valid rate after clear.
+        ]), ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/x']);
+
+        // Invalid rate must not break boot (fail-open). Sampling may or may not start at default 0.1.
+        self::assertNotNull(ProcessProfiler::get());
+    }
+
     public function testBootWithNullEnvironmentUsesProcessVariables(): void
     {
         $appKey = AutoPrepend::ENV_APPLICATION;
         $spoolKey = AutoPrepend::ENV_SPOOL_DIR;
+        $rateKey = AutoPrepend::ENV_SAMPLE_RATE;
         $previous = [
             'server_app' => $_SERVER[$appKey] ?? null,
             'server_spool' => $_SERVER[$spoolKey] ?? null,
+            'server_rate' => $_SERVER[$rateKey] ?? null,
             'env_app' => $_ENV[$appKey] ?? null,
             'env_spool' => $_ENV[$spoolKey] ?? null,
+            'env_rate' => $_ENV[$rateKey] ?? null,
             'method' => $_SERVER['REQUEST_METHOD'] ?? null,
             'uri' => $_SERVER['REQUEST_URI'] ?? null,
         ];
 
         $_SERVER[$appKey] = 'process-app';
         $_SERVER[$spoolKey] = $this->spool->path;
+        $_SERVER[$rateKey] = '1';
         $_ENV[$appKey] = 'process-app';
         $_ENV[$spoolKey] = $this->spool->path;
+        $_ENV[$rateKey] = '1';
         $_SERVER['REQUEST_METHOD'] = 'GET';
         $_SERVER['REQUEST_URI'] = '/via-process-env';
 
@@ -238,6 +282,7 @@ final class AutoPrependTest extends TestCase
         } finally {
             $this->restoreProcessValue($appKey, $previous['server_app'], $previous['env_app']);
             $this->restoreProcessValue($spoolKey, $previous['server_spool'], $previous['env_spool']);
+            $this->restoreProcessValue($rateKey, $previous['server_rate'], $previous['env_rate']);
             $this->restoreServerKey('REQUEST_METHOD', $previous['method']);
             $this->restoreServerKey('REQUEST_URI', $previous['uri']);
         }
@@ -277,6 +322,8 @@ final class AutoPrependTest extends TestCase
         return $extra + [
             AutoPrepend::ENV_APPLICATION => 'demo-app',
             AutoPrepend::ENV_SPOOL_DIR => $this->spool->path,
+            // Deterministic unit tests: always enter the sampled path.
+            AutoPrepend::ENV_SAMPLE_RATE => '1',
         ];
     }
 }

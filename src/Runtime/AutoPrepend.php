@@ -27,6 +27,17 @@ final class AutoPrepend
 
     public const ENV_PROJECT_ROOT = 'TRACEWICK_PROJECT_ROOT';
 
+    /**
+     * When set to a truthy value (`1`, `true`, `yes`, `on`), {@see boot()} may put the raw request
+     * path on the `route` label. Default is off: `route=unmatched` until the app sets a template.
+     */
+    public const ENV_LABEL_RAW_PATH = 'TRACEWICK_LABEL_RAW_PATH';
+
+    /**
+     * Optional override of {@see ProfilerConfig::$sampleRate} (0..1). When unset, the library default applies.
+     */
+    public const ENV_SAMPLE_RATE = 'TRACEWICK_SAMPLE_RATE';
+
     private static bool $missingConfigWarned = false;
 
     private function __construct() {}
@@ -68,10 +79,10 @@ final class AutoPrepend
 
             $profiler = UnitOfWorkProfiler::create(
                 new SpoolSink($application, new SpoolConfig($spoolDir)),
-                new ProfilerConfig(new Labels($staticLabels)),
+                new ProfilerConfig(new Labels($staticLabels), sampleRate: self::sampleRateFrom($environment)),
                 new SamplerConfig(projectRoot: $projectRoot),
             );
-            $profiler->start(self::requestLabels($server));
+            $profiler->start(self::requestLabels($server, $environment));
             $profiler->registerShutdown();
             ProcessProfiler::bind($profiler);
         } catch (\Throwable) {
@@ -80,8 +91,10 @@ final class AutoPrepend
     }
 
     /**
-     * Path-only route label from the request server map. Query strings are stripped so raw URLs
-     * do not become Pyroscope series labels.
+     * Safe default route label: `cli` for CLI without a request, otherwise `unmatched`.
+     *
+     * Does not put URL paths on series labels. For the opt-in raw path (after stripping the query),
+     * see {@see rawPathFromServer()}.
      *
      * @param array<string, mixed> $server
      */
@@ -91,6 +104,17 @@ final class AutoPrepend
             return 'cli';
         }
 
+        return 'unmatched';
+    }
+
+    /**
+     * Path-only value from the request server map (query string stripped). Opt-in only via
+     * {@see ENV_LABEL_RAW_PATH}; high cardinality and secrets in path segments are the caller's risk.
+     *
+     * @param array<string, mixed> $server
+     */
+    public static function rawPathFromServer(array $server): string
+    {
         $uri = $server['REQUEST_URI'] ?? null;
         if (!\is_string($uri) || '' === $uri) {
             return 'unmatched';
@@ -98,7 +122,6 @@ final class AutoPrepend
 
         $path = parse_url($uri, \PHP_URL_PATH);
         if (!\is_string($path) || '' === $path) {
-            // REQUEST_URI without a scheme may still be a path; strip the query by hand.
             $cut = strpos($uri, '?');
 
             return false === $cut ? $uri : substr($uri, 0, $cut);
@@ -116,11 +139,12 @@ final class AutoPrepend
     }
 
     /**
-     * @param array<string, mixed> $server
+     * @param array<string, mixed>  $server
+     * @param array<string, string> $environment
      *
      * @return array<string, string>
      */
-    private static function requestLabels(array $server): array
+    private static function requestLabels(array $server, array $environment): array
     {
         $labels = [];
 
@@ -129,9 +153,43 @@ final class AutoPrepend
             $labels['method'] = $method;
         }
 
-        $labels['route'] = self::routeFromServer($server);
+        $labels['route'] = self::rawPathEnabled($environment)
+            ? self::rawPathFromServer($server)
+            : self::routeFromServer($server);
 
         return $labels;
+    }
+
+    /**
+     * @param array<string, string> $environment
+     */
+    private static function rawPathEnabled(array $environment): bool
+    {
+        $value = strtolower($environment[self::ENV_LABEL_RAW_PATH] ?? '');
+
+        return \in_array($value, ['1', 'true', 'yes', 'on'], true);
+    }
+
+    /**
+     * @param array<string, string> $environment
+     */
+    private static function sampleRateFrom(array $environment): float
+    {
+        $raw = $environment[self::ENV_SAMPLE_RATE] ?? null;
+        if (null === $raw || '' === $raw) {
+            return ProfilerConfig::DEFAULT_SAMPLE_RATE;
+        }
+
+        if (!is_numeric($raw)) {
+            return ProfilerConfig::DEFAULT_SAMPLE_RATE;
+        }
+
+        $rate = (float) $raw;
+        if (is_nan($rate) || $rate < 0.0 || $rate > 1.0) {
+            return ProfilerConfig::DEFAULT_SAMPLE_RATE;
+        }
+
+        return $rate;
     }
 
     /**
@@ -159,6 +217,8 @@ final class AutoPrepend
             self::ENV_SPOOL_DIR,
             self::ENV_ENV,
             self::ENV_PROJECT_ROOT,
+            self::ENV_LABEL_RAW_PATH,
+            self::ENV_SAMPLE_RATE,
         ];
         $environment = [];
         foreach ($keys as $key) {

@@ -4,7 +4,7 @@
 # frames of one route. Asserts wall-time units (nanoseconds), non-empty stacks, and that series
 # labels do not look like raw request URLs. Run it after `make app-up`.
 #
-# PHP-FPM profiles go through the spool and app-drain, RoadRunner profiles straight to Pyroscope.
+# Both FPM and RoadRunner write the spool; app-drain delivers to Pyroscope.
 set -eu
 
 pyroscope=${PYROSCOPE_URL:-http://127.0.0.1:4040}

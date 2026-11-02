@@ -12,7 +12,7 @@ use Tracewick\Diagnostics\DiagnosticLogger;
 use Tracewick\Diagnostics\HostCounterKeys;
 use Tracewick\Diagnostics\NullCounterStore;
 use Tracewick\Exception\LogicException;
-use Tracewick\Profile\LabelPiiHeuristics;
+use Tracewick\Profile\LabelPolicy;
 use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
 use Tracewick\Profile\ProfileMerger;
@@ -74,7 +74,7 @@ use Tracewick\Transport\Delivery;
 #[UsesClass(AtomicFile::class)]
 #[UsesClass(NullCounterStore::class)]
 #[UsesClass(HostCounterKeys::class)]
-#[UsesClass(LabelPiiHeuristics::class)]
+#[UsesClass(LabelPolicy::class)]
 #[UsesClass(AggregationCardinalityLimiter::class)]
 final class ContinuousProfilerTest extends TestCase
 {
@@ -390,7 +390,7 @@ final class ContinuousProfilerTest extends TestCase
         self::assertSame([], $this->sink->sent);
     }
 
-    public function testWarnsOnceAboutSuspiciousProcessLabels(): void
+    public function testDropsDeniedProcessLabelsOnce(): void
     {
         $logger = new RecordingLogger();
         $directory = new TemporaryDirectory();
@@ -399,11 +399,10 @@ final class ContinuousProfilerTest extends TestCase
             $profiler = new ContinuousProfiler(
                 $this->sampler,
                 $this->sink,
-                new ContinuousProfilerConfig('blog', new Labels(['email' => 'user@example.com'])),
+                new ContinuousProfilerConfig('blog', new Labels(['email' => 'user@example.com', 'env' => 'prod'])),
                 new DiagnosticLogger($logger, $directory->path, clock: $this->clock),
                 $this->clock,
             );
-            // Constructing again with the same key must not warn twice.
             new ContinuousProfiler(
                 $this->sampler,
                 $this->sink,
@@ -414,7 +413,7 @@ final class ContinuousProfilerTest extends TestCase
 
             self::assertCount(1, array_filter(
                 $logger->records,
-                static fn(array $r): bool => str_contains($r['message'], 'looks like personal data'),
+                static fn(array $r): bool => str_contains($r['message'], 'denied by the label policy'),
             ));
             self::assertNull($profiler->diagnostics()->inactiveSampler);
         } finally {

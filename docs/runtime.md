@@ -67,9 +67,11 @@ service a share of the requests gives the same flame graphs at a fraction of tha
 new ProfilerConfig(new Labels(['env' => 'prod']), sampleRate: 0.1); // one request in ten
 ```
 
-`start()` decides at random for each unit of work. For the others it does nothing: the sampler
-does not run, and `label()` and `stop()` have no effect. The default rate is 1, every unit of
-work; 0 turns profiling off without removing the calls.
+`start()` decides at random for each unit of work (`random_int`, not the app's `mt_rand` state).
+For the others it does nothing: the sampler does not run, and `label()` and `stop()` have no
+effect. The default rate is **0.1** (one unit in ten); pass `sampleRate: 1.0` only when you
+intentionally want every request. `0` turns profiling off without removing the calls. On
+construct the profiler logs the effective rate once via `error_log`.
 
 The profiles show only the requests that were profiled, so absolute totals in Pyroscope shrink
 by the rate. Shares within a flame graph, which is what profiling is read for, stay the same.
@@ -118,13 +120,20 @@ To include cold-start and autoloader time in the profile, point PHP at
 `-d`). That script boots a `SpoolSink` profiler, starts one unit of work, registers shutdown
 delivery, and stores the instance in `ProcessProfiler`.
 
-Required environment: `TRACEWICK_APPLICATION`, `TRACEWICK_SPOOL_DIR`. After the router runs:
+Required environment: `TRACEWICK_APPLICATION`, `TRACEWICK_SPOOL_DIR`. Optional:
+`TRACEWICK_SAMPLE_RATE` (0..1), `TRACEWICK_LABEL_RAW_PATH=1` (put the request path on `route`;
+**off by default** — default `route` is `unmatched` until the app sets a template name).
+
+After the router runs:
 
 ```php
 use Tracewick\Runtime\ProcessProfiler;
 
 ProcessProfiler::get()?->label('route', $routeName);
 ```
+
+Label policy drops keys such as `url` / `user_id` / `email` / `trace_id` and values that look like
+emails, UUIDs, query strings, or long digit runs — before they become series labels.
 
 Use either prepend **or** a framework subscriber that creates its own profiler — not both for the
 same request, or you double-sample. Prefer the framework integration when one exists; prepend is
@@ -244,7 +253,7 @@ $profiler = UnitOfWorkProfiler::create($sink, $config, logger: $logger);
 | warning | A profile could not be delivered, or the backend rejected it                |
 | warning | The circuit breaker opened; logged once per host, by the process that opened it |
 | warning | An error was swallowed; the exception is in the context                     |
-| warning | A label key looks like personal data (email / UUID / long digits); once per process per key |
+| notice  | A label was dropped by the label policy (denied key/value); once per process per key |
 | notice  | A profile was dropped from a full buffer, or the sink skipped it             |
 | info    | The circuit breaker closed again                                            |
 

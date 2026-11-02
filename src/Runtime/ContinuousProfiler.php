@@ -12,7 +12,7 @@ use Tracewick\Diagnostics\CounterStore;
 use Tracewick\Diagnostics\DiagnosticLogger;
 use Tracewick\Diagnostics\HostCounterKeys;
 use Tracewick\Diagnostics\NullCounterStore;
-use Tracewick\Profile\LabelPiiHeuristics;
+use Tracewick\Profile\LabelPolicy;
 use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
 use Tracewick\Sampler\ExcimerSampler;
@@ -62,7 +62,7 @@ final class ContinuousProfiler
     private int $swallowedErrors = 0;
 
     /** @var array<string, true> */
-    private static array $piiWarnedKeys = [];
+    private static array $policyDroppedKeys = [];
 
     private ?\Throwable $lastFailure = null;
 
@@ -71,6 +71,8 @@ final class ContinuousProfiler
     private readonly Clock $clock;
 
     private readonly ProfileAccumulator $accumulator;
+
+    private readonly Labels $filteredLabels;
 
     /**
      * @param ?\Closure(callable(): void): void $registerShutdownFunction `register_shutdown_function()` by default
@@ -96,7 +98,8 @@ final class ContinuousProfiler
             $sampler->setSegmentListener($this->pulse(...));
         }
 
-        $this->warnAboutPii($config->labels);
+        $this->filteredLabels = LabelPolicy::filter($config->labels);
+        $this->noteDroppedLabels($config->labels, $this->filteredLabels);
         $this->warnAboutInactiveSampler();
     }
 
@@ -260,7 +263,31 @@ final class ContinuousProfiler
     public static function resetInactiveSamplerWarning(): void
     {
         self::$inactiveSamplerWarned = false;
-        self::$piiWarnedKeys = [];
+        self::$policyDroppedKeys = [];
+    }
+
+    private function noteDroppedLabels(Labels $before, Labels $after): void
+    {
+        $kept = $after->toArray();
+        foreach ($before as $key => $_) {
+            if (!\array_key_exists($key, $kept)) {
+                $this->noteDroppedKey($key);
+            }
+        }
+    }
+
+    private function noteDroppedKey(string $key): void
+    {
+        if (isset(self::$policyDroppedKeys[$key])) {
+            return;
+        }
+
+        self::$policyDroppedKeys[$key] = true;
+        $this->logger->log(
+            LogLevel::NOTICE,
+            'Tracewick dropped label "{key}" because it is denied by the label policy.',
+            ['key' => $key],
+        );
     }
 
     private function capture(): void
@@ -268,7 +295,7 @@ final class ContinuousProfiler
         $batch = $this->sampler->flush();
         $labels = new Labels($this->cardinalityLimiter->limitLabels(
             $this->config->applicationName,
-            $this->config->labels->toArray(),
+            $this->filteredLabels->toArray(),
             $batch->eventType,
             $batch->periodNs,
         ));
@@ -336,22 +363,6 @@ final class ContinuousProfiler
                 $this->counters->increment(HostCounterKeys::PROFILES_EMPTY);
 
                 break;
-        }
-    }
-
-    private function warnAboutPii(Labels $labels): void
-    {
-        foreach (LabelPiiHeuristics::suspiciousKeys($labels) as $key) {
-            if (isset(self::$piiWarnedKeys[$key])) {
-                continue;
-            }
-
-            self::$piiWarnedKeys[$key] = true;
-            $this->logger->log(
-                LogLevel::WARNING,
-                'Tracewick label "{key}" looks like personal data; prefer coarse labels (route, tenant class).',
-                ['key' => $key],
-            );
         }
     }
 

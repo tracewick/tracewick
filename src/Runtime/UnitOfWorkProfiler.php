@@ -13,7 +13,7 @@ use Tracewick\Diagnostics\DiagnosticLogger;
 use Tracewick\Diagnostics\HostCounterKeys;
 use Tracewick\Diagnostics\NullCounterStore;
 use Tracewick\Exception\LogicException;
-use Tracewick\Profile\LabelPiiHeuristics;
+use Tracewick\Profile\LabelPolicy;
 use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
 use Tracewick\Sampler\ExcimerSampler;
@@ -76,7 +76,9 @@ final class UnitOfWorkProfiler
     private int $swallowedErrors = 0;
 
     /** @var array<string, true> */
-    private static array $piiWarnedKeys = [];
+    private static array $policyDroppedKeys = [];
+
+    private static bool $sampleRateLogged = false;
 
     private ?\Throwable $lastFailure = null;
 
@@ -115,11 +117,11 @@ final class UnitOfWorkProfiler
         ?Clock $clock = null,
         private readonly CounterStore $counters = new NullCounterStore(),
     ) {
-        $this->labels = $config->labels;
+        $this->labels = LabelPolicy::filter($config->labels);
         $this->inactiveSampler = $sampler instanceof NullSampler ? $sampler->reason : null;
         $this->clock = $clock ?? new SystemClock();
         $this->maxProfileDurationNs = $config->maxProfileDurationSeconds * 1_000_000_000;
-        $this->warnAboutPii($config->labels);
+        $this->noteDroppedLabels($config->labels, $this->labels);
         $this->finishRequest = $finishRequest ?? static function (): void {
             if (\function_exists('fastcgi_finish_request')) {
                 fastcgi_finish_request();
@@ -128,11 +130,12 @@ final class UnitOfWorkProfiler
         $this->registerShutdownFunction = $registerShutdownFunction ?? static function (callable $callback): void {
             register_shutdown_function($callback);
         };
-        $this->random = $random ?? static fn(): float => mt_rand() / (mt_getrandmax() + 1);
+        $this->random = $random ?? (static fn(): float => random_int(0, 1_000_000_000 - 1) / 1_000_000_000);
         if ($sampler instanceof ExcimerSampler && $this->maxProfileDurationNs > 0) {
             $sampler->setSegmentListener($this->pulse(...));
         }
 
+        $this->logSampleRateOnce();
         $this->warnAboutInactiveSampler();
     }
 
@@ -214,10 +217,17 @@ final class UnitOfWorkProfiler
     public function label(string $key, string $value): void
     {
         try {
-            if ($this->started) {
-                $this->labels = $this->labels->with($key, $value);
-                $this->warnAboutPii(new Labels([$key => $value]));
+            if (!$this->started) {
+                return;
             }
+
+            if (!LabelPolicy::admits($key, $value)) {
+                $this->noteDroppedKey($key);
+
+                return;
+            }
+
+            $this->labels = $this->labels->with($key, $value);
         } catch (\Throwable $e) {
             $this->swallow($e);
         }
@@ -361,7 +371,47 @@ final class UnitOfWorkProfiler
     public static function resetInactiveSamplerWarning(): void
     {
         self::$inactiveSamplerWarned = false;
-        self::$piiWarnedKeys = [];
+        self::$policyDroppedKeys = [];
+        self::$sampleRateLogged = false;
+    }
+
+    private function logSampleRateOnce(): void
+    {
+        if (self::$sampleRateLogged) {
+            return;
+        }
+
+        self::$sampleRateLogged = true;
+        $rate = $this->config->sampleRate;
+        error_log(\sprintf(
+            'Tracewick sample rate: %s (%.0f%% of units of work).',
+            rtrim(rtrim(\sprintf('%.4F', $rate), '0'), '.'),
+            $rate * 100.0,
+        ));
+    }
+
+    private function noteDroppedLabels(Labels $before, Labels $after): void
+    {
+        $kept = $after->toArray();
+        foreach ($before as $key => $_) {
+            if (!\array_key_exists($key, $kept)) {
+                $this->noteDroppedKey($key);
+            }
+        }
+    }
+
+    private function noteDroppedKey(string $key): void
+    {
+        if (isset(self::$policyDroppedKeys[$key])) {
+            return;
+        }
+
+        self::$policyDroppedKeys[$key] = true;
+        $this->logger->log(
+            LogLevel::NOTICE,
+            'Tracewick dropped label "{key}" because it is denied by the label policy.',
+            ['key' => $key],
+        );
     }
 
     private function beginProfile(Labels $labels): void
@@ -388,7 +438,8 @@ final class UnitOfWorkProfiler
      */
     private function prepareLabels(array $labels): Labels
     {
-        $prepared = $this->config->labels;
+        // Always restart from the configured base labels, not the previous unit of work.
+        $prepared = LabelPolicy::filter($this->config->labels);
         foreach ($labels as $key => $value) {
             if (!\is_string($key) || !\is_string($value)) {
                 $this->swallow(new LogicException('Profile labels must be string keys and string values.'));
@@ -396,9 +447,14 @@ final class UnitOfWorkProfiler
                 continue;
             }
 
+            if (!LabelPolicy::admits($key, $value)) {
+                $this->noteDroppedKey($key);
+
+                continue;
+            }
+
             try {
                 $prepared = $prepared->with($key, $value);
-                $this->warnAboutPii(new Labels([$key => $value]));
             } catch (\Throwable $e) {
                 $this->swallow($e);
             }
@@ -471,22 +527,6 @@ final class UnitOfWorkProfiler
     private function bump(string $key): void
     {
         $this->counters->increment($key);
-    }
-
-    private function warnAboutPii(Labels $labels): void
-    {
-        foreach (LabelPiiHeuristics::suspiciousKeys($labels) as $key) {
-            if (isset(self::$piiWarnedKeys[$key])) {
-                continue;
-            }
-
-            self::$piiWarnedKeys[$key] = true;
-            $this->logger->log(
-                LogLevel::WARNING,
-                'Tracewick label "{key}" looks like personal data; prefer coarse labels (route, tenant class).',
-                ['key' => $key],
-            );
-        }
     }
 
     private function swallow(\Throwable $error): void
