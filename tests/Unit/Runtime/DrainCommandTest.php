@@ -52,6 +52,7 @@ use Tracewick\Transport\HttpConfig;
 use Tracewick\Transport\HttpTransport;
 use Tracewick\Transport\InMemoryCircuitBreakerStore;
 use Tracewick\Transport\SpoolReaderConfig;
+use Tracewick\Transport\SpoolSource;
 use Tracewick\Transport\SpoolTransport;
 use Tracewick\Transport\SystemDnsResolver;
 
@@ -183,7 +184,7 @@ final class DrainCommandTest extends TestCase
 
         self::assertSame(0, $exitCode);
         self::assertSame(['first', 'second'], array_map(static fn(SpoolFile $file): string => $file->labels['id'] ?? '', $forwarder->forwarded));
-        self::assertSame("Delivered 1, rejected 1 spool files.\n", $this->read($this->output));
+        self::assertSame("Delivered 1, rejected 1, ack-failures 0 spool files.\n", $this->read($this->output));
         self::assertSame('Rejected ' . self::SECOND . ": Bad request.\n", $this->read($this->errors));
         self::assertSame([], $this->sleeps);
     }
@@ -197,7 +198,7 @@ final class DrainCommandTest extends TestCase
 
         self::assertSame(DrainCommand::EXIT_FAILURE, $exitCode);
         self::assertSame("Delivery failed: Connection refused.\n", $this->read($this->errors));
-        self::assertSame("Delivered 0, rejected 0 spool files.\n", $this->read($this->output));
+        self::assertSame("Delivered 0, rejected 0, ack-failures 0 spool files.\n", $this->read($this->output));
         self::assertSame([self::FIRST], $this->spool->entries());
         self::assertSame([], $this->sleeps);
     }
@@ -210,7 +211,7 @@ final class DrainCommandTest extends TestCase
 
         self::assertSame(0, $exitCode);
         self::assertSame([5_000, 5_000], $this->sleeps);
-        self::assertSame("Delivered 0, rejected 0 spool files.\n", $this->read($this->output));
+        self::assertSame("Delivered 0, rejected 0, ack-failures 0 spool files.\n", $this->read($this->output));
     }
 
     public function testDeliversFilesThatArriveWhileRunning(): void
@@ -256,7 +257,7 @@ final class DrainCommandTest extends TestCase
         $exitCode = $this->command($forwarder)->run([...$this->required(), '--limit=2']);
 
         self::assertSame(0, $exitCode);
-        self::assertSame("Delivered 1, rejected 1 spool files.\n", $this->read($this->output));
+        self::assertSame("Delivered 1, rejected 1, ack-failures 0 spool files.\n", $this->read($this->output));
         self::assertSame([self::THIRD, 'rejected'], $this->spool->entries());
     }
 
@@ -279,7 +280,7 @@ final class DrainCommandTest extends TestCase
         $exitCode = $command->run([...$this->required(), '--memory-limit=1K']);
 
         self::assertSame(0, $exitCode);
-        self::assertSame("Delivered 1, rejected 0 spool files.\n", $this->read($this->output));
+        self::assertSame("Delivered 1, rejected 0, ack-failures 0 spool files.\n", $this->read($this->output));
         self::assertSame([self::SECOND], $this->spool->entries());
     }
 
@@ -339,8 +340,60 @@ final class DrainCommandTest extends TestCase
         $exitCode = $command->run($this->required());
 
         self::assertSame(0, $exitCode);
-        self::assertSame("Delivered 2, rejected 0 spool files.\n", $this->read($this->output));
+        self::assertSame("Delivered 2, rejected 0, ack-failures 0 spool files.\n", $this->read($this->output));
         self::assertSame([], $this->spool->entries());
+    }
+
+    public function testReportsAcknowledgeFailuresOnStderrAndInTheSummary(): void
+    {
+        $this->write(self::FIRST, 'first');
+        $source = new class ($this->spool->path) implements SpoolSource {
+            private ?ClaimedSpoolFile $claimed = null;
+
+            public function __construct(private readonly string $directory) {}
+
+            public function claim(): ?ClaimedSpoolFile
+            {
+                if ($this->claimed instanceof ClaimedSpoolFile) {
+                    return null;
+                }
+
+                $name = '01798000000000000001-0000000000000000.spool';
+                $path = $this->directory . '/' . $name;
+                $this->claimed = new ClaimedSpoolFile($name, (string) file_get_contents($path), $path);
+
+                return $this->claimed;
+            }
+
+            public function acknowledge(ClaimedSpoolFile $file): bool
+            {
+                return false;
+            }
+
+            public function release(ClaimedSpoolFile $file): void {}
+
+            public function reject(ClaimedSpoolFile $file): void {}
+        };
+        $forwarder = new ScriptedForwarder(Delivery::delivered());
+        $command = new DrainCommand(
+            $this->output,
+            $this->errors,
+            $this->clock,
+            $this->recordSleep(...),
+            null,
+            static fn(): SpoolForwarder => $forwarder,
+            fn(DrainSettings $settings, SpoolForwarder $fwd): SpoolDrainer => new SpoolDrainer(
+                $source,
+                $fwd,
+                $settings->aggregationWindow,
+            ),
+        );
+
+        $exitCode = $command->run(['--once', ...$this->required()]);
+
+        self::assertSame(0, $exitCode);
+        self::assertSame("Delivered 1, rejected 0, ack-failures 1 spool files.\n", $this->read($this->output));
+        self::assertSame("Acknowledge failed for 1 spool file(s) after delivery.\n", $this->read($this->errors));
     }
 
     public function testReadsTheSettingsFromTheEnvironment(): void
@@ -368,7 +421,7 @@ final class DrainCommandTest extends TestCase
         $exitCode = $command->run(['--once', ...$this->required()]);
 
         self::assertSame(0, $exitCode);
-        self::assertSame("Delivered 0, rejected 0 spool files.\n", $this->read($this->output));
+        self::assertSame("Delivered 0, rejected 0, ack-failures 0 spool files.\n", $this->read($this->output));
     }
 
     public function testDefaultPauseSleepsInShortStepsUntilTheTimeLimit(): void
@@ -385,7 +438,7 @@ final class DrainCommandTest extends TestCase
         $exitCode = $command->run([...$this->required(), '--sleep=1', '--time-limit=1']);
 
         self::assertSame(0, $exitCode);
-        self::assertSame("Delivered 0, rejected 0 spool files.\n", $this->read($this->output));
+        self::assertSame("Delivered 0, rejected 0, ack-failures 0 spool files.\n", $this->read($this->output));
     }
 
     /**

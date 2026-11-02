@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Tracewick\Runtime;
 
-use Tracewick\Clock\Clock;
-use Tracewick\Clock\SystemClock;
 use Tracewick\Encoder\CompactStacksCodec;
 use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
@@ -22,8 +20,9 @@ use Tracewick\Transport\SpoolSource;
 /**
  * Delivers the files of a spool to a backend, one pass at a time.
  *
- * Compact-stacks files that share an aggregation key and fall into the same closed wall-clock
- * window are merged into one pprof POST ([ADR 12](../../docs/adr/0012-aggregate-before-delivery.md)).
+ * Compact-stacks files that share an aggregation key and the same wall-clock window id are merged
+ * into one pprof POST ([ADR 12](../../docs/adr/0012-aggregate-before-delivery.md)). The window id
+ * is merge compatibility only: open windows are sent immediately (multi-POST per window is OK).
  * Invalid files are rejected; a failed send releases every claimed file still held and ends the
  * pass.
  *
@@ -33,6 +32,9 @@ use Tracewick\Transport\SpoolSource;
  */
 final readonly class SpoolDrainer
 {
+    /** Default claim budget: two writer max-file sizes. */
+    public const DEFAULT_MAX_BATCH_INPUT_BYTES = 8_388_608;
+
     private CompactStacksCodec $codec;
 
     private ProfileMerger $merger;
@@ -41,7 +43,7 @@ final readonly class SpoolDrainer
         private SpoolSource $source,
         private SpoolForwarder $forwarder,
         private SpoolAggregationWindow $window = new SpoolAggregationWindow(),
-        private Clock $clock = new SystemClock(),
+        private int $maxBatchInputBytes = self::DEFAULT_MAX_BATCH_INPUT_BYTES,
     ) {
         $this->codec = new CompactStacksCodec();
         $this->merger = new ProfileMerger();
@@ -49,10 +51,13 @@ final readonly class SpoolDrainer
 
     /**
      * @param int  $maxFiles           the most files to claim in this pass
-     * @param bool $includeOpenWindows when true (e.g. `--once`), also send the current open window
+     * @param bool $includeOpenWindows kept for call-site compatibility; the window is no longer a
+     *                                 send gate (always included)
      */
     public function drain(int $maxFiles = \PHP_INT_MAX, bool $includeOpenWindows = false): DrainResult
     {
+        unset($includeOpenWindows);
+
         if ($maxFiles <= 0) {
             return new DrainResult(DrainOutcome::LimitReached, 0, 0);
         }
@@ -63,19 +68,18 @@ final readonly class SpoolDrainer
         $lastRejection = '';
         /** @var list<ClaimedSpoolFile> $held */
         $held = [];
+        $batch = [];
+        $hitBudget = false;
 
         try {
-            $batch = $this->claimBatch($maxFiles);
+            [$batch, $hitBudget] = $this->claimBatch($maxFiles);
             if ([] === $batch) {
                 return new DrainResult(DrainOutcome::Empty, 0, 0);
             }
 
             $held = $batch;
-            $nowNs = $this->clock->nowNs();
             /** @var array<string, non-empty-list<array{ClaimedSpoolFile, SpoolFile, Profile}>> $groups */
             $groups = [];
-            /** @var list<ClaimedSpoolFile> $openWindow */
-            $openWindow = [];
 
             foreach ($batch as $claimed) {
                 try {
@@ -91,12 +95,6 @@ final readonly class SpoolDrainer
                 }
 
                 $windowId = $this->window->idFor($file->startNs);
-                if (!$includeOpenWindows && !$this->window->isClosed($windowId, $nowNs)) {
-                    $openWindow[] = $claimed;
-
-                    continue;
-                }
-
                 $groupKey = $this->groupKey($claimed->name, $file) . "\0" . $windowId;
                 $groups[$groupKey][] = [$claimed, $file, $profile];
             }
@@ -158,11 +156,6 @@ final readonly class SpoolDrainer
 
                 return new DrainResult(DrainOutcome::Failed, $delivered, $rejected, $lastRejection, $delivery->reason, $ackFailures);
             }
-
-            $this->releaseAll($openWindow);
-            foreach ($openWindow as $claimed) {
-                $held = $this->without($held, $claimed);
-            }
         } catch (\Throwable $e) {
             $this->releaseAll($held);
 
@@ -171,12 +164,8 @@ final readonly class SpoolDrainer
 
         $this->releaseAll($held);
 
-        if (0 === $delivered && 0 === $rejected) {
-            return new DrainResult(DrainOutcome::Empty, 0, 0, ackFailures: $ackFailures);
-        }
-
-        // A full claim batch means more files may remain; otherwise the spool was exhausted.
-        if (\count($batch) >= $maxFiles) {
+        // A full claim batch (files or bytes) means more files may remain.
+        if ($hitBudget || \count($batch) >= $maxFiles) {
             return new DrainResult(DrainOutcome::LimitReached, $delivered, $rejected, $lastRejection, ackFailures: $ackFailures);
         }
 
@@ -184,21 +173,38 @@ final readonly class SpoolDrainer
     }
 
     /**
-     * @return list<ClaimedSpoolFile>
+     * @return array{0: list<ClaimedSpoolFile>, 1: bool}
      */
     private function claimBatch(int $maxFiles): array
     {
         $batch = [];
+        $bytes = 0;
+        $hitBudget = false;
+
         for ($i = 0; $i < $maxFiles; ++$i) {
             $claimed = $this->source->claim();
             if (!$claimed instanceof ClaimedSpoolFile) {
                 break;
             }
 
+            $size = \strlen($claimed->bytes);
+            if ([] !== $batch && $bytes + $size > $this->maxBatchInputBytes) {
+                $this->source->release($claimed);
+                $hitBudget = true;
+
+                break;
+            }
+
             $batch[] = $claimed;
+            $bytes += $size;
+            if ($bytes >= $this->maxBatchInputBytes) {
+                $hitBudget = true;
+
+                break;
+            }
         }
 
-        return $batch;
+        return [$batch, $hitBudget];
     }
 
     private function forwardFile(SpoolFile $file): Delivery

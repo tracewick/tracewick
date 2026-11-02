@@ -31,20 +31,24 @@ final readonly class CompactStacksCodec
      */
     public function encode(Profile $profile): string
     {
+        /** @var list<string> $strings */
         $strings = [];
-        $indexOf = static function (?string $value) use (&$strings): int {
+        /** @var array<string, int> $index */
+        $index = [];
+        $indexOf = static function (?string $value) use (&$strings, &$index): int {
             if (null === $value) {
                 return CompactStacksCodec::NULL_INDEX;
             }
 
-            $existing = array_search($value, $strings, true);
-            if (false !== $existing) {
-                return $existing;
+            if (isset($index[$value])) {
+                return $index[$value];
             }
 
+            $id = \count($strings);
             $strings[] = $value;
+            $index[$value] = $id;
 
-            return \count($strings) - 1;
+            return $id;
         };
 
         $frameRecords = [];

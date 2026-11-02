@@ -29,7 +29,7 @@ final class DrainCommand
 {
     public const MAX_BACKOFF_SECONDS = 30;
 
-    /** Files claimed per pass so closed aggregation windows can merge. */
+    /** Files claimed per pass (also bounded by {@see SpoolDrainer::DEFAULT_MAX_BATCH_INPUT_BYTES}). */
     public const BATCH_SIZE = 256;
 
     /** Exit code for a failed --once pass. */
@@ -74,11 +74,12 @@ final class DrainCommand
     private readonly \Closure $memoryUsage;
 
     /**
-     * @param resource                                  $output      receives the summary
-     * @param resource                                  $errors      receives usage errors, rejections and failures
-     * @param ?\Closure(int): void                      $sleep       pauses for the given number of milliseconds
-     * @param ?\Closure(): int                          $memoryUsage returns the memory the process uses, in bytes
-     * @param ?\Closure(PyroscopeConfig): SpoolForwarder $forwarder   connects to the backend; a {@see PyroscopeSink} by default
+     * @param resource                                                                   $output        receives the summary
+     * @param resource                                                                   $errors        receives usage errors, rejections and failures
+     * @param ?\Closure(int): void                                                       $sleep         pauses for the given number of milliseconds
+     * @param ?\Closure(): int                                                           $memoryUsage   returns the memory the process uses, in bytes
+     * @param ?\Closure(PyroscopeConfig): SpoolForwarder                                  $forwarder     connects to the backend; a {@see PyroscopeSink} by default
+     * @param ?\Closure(DrainSettings, SpoolForwarder): SpoolDrainer                      $createDrainer builds the drainer; default uses {@see DirectorySpoolSource}
      */
     public function __construct(
         private $output,
@@ -87,6 +88,7 @@ final class DrainCommand
         ?\Closure $sleep = null,
         ?\Closure $memoryUsage = null,
         private readonly ?\Closure $forwarder = null,
+        private readonly ?\Closure $createDrainer = null,
     ) {
         $this->sleep = $sleep ?? $this->pause(...);
         $this->memoryUsage = $memoryUsage ?? static fn(): int => memory_get_usage(true);
@@ -115,11 +117,14 @@ final class DrainCommand
             return self::EXIT_USAGE;
         }
 
-        return $this->loop($settings, new SpoolDrainer(
+        $forwarder = ($this->forwarder ?? static fn(PyroscopeConfig $config): SpoolForwarder => new PyroscopeSink($config))($settings->pyroscope);
+        $drainer = ($this->createDrainer ?? static fn(DrainSettings $settings, SpoolForwarder $forwarder): SpoolDrainer => new SpoolDrainer(
             new DirectorySpoolSource($settings->reader),
-            ($this->forwarder ?? static fn(PyroscopeConfig $config): SpoolForwarder => new PyroscopeSink($config))($settings->pyroscope),
+            $forwarder,
             $settings->aggregationWindow,
-        ));
+        ))($settings, $forwarder);
+
+        return $this->loop($settings, $drainer);
     }
 
     /**
@@ -135,6 +140,7 @@ final class DrainCommand
         $startNs = $this->clock->nowNs();
         $delivered = 0;
         $rejected = 0;
+        $ackFailures = 0;
         $backoff = 0;
         $exitCode = 0;
 
@@ -150,8 +156,12 @@ final class DrainCommand
             $result = $drainer->drain($batchSize, $settings->once);
             $delivered += $result->delivered;
             $rejected += $result->rejected;
+            $ackFailures += $result->ackFailures;
             if (0 < $result->rejected) {
                 fwrite($this->errors, \sprintf("Rejected %s\n", $result->lastRejection));
+            }
+            if (0 < $result->ackFailures) {
+                fwrite($this->errors, \sprintf("Acknowledge failed for %d spool file(s) after delivery.\n", $result->ackFailures));
             }
 
             if ($result->delivered > 0 || $result->rejected > 0) {
@@ -183,7 +193,10 @@ final class DrainCommand
             ($this->sleep)($settings->sleepSeconds * 1_000);
         }
 
-        fwrite($this->output, \sprintf("Delivered %d, rejected %d spool files.\n", $delivered, $rejected));
+        fwrite(
+            $this->output,
+            \sprintf("Delivered %d, rejected %d, ack-failures %d spool files.\n", $delivered, $rejected, $ackFailures),
+        );
 
         return $exitCode;
     }
