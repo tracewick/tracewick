@@ -9,9 +9,12 @@ use Tracewick\Exception\LogicException;
 /**
  * Where a {@see SpoolTransport} writes files and how much it may write.
  *
- * The directory never holds more than `maxFiles × maxFileBytes` bytes of spool files (soft under
- * concurrent writers), and a write never leaves less than {@see $minFreeBytes} free on the file
- * system. Files are stored under two-hex shard directories when an aggregation-key hash is provided.
+ * Admission is **soft**: under concurrent writers the file count MAY briefly overshoot
+ * {@see $maxFiles}. The product of `maxFiles × maxFileBytes` is a planning guide, not a hard
+ * host-wide byte ceiling. Prefer a dedicated local volume or tmpfs with an OS quota; Tracewick
+ * does not maintain a global FileCounter on every FPM write. A write still refuses when free
+ * space would fall below {@see $minFreeBytes}. Files go under two-hex shard directories when an
+ * aggregation-key hash is provided.
  *
  * @see https://github.com/tracewick/tracewick/blob/main/docs/spool-format.md
  */

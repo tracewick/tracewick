@@ -21,7 +21,7 @@ use Tracewick\Sampler\NullSamplerReason;
 use Tracewick\Sampler\Sampler;
 use Tracewick\Sampler\SamplerConfig;
 use Tracewick\Sampler\SamplerFactory;
-use Tracewick\Sink\AggregationCardinalityLimiter;
+use Tracewick\Sink\CardinalityGate;
 use Tracewick\Sink\Sink;
 use Tracewick\Transport\Delivery;
 use Tracewick\Transport\DeliveryStatus;
@@ -90,7 +90,7 @@ final class ContinuousProfiler
         ?Clock $clock = null,
         private readonly ?\Closure $registerShutdownFunction = null,
         private readonly CounterStore $counters = new NullCounterStore(),
-        private readonly AggregationCardinalityLimiter $cardinalityLimiter = new AggregationCardinalityLimiter(),
+        private readonly CardinalityGate $cardinalityGate = new CardinalityGate(),
     ) {
         $this->inactiveSampler = $sampler instanceof NullSampler ? $sampler->reason : null;
         $this->clock = $clock ?? new SystemClock();
@@ -322,7 +322,7 @@ final class ContinuousProfiler
     private function capture(): void
     {
         $batch = $this->sampler->flush();
-        $labels = new Labels($this->cardinalityLimiter->limitLabels(
+        $labels = new Labels($this->cardinalityGate->limitLabels(
             $this->config->applicationName,
             $this->filteredLabels->toArray(),
             $batch->eventType,

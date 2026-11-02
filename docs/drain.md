@@ -15,6 +15,11 @@ window id are merged before upload ([ADR 12](adr/0012-aggregate-before-delivery.
 merge compatibility only: drain does not wait for it to close, and may send more than one POST for
 the same key in the same window. Each pass claims under a file count and a byte budget.
 
+Before each upload, drain applies a **process-scoped** cardinality gate (default 256 unique
+aggregation keys in that drain process). Excess keys keep `service` / `env` when present and set
+`cardinality=other`. This is not host-wide APCu; FPM `SpoolSink` does not enable the gate by
+default. See [ADR 12](adr/0012-aggregate-before-delivery.md).
+
 ## DNS before claim
 
 PHP cannot bound `gethostbynamel()` with the HTTP socket timeout ([ADR 8](adr/0008-own-http-transport.md)).

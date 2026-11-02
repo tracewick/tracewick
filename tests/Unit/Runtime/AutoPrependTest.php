@@ -35,8 +35,8 @@ use Tracewick\Sampler\SampleBatch;
 use Tracewick\Sampler\SamplerConfig;
 use Tracewick\Sampler\SamplerFactory;
 use Tracewick\Sampler\StackAggregator;
-use Tracewick\Sink\AggregationCardinalityLimiter;
 use Tracewick\Sink\ApplicationName;
+use Tracewick\Sink\CardinalityGate;
 use Tracewick\Sink\SpoolAggregationKey;
 use Tracewick\Sink\SpoolSink;
 use Tracewick\Tests\Support\TemporaryDirectory;
@@ -78,7 +78,7 @@ use Tracewick\Transport\SpoolTransport;
 #[UsesClass(LogicException::class)]
 #[UsesClass(AtomicFile::class)]
 #[UsesClass(CompactStacksCodec::class)]
-#[UsesClass(AggregationCardinalityLimiter::class)]
+#[UsesClass(CardinalityGate::class)]
 #[UsesClass(SpoolAggregationKey::class)]
 final class AutoPrependTest extends TestCase
 {

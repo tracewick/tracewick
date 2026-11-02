@@ -31,8 +31,8 @@ use Tracewick\Sampler\Sample;
 use Tracewick\Sampler\SampleBatch;
 use Tracewick\Sampler\SamplerConfig;
 use Tracewick\Sampler\StackAggregator;
-use Tracewick\Sink\AggregationCardinalityLimiter;
 use Tracewick\Sink\ApplicationName;
+use Tracewick\Sink\CardinalityGate;
 use Tracewick\Sink\SpoolAggregationKey;
 use Tracewick\Tests\Support\ManualClock;
 use Tracewick\Tests\Support\RecordingSink;
@@ -69,7 +69,7 @@ use Tracewick\Transport\Delivery;
 #[UsesClass(NullCounterStore::class)]
 #[UsesClass(HostCounterKeys::class)]
 #[UsesClass(LabelPolicy::class)]
-#[UsesClass(AggregationCardinalityLimiter::class)]
+#[UsesClass(CardinalityGate::class)]
 #[RequiresPhpExtension('excimer')]
 final class ContinuousProfilerTest extends TestCase
 {

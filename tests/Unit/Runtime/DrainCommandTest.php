@@ -9,6 +9,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Clock\SystemClock;
+use Tracewick\Diagnostics\ArrayCounterStore;
 use Tracewick\Diagnostics\DiagnosticLogger;
 use Tracewick\Encoder\CompactStacksCodec;
 use Tracewick\Encoder\PprofEncoder;
@@ -27,6 +28,7 @@ use Tracewick\Runtime\SpoolDrainer;
 use Tracewick\Sampler\EventType;
 use Tracewick\Sampler\Frame;
 use Tracewick\Sink\ApplicationName;
+use Tracewick\Sink\CardinalityGate;
 use Tracewick\Sink\PyroscopeConfig;
 use Tracewick\Sink\PyroscopePushRequest;
 use Tracewick\Sink\PyroscopeSink;
@@ -99,6 +101,8 @@ use Tracewick\Transport\SystemDnsResolver;
 #[UsesClass(Frame::class)]
 #[UsesClass(SpoolAggregationKey::class)]
 #[UsesClass(SpoolFileName::class)]
+#[UsesClass(CardinalityGate::class)]
+#[UsesClass(ArrayCounterStore::class)]
 final class DrainCommandTest extends TestCase
 {
     private const FIRST = '01798000000000000001-0000000000000000.spool';

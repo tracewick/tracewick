@@ -8,6 +8,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Clock\SystemClock;
+use Tracewick\Diagnostics\ArrayCounterStore;
 use Tracewick\Encoder\CompactStacksCodec;
 use Tracewick\Encoder\ProfileParts;
 use Tracewick\Profile\BoundedProfileBuilder;
@@ -21,6 +22,7 @@ use Tracewick\Runtime\SpoolAggregationWindow;
 use Tracewick\Runtime\SpoolDrainer;
 use Tracewick\Sampler\EventType;
 use Tracewick\Sampler\Frame;
+use Tracewick\Sink\CardinalityGate;
 use Tracewick\Sink\SpoolAggregationKey;
 use Tracewick\Sink\SpoolFile;
 use Tracewick\Sink\SpoolFileException;
@@ -56,6 +58,8 @@ use Tracewick\Transport\SpoolTransport;
 #[UsesClass(SpoolAggregationKey::class)]
 #[UsesClass(SpoolFileName::class)]
 #[UsesClass(SpoolAggregationWindow::class)]
+#[UsesClass(CardinalityGate::class)]
+#[UsesClass(ArrayCounterStore::class)]
 final class SpoolDrainerTest extends TestCase
 {
     private const FIRST = '01798000000000000001-0000000000000000.spool';
@@ -597,16 +601,38 @@ final class SpoolDrainerTest extends TestCase
         self::assertCount(2, $this->spool->entries());
     }
 
+    public function testCollapsesExcessAggregationKeysBeforeForward(): void
+    {
+        $this->writeCompact(self::FIRST, 1_000_000_000, 1_100_000_000, 1, labels: ['env' => 'prod', 'route' => 'a']);
+        $this->writeCompact(self::SECOND, 1_000_000_000, 1_100_000_000, 1, labels: ['env' => 'prod', 'route' => 'b']);
+        $this->writeCompact(self::THIRD, 1_000_000_000, 1_100_000_000, 1, labels: ['env' => 'prod', 'route' => 'c']);
+        $forwarder = new ScriptedForwarder(Delivery::delivered(), Delivery::delivered(), Delivery::delivered());
+
+        $result = $this->drainer($forwarder, cardinalityGate: new CardinalityGate(new ArrayCounterStore(), 2))->drain();
+
+        self::assertSame(3, $result->delivered);
+        self::assertSame(
+            [
+                ['env' => 'prod', 'route' => 'a'],
+                ['env' => 'prod', 'route' => 'b'],
+                ['env' => 'prod', 'cardinality' => 'other'],
+            ],
+            array_map(static fn(SpoolFile $file): array => $file->labels, $forwarder->forwarded),
+        );
+    }
+
     private function drainer(
         ScriptedForwarder $forwarder,
         SpoolAggregationWindow $window = new SpoolAggregationWindow(10),
         int $maxBatchInputBytes = SpoolDrainer::DEFAULT_MAX_BATCH_INPUT_BYTES,
+        ?CardinalityGate $cardinalityGate = null,
     ): SpoolDrainer {
         return new SpoolDrainer(
             new DirectorySpoolSource(new SpoolReaderConfig($this->spool->path, 'drainer')),
             $forwarder,
             $window,
             $maxBatchInputBytes,
+            cardinalityGate: $cardinalityGate ?? new CardinalityGate(new ArrayCounterStore()),
         );
     }
 

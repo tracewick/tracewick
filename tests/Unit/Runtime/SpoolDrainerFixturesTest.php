@@ -8,6 +8,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Clock\SystemClock;
+use Tracewick\Diagnostics\ArrayCounterStore;
 use Tracewick\Encoder\CompactStacksCodec;
 use Tracewick\Encoder\Pprof\ProtobufWriter;
 use Tracewick\Encoder\Pprof\StringTable;
@@ -24,6 +25,7 @@ use Tracewick\Runtime\SpoolAggregationWindow;
 use Tracewick\Runtime\SpoolDrainer;
 use Tracewick\Sampler\Frame;
 use Tracewick\Sink\ApplicationName;
+use Tracewick\Sink\CardinalityGate;
 use Tracewick\Sink\PyroscopeConfig;
 use Tracewick\Sink\PyroscopePushRequest;
 use Tracewick\Sink\PyroscopeSink;
@@ -79,6 +81,8 @@ use Tracewick\Transport\SystemDnsResolver;
 #[UsesClass(Frame::class)]
 #[UsesClass(SpoolAggregationKey::class)]
 #[UsesClass(SpoolFileName::class)]
+#[UsesClass(CardinalityGate::class)]
+#[UsesClass(ArrayCounterStore::class)]
 #[UsesClass(CachingDnsResolver::class)]
 #[UsesClass(SystemDnsResolver::class)]
 #[UsesClass(Delivery::class)]

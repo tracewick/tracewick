@@ -34,13 +34,14 @@ final readonly class SpoolSink implements Sink
 
     private CompactStacksCodec $codec;
 
-    private AggregationCardinalityLimiter $cardinalityLimiter;
+    private CardinalityGate $cardinalityGate;
 
     /**
-     * @param string                           $applicationName becomes the service name of every profile
-     * @param SpoolConfig                      $config          the spool directory and its limits
-     * @param ?Transport                       $transport       writes the files; a {@see SpoolTransport} by default
-     * @param ?AggregationCardinalityLimiter   $cardinalityLimiter caps unique aggregation keys on the host
+     * @param string              $applicationName  becomes the service name of every profile
+     * @param SpoolConfig         $config           the spool directory and its limits
+     * @param ?Transport          $transport        writes the files; a {@see SpoolTransport} by default
+     * @param ?CardinalityGate    $cardinalityGate  optional writer-side cap; default store never collapses
+     *                                              (alpha cardinality lives in {@see \Tracewick\Runtime\SpoolDrainer})
      *
      * @throws LogicException when the application name is invalid
      */
@@ -48,12 +49,12 @@ final readonly class SpoolSink implements Sink
         private string $applicationName,
         SpoolConfig $config,
         ?Transport $transport = null,
-        ?AggregationCardinalityLimiter $cardinalityLimiter = null,
+        ?CardinalityGate $cardinalityGate = null,
     ) {
         ApplicationName::assertValid($applicationName);
         $this->transport = $transport ?? new SpoolTransport($config);
         $this->codec = new CompactStacksCodec();
-        $this->cardinalityLimiter = $cardinalityLimiter ?? new AggregationCardinalityLimiter();
+        $this->cardinalityGate = $cardinalityGate ?? new CardinalityGate();
     }
 
     public function send(Profile $profile): Delivery
@@ -63,7 +64,7 @@ final readonly class SpoolSink implements Sink
                 return Delivery::empty('The profile has no samples.');
             }
 
-            $labels = $this->cardinalityLimiter->limitLabels(
+            $labels = $this->cardinalityGate->limitLabels(
                 $this->applicationName,
                 $profile->labels->toArray(),
                 $profile->eventType,

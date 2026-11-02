@@ -199,8 +199,8 @@ adapter therefore:
 - lets Excimer's native flush aggregate stacks in the sampler and only marks `hasPendingSegment()`;
 - on `pulse()` / `flush()` from the app loop, captures into an in-process `ProfileAccumulator`
   with the same aggregation key and 10–15 s window as drain
-  ([ADR 12](adr/0012-aggregate-before-delivery.md));
-- sends one merged profile per key per closed window to the sink.
+  ([ADR 12](adr/0012-aggregate-before-delivery.md)), then sends closed buckets to the sink
+  (one merged profile per closed bucket; multi-POST across windows is normal).
 
 ```php
 use Tracewick\Profile\Labels;
@@ -243,8 +243,11 @@ Pass a store into the profiler constructor to mirror drop/skip/empty/delivery co
 Every counter name is product-prefixed (`tracewick:profiles_*`, `tracewick:agg:*`) so a shared APCu
 userland or a shared counters directory does not collide with another library. The APCu iterator only
 returns keys under that prefix; the file store writes `tracewick-counters.json`.
-`SpoolSink` also caps unique aggregation label sets (default 256) and collapses further combinations
-to `cardinality=other`. Label values that look like email, UUID, or long digit runs log a warning
+
+**Cardinality:** alpha default is on **`tracewick-drain`** (`CardinalityGate` + in-process store,
+max 256). `SpoolSink` / `ContinuousProfiler` do **not** collapse label sets unless you inject a
+gate with a real `CounterStore`. On overflow, `service` / `env` are kept and excess keys become
+`cardinality=other`. Label values that look like email, UUID, or long digit runs log a warning
 once per process per key; they are not stripped.
 
 Give a PSR-3 logger to see problems as they happen:
