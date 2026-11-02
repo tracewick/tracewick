@@ -25,7 +25,6 @@ use Tracewick\Sink\SpoolAggregationKey;
 use Tracewick\Sink\SpoolFile;
 use Tracewick\Sink\SpoolFileException;
 use Tracewick\Sink\SpoolFileName;
-use Tracewick\Tests\Support\ManualClock;
 use Tracewick\Tests\Support\ScriptedForwarder;
 use Tracewick\Tests\Support\TemporaryDirectory;
 use Tracewick\Transport\ClaimedSpoolFile;
@@ -57,7 +56,6 @@ use Tracewick\Transport\SpoolTransport;
 #[UsesClass(SpoolAggregationKey::class)]
 #[UsesClass(SpoolFileName::class)]
 #[UsesClass(SpoolAggregationWindow::class)]
-#[UsesClass(ManualClock::class)]
 final class SpoolDrainerTest extends TestCase
 {
     private const FIRST = '01798000000000000001-0000000000000000.spool';
@@ -279,7 +277,6 @@ final class SpoolDrainerTest extends TestCase
             $source,
             new ScriptedForwarder(Delivery::delivered()),
             new SpoolAggregationWindow(10),
-            new ManualClock(20_000_000_000),
         ))->drain();
 
         self::assertSame(DrainOutcome::Empty, $result->outcome);
@@ -304,15 +301,14 @@ final class SpoolDrainerTest extends TestCase
         self::assertSame('Timeout.', $result->failure);
     }
 
-    public function testMergesCompactStacksFilesInAClosedWindow(): void
+    public function testMergesCompactStacksFilesInTheSameWindow(): void
     {
         $hash = SpoolAggregationKey::hash('blog', ['env' => 'prod'], EventType::Wall, 10_000_000);
         $this->writeCompact('01798000000000000001-' . $hash . '-0000000000000001.spool', 1_000_000_000, 1_100_000_000, 2);
         $this->writeCompact('01798000000000000002-' . $hash . '-0000000000000002.spool', 1_200_000_000, 1_300_000_000, 3);
         $forwarder = new ScriptedForwarder(Delivery::delivered());
-        $clock = new ManualClock(20_000_000_000);
 
-        $result = $this->drainer($forwarder, new SpoolAggregationWindow(10), $clock)->drain();
+        $result = $this->drainer($forwarder)->drain();
 
         self::assertSame(DrainOutcome::Empty, $result->outcome);
         self::assertSame(2, $result->delivered);
@@ -326,32 +322,71 @@ final class SpoolDrainerTest extends TestCase
         self::assertSame([], $this->spool->entries());
     }
 
-    public function testLeavesAnOpenAggregationWindowInTheSpool(): void
-    {
-        $hash = SpoolAggregationKey::hash('blog', ['env' => 'prod'], EventType::Wall, 10_000_000);
-        $this->writeCompact('01798000000000000001-' . $hash . '-0000000000000001.spool', 10_000_000_000, 10_100_000_000, 2);
-        $forwarder = new ScriptedForwarder();
-        $clock = new ManualClock(10_500_000_000);
-
-        $result = $this->drainer($forwarder, new SpoolAggregationWindow(10), $clock)->drain();
-
-        self::assertSame(DrainOutcome::Empty, $result->outcome);
-        self::assertSame(0, $result->delivered);
-        self::assertSame([], $forwarder->forwarded);
-        self::assertCount(1, $this->spool->entries());
-    }
-
-    public function testFlushesAnOpenWindowWhenAsked(): void
+    public function testDeliversAnOpenAggregationWindowImmediately(): void
     {
         $hash = SpoolAggregationKey::hash('blog', ['env' => 'prod'], EventType::Wall, 10_000_000);
         $this->writeCompact('01798000000000000001-' . $hash . '-0000000000000001.spool', 10_000_000_000, 10_100_000_000, 2);
         $forwarder = new ScriptedForwarder(Delivery::delivered());
-        $clock = new ManualClock(10_500_000_000);
 
-        $result = $this->drainer($forwarder, new SpoolAggregationWindow(10), $clock)->drain(includeOpenWindows: true);
+        $result = $this->drainer($forwarder)->drain();
 
+        self::assertSame(DrainOutcome::Empty, $result->outcome);
         self::assertSame(1, $result->delivered);
         self::assertCount(1, $forwarder->forwarded);
+        self::assertSame([], $this->spool->entries());
+    }
+
+    public function testDoesNotMergeAcrossWindowBoundaries(): void
+    {
+        $hash = SpoolAggregationKey::hash('blog', ['env' => 'prod'], EventType::Wall, 10_000_000);
+        // Window length 10 s: first file in window 0, second in window 1.
+        $this->writeCompact('01798000000000000001-' . $hash . '-0000000000000001.spool', 1_000_000_000, 1_100_000_000, 2);
+        $this->writeCompact('01798000000000000002-' . $hash . '-0000000000000002.spool', 11_000_000_000, 11_100_000_000, 3);
+        $forwarder = new ScriptedForwarder(Delivery::delivered(), Delivery::delivered());
+
+        $result = $this->drainer($forwarder)->drain();
+
+        self::assertSame(2, $result->delivered);
+        self::assertCount(2, $forwarder->forwarded);
+        $weights = [];
+        foreach ($forwarder->forwarded as $file) {
+            $stacks = (new CompactStacksCodec())->decode($file->payload)->stacks;
+            self::assertCount(1, $stacks);
+            $weights[] = $stacks[0]->count;
+        }
+        sort($weights);
+        self::assertSame([2, 3], $weights);
+    }
+
+    public function testStopsClaimingWhenTheByteBudgetIsReached(): void
+    {
+        $this->write(self::FIRST, 'first');
+        $this->write(self::SECOND, 'second');
+        $this->write(self::THIRD, 'third');
+        $forwarder = new ScriptedForwarder(Delivery::delivered(), Delivery::delivered(), Delivery::delivered());
+        $firstBytes = \strlen((string) file_get_contents($this->spool->path . '/' . self::FIRST));
+
+        $result = $this->drainer($forwarder, new SpoolAggregationWindow(10), $firstBytes)->drain();
+
+        self::assertSame(DrainOutcome::LimitReached, $result->outcome);
+        self::assertSame(1, $result->delivered);
+        self::assertCount(1, $forwarder->forwarded);
+        self::assertSame([self::SECOND, self::THIRD], $this->spool->entries());
+    }
+
+    public function testReleasesAnOversizedNextClaimAgainstTheByteBudget(): void
+    {
+        $this->write(self::FIRST, 'first');
+        $this->write(self::SECOND, 'second');
+        $forwarder = new ScriptedForwarder(Delivery::delivered(), Delivery::delivered());
+        $firstBytes = \strlen((string) file_get_contents($this->spool->path . '/' . self::FIRST));
+        // First file fits; claiming the second would exceed the budget, so it is released.
+        $result = $this->drainer($forwarder, new SpoolAggregationWindow(10), $firstBytes + 1)->drain();
+
+        self::assertSame(DrainOutcome::LimitReached, $result->outcome);
+        self::assertSame(1, $result->delivered);
+        self::assertCount(1, $forwarder->forwarded);
+        self::assertSame([self::SECOND], $this->spool->entries());
     }
 
     public function testRejectsCompactStacksFilesWithAnInvalidPayload(): void
@@ -372,7 +407,7 @@ final class SpoolDrainerTest extends TestCase
         file_put_contents($this->spool->path . '/' . $name, $file->toBytes());
         $forwarder = new ScriptedForwarder();
 
-        $result = $this->drainer($forwarder, new SpoolAggregationWindow(10), new ManualClock(20_000_000_000))->drain();
+        $result = $this->drainer($forwarder)->drain();
 
         self::assertSame(DrainOutcome::Empty, $result->outcome);
         self::assertSame(1, $result->rejected);
@@ -387,7 +422,7 @@ final class SpoolDrainerTest extends TestCase
         $this->writeCompact('01798000000000000002-0000000000000002.spool', 1_200_000_000, 1_300_000_000, 3);
         $forwarder = new ScriptedForwarder(Delivery::delivered());
 
-        $result = $this->drainer($forwarder, new SpoolAggregationWindow(10), new ManualClock(20_000_000_000))->drain();
+        $result = $this->drainer($forwarder)->drain();
 
         self::assertSame(2, $result->delivered);
         self::assertCount(1, $forwarder->forwarded);
@@ -402,7 +437,7 @@ final class SpoolDrainerTest extends TestCase
         $this->writeCompact($second, 1_200_000_000, 1_300_000_000, 3);
         $forwarder = new ScriptedForwarder(Delivery::rejected('Bad request.'));
 
-        $result = $this->drainer($forwarder, new SpoolAggregationWindow(10), new ManualClock(20_000_000_000))->drain();
+        $result = $this->drainer($forwarder)->drain();
 
         self::assertSame(DrainOutcome::Empty, $result->outcome);
         self::assertSame(0, $result->delivered);
@@ -418,7 +453,7 @@ final class SpoolDrainerTest extends TestCase
         $this->writeCompact($name, 1_000_000_000, 1_100_000_000, 2);
         $forwarder = new ScriptedForwarder(Delivery::configuration('HTTP 401'));
 
-        $result = $this->drainer($forwarder, new SpoolAggregationWindow(10), new ManualClock(20_000_000_000))->drain();
+        $result = $this->drainer($forwarder)->drain();
 
         self::assertSame(1, $result->rejected);
         self::assertSame($name . ': HTTP 401', $result->lastRejection);
@@ -434,7 +469,7 @@ final class SpoolDrainerTest extends TestCase
         $this->writeCompact($second, 1_200_000_000, 1_300_000_000, 3);
         $forwarder = new ScriptedForwarder(Delivery::failed('Timeout.'));
 
-        $result = $this->drainer($forwarder, new SpoolAggregationWindow(10), new ManualClock(20_000_000_000))->drain();
+        $result = $this->drainer($forwarder)->drain();
 
         self::assertSame(DrainOutcome::Failed, $result->outcome);
         self::assertSame('Timeout.', $result->failure);
@@ -490,7 +525,6 @@ final class SpoolDrainerTest extends TestCase
             $source,
             new ScriptedForwarder(Delivery::delivered()),
             new SpoolAggregationWindow(10),
-            new ManualClock(20_000_000_000),
         ))->drain();
 
         self::assertSame(1, $result->delivered);
@@ -518,7 +552,7 @@ final class SpoolDrainerTest extends TestCase
         );
         $forwarder = new ScriptedForwarder();
 
-        $result = $this->drainer($forwarder, new SpoolAggregationWindow(10), new ManualClock(20_000_000_000))->drain();
+        $result = $this->drainer($forwarder)->drain();
 
         self::assertSame(DrainOutcome::Failed, $result->outcome);
         self::assertStringContainsString('event type', $result->failure);
@@ -529,13 +563,13 @@ final class SpoolDrainerTest extends TestCase
     private function drainer(
         ScriptedForwarder $forwarder,
         SpoolAggregationWindow $window = new SpoolAggregationWindow(10),
-        ?ManualClock $clock = null,
+        int $maxBatchInputBytes = SpoolDrainer::DEFAULT_MAX_BATCH_INPUT_BYTES,
     ): SpoolDrainer {
         return new SpoolDrainer(
             new DirectorySpoolSource(new SpoolReaderConfig($this->spool->path, 'drainer')),
             $forwarder,
             $window,
-            $clock ?? new ManualClock(20_000_000_000),
+            $maxBatchInputBytes,
         );
     }
 

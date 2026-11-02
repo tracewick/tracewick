@@ -10,14 +10,14 @@ drains, or a drain and an agent, can read the same directory at the same time; e
 exactly one of them ([ADR 9](adr/0009-agent-hand-off.md)).
 
 `PyroscopeSink::forward()` encodes pprof from compact spool payloads
-([ADR 13](adr/0013-spool-v2-compact-payload.md)). Files that share an aggregation key are merged
-over a 10–15 s window (default 15) before upload ([ADR 12](adr/0012-aggregate-before-delivery.md));
-only closed windows are sent in the long-running loop, while `--once` also flushes the open
-window.
+([ADR 13](adr/0013-spool-v2-compact-payload.md)). Files that share an aggregation key and the same
+window id are merged before upload ([ADR 12](adr/0012-aggregate-before-delivery.md)). The window is
+merge compatibility only: drain does not wait for it to close, and may send more than one POST for
+the same key in the same window. Each pass claims under a file count and a byte budget.
 
 ## What it does with each file
 
-The drain takes files oldest first, one at a time:
+The drain claims a batch (oldest first), merges compatible compact-stacks files, then sends:
 
 | Result                                                            | What happens to the file                         |
 |-------------------------------------------------------------------|--------------------------------------------------|
@@ -38,6 +38,10 @@ by hand. Writers stop adding files when the directory is full, so the applicatio
 The drain keeps no state of its own: whatever it has not delivered stays in the spool directory,
 so it can be stopped and restarted at any time. If it dies while sending a file, any reader returns
 that file to the spool after 10 minutes.
+
+If a file was accepted by Pyroscope but could not be deleted from the spool (acknowledge failure),
+the pass still counts it as delivered, reports `ack-failures` on the summary line, and may
+re-deliver that file later.
 
 ## Usage
 
@@ -144,9 +148,9 @@ $drainer = new SpoolDrainer(
     new PyroscopeSink(new PyroscopeConfig('http://pyroscope:4040', 'drain')),
 );
 
-$result = $drainer->drain(); // one pass: until the spool is empty or a delivery fails
+$result = $drainer->drain(); // one pass: until the spool is empty, a budget is hit, or a delivery fails
 ```
 
-`drain()` never throws. Its result tells how many files were delivered and rejected, and whether
-the pass ended because the spool was empty, because of the limit passed to it, or because a
-delivery failed and the caller should wait before the next pass.
+`drain()` never throws. Its result tells how many files were delivered and rejected, acknowledge
+failures after a successful send, and whether the pass ended because the spool was empty, because
+of a claim budget, or because a delivery failed and the caller should wait before the next pass.

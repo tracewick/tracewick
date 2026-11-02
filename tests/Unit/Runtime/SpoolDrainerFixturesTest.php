@@ -31,7 +31,6 @@ use Tracewick\Sink\SpoolAggregationKey;
 use Tracewick\Sink\SpoolFile;
 use Tracewick\Sink\SpoolFileException;
 use Tracewick\Sink\SpoolFileName;
-use Tracewick\Tests\Support\ManualClock;
 use Tracewick\Tests\Support\ProtobufMessage;
 use Tracewick\Tests\Support\ScriptedTransport;
 use Tracewick\Tests\Support\TemporaryDirectory;
@@ -84,7 +83,6 @@ use Tracewick\Transport\SystemDnsResolver;
 #[UsesClass(SystemDnsResolver::class)]
 #[UsesClass(Delivery::class)]
 #[UsesClass(Payload::class)]
-#[UsesClass(ManualClock::class)]
 final class SpoolDrainerFixturesTest extends TestCase
 {
     private const FIXTURES = __DIR__ . '/../../Fixtures/spool/v2';
@@ -111,10 +109,8 @@ final class SpoolDrainerFixturesTest extends TestCase
         $transport = new ScriptedTransport(Delivery::delivered(), Delivery::delivered());
         $sink = new PyroscopeSink(new PyroscopeConfig('http://pyroscope:4040', 'drain'), $transport);
         $source = new DirectorySpoolSource(new SpoolReaderConfig($this->spool->path, 'drainer'));
-        // Past the fixture profile windows so aggregation buckets are closed.
-        $clock = new ManualClock(1_798_000_000_000_000_000 + 60_000_000_000);
 
-        $result = (new SpoolDrainer($source, $sink, new SpoolAggregationWindow(10), $clock))->drain();
+        $result = (new SpoolDrainer($source, $sink, new SpoolAggregationWindow(10)))->drain();
 
         self::assertSame(DrainOutcome::Empty, $result->outcome);
         // web-request + unknown-header-key share an aggregation key and merge; edge-cases is alone.
