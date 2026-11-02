@@ -8,8 +8,12 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
 use Tracewick\Clock\Clock;
 use Tracewick\Clock\SystemClock;
+use Tracewick\Diagnostics\CounterStore;
 use Tracewick\Diagnostics\DiagnosticLogger;
+use Tracewick\Diagnostics\HostCounterKeys;
+use Tracewick\Diagnostics\NullCounterStore;
 use Tracewick\Exception\LogicException;
+use Tracewick\Profile\LabelPiiHeuristics;
 use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
 use Tracewick\Sampler\ExcimerSampler;
@@ -66,7 +70,12 @@ final class UnitOfWorkProfiler
 
     private int $skippedProfiles = 0;
 
+    private int $emptyProfiles = 0;
+
     private int $swallowedErrors = 0;
+
+    /** @var array<string, true> */
+    private static array $piiWarnedKeys = [];
 
     private ?\Throwable $lastFailure = null;
 
@@ -103,11 +112,13 @@ final class UnitOfWorkProfiler
         ?\Closure $random = null,
         private readonly DiagnosticLogger $logger = new DiagnosticLogger(),
         ?Clock $clock = null,
+        private readonly CounterStore $counters = new NullCounterStore(),
     ) {
         $this->labels = $config->labels;
         $this->inactiveSampler = $sampler instanceof NullSampler ? $sampler->reason : null;
         $this->clock = $clock ?? new SystemClock();
         $this->maxProfileDurationNs = $config->maxProfileDurationSeconds * 1_000_000_000;
+        $this->warnAboutPii($config->labels);
         $this->finishRequest = $finishRequest ?? static function (): void {
             if (\function_exists('fastcgi_finish_request')) {
                 fastcgi_finish_request();
@@ -204,6 +215,7 @@ final class UnitOfWorkProfiler
         try {
             if ($this->started) {
                 $this->labels = $this->labels->with($key, $value);
+                $this->warnAboutPii(new Labels([$key => $value]));
             }
         } catch (\Throwable $e) {
             $this->swallow($e);
@@ -226,14 +238,19 @@ final class UnitOfWorkProfiler
             $this->sampler->stop();
             $profile = Profile::fromBatch($this->sampler->flush(), $this->labels);
             if ($profile->isEmpty()) {
+                ++$this->emptyProfiles;
+                $this->bump(HostCounterKeys::PROFILES_EMPTY);
+
                 return;
             }
 
             ++$this->collectedProfiles;
+            $this->bump(HostCounterKeys::PROFILES_COLLECTED);
             if (\count($this->buffer) < $this->config->maxBufferedProfiles) {
                 $this->buffer[] = $profile;
             } else {
                 ++$this->droppedProfiles;
+                $this->bump(HostCounterKeys::PROFILES_DROPPED);
                 $this->logger->log(LogLevel::NOTICE, 'Tracewick dropped a profile because {count} profiles already wait for the flush.', ['count' => \count($this->buffer)]);
             }
         } catch (\Throwable $e) {
@@ -320,6 +337,7 @@ final class UnitOfWorkProfiler
             $this->rejectedProfiles,
             $this->failedProfiles,
             $this->skippedProfiles,
+            $this->emptyProfiles,
             $this->swallowedErrors,
             $this->inactiveSampler,
             $this->sampler->failureCount(),
@@ -342,6 +360,7 @@ final class UnitOfWorkProfiler
     public static function resetInactiveSamplerWarning(): void
     {
         self::$inactiveSamplerWarned = false;
+        self::$piiWarnedKeys = [];
     }
 
     private function beginProfile(Labels $labels): void
@@ -378,6 +397,7 @@ final class UnitOfWorkProfiler
 
             try {
                 $prepared = $prepared->with($key, $value);
+                $this->warnAboutPii(new Labels([$key => $value]));
             } catch (\Throwable $e) {
                 $this->swallow($e);
             }
@@ -403,17 +423,20 @@ final class UnitOfWorkProfiler
         switch ($delivery->status) {
             case DeliveryStatus::Delivered:
                 ++$this->deliveredProfiles;
+                $this->bump(HostCounterKeys::PROFILES_DELIVERED);
 
                 break;
 
             case DeliveryStatus::Rejected:
                 ++$this->rejectedProfiles;
+                $this->bump(HostCounterKeys::PROFILES_REJECTED);
                 $this->logger->log(LogLevel::WARNING, 'The profile backend rejected a profile: {reason}', $context);
 
                 break;
 
             case DeliveryStatus::Configuration:
                 ++$this->rejectedProfiles;
+                $this->bump(HostCounterKeys::PROFILES_REJECTED);
                 $this->logger->log(
                     LogLevel::WARNING,
                     'Tracewick could not deliver a profile because of a configuration error: {reason}',
@@ -424,21 +447,51 @@ final class UnitOfWorkProfiler
 
             case DeliveryStatus::Failed:
                 ++$this->failedProfiles;
+                $this->bump(HostCounterKeys::PROFILES_FAILED);
                 $this->logger->log(LogLevel::WARNING, 'Tracewick could not deliver a profile: {reason}', $context);
 
                 break;
 
             case DeliveryStatus::Skipped:
                 ++$this->skippedProfiles;
+                $this->bump(HostCounterKeys::PROFILES_SKIPPED);
                 $this->logger->log(LogLevel::NOTICE, 'Tracewick skipped a profile: {reason}', $context);
 
                 break;
+
+            case DeliveryStatus::Empty:
+                ++$this->emptyProfiles;
+                $this->bump(HostCounterKeys::PROFILES_EMPTY);
+
+                break;
+        }
+    }
+
+    private function bump(string $key): void
+    {
+        $this->counters->increment($key);
+    }
+
+    private function warnAboutPii(Labels $labels): void
+    {
+        foreach (LabelPiiHeuristics::suspiciousKeys($labels) as $key) {
+            if (isset(self::$piiWarnedKeys[$key])) {
+                continue;
+            }
+
+            self::$piiWarnedKeys[$key] = true;
+            $this->logger->log(
+                LogLevel::WARNING,
+                'Tracewick label "{key}" looks like personal data; prefer coarse labels (route, tenant class).',
+                ['key' => $key],
+            );
         }
     }
 
     private function swallow(\Throwable $error): void
     {
         ++$this->swallowedErrors;
+        $this->bump(HostCounterKeys::PROFILES_SWALLOWED);
         $this->lastFailure = $error;
         $this->logger->log(LogLevel::WARNING, 'Tracewick ignored an error: {error}', ['error' => $error->getMessage(), 'exception' => $error]);
     }

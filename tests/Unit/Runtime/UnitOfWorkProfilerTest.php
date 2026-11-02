@@ -10,7 +10,10 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Clock\SystemClock;
 use Tracewick\Diagnostics\DiagnosticLogger;
+use Tracewick\Diagnostics\HostCounterKeys;
+use Tracewick\Diagnostics\NullCounterStore;
 use Tracewick\Exception\LogicException;
+use Tracewick\Profile\LabelPiiHeuristics;
 use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
 use Tracewick\Profile\Stack;
@@ -55,6 +58,9 @@ use Tracewick\Transport\Delivery;
 #[UsesClass(Diagnostics::class)]
 #[UsesClass(DiagnosticLogger::class)]
 #[UsesClass(AtomicFile::class)]
+#[UsesClass(NullCounterStore::class)]
+#[UsesClass(HostCounterKeys::class)]
+#[UsesClass(LabelPiiHeuristics::class)]
 final class UnitOfWorkProfilerTest extends TestCase
 {
     private ScriptedSampler $sampler;
@@ -224,7 +230,23 @@ final class UnitOfWorkProfilerTest extends TestCase
         $profiler->stop();
 
         self::assertSame(0, $profiler->bufferedProfiles());
-        self::assertEquals(new Diagnostics(), $profiler->diagnostics());
+        self::assertEquals(new Diagnostics(emptyProfiles: 1), $profiler->diagnostics());
+    }
+
+    public function testWarnsOnceAboutLabelValuesThatLookLikePii(): void
+    {
+        $profiler = $this->profiler();
+        $this->sampler->willSample('x');
+
+        $profiler->start(['email' => 'user@example.com']);
+        $profiler->label('email', 'other@example.com');
+        $profiler->stop();
+
+        self::assertSame(1, $profiler->bufferedProfiles());
+        self::assertCount(1, array_filter(
+            $this->logger->records,
+            static fn(array $r): bool => str_contains($r['message'], 'looks like personal data'),
+        ));
     }
 
     public function testDropsProfilesThatDoNotFitIntoTheBuffer(): void
@@ -247,26 +269,27 @@ final class UnitOfWorkProfilerTest extends TestCase
 
     public function testCountsAndReportsWhatHappensToEachProfile(): void
     {
-        $profiler = $this->profiler(new ProfilerConfig(maxBufferedProfiles: 5));
+        $profiler = $this->profiler(new ProfilerConfig(maxBufferedProfiles: 6));
         $this->sink->deliveries = [
             Delivery::delivered(),
             Delivery::rejected('Bad request.'),
             Delivery::configuration('HTTP 401'),
             Delivery::failed('Timeout.'),
             Delivery::skipped('Circuit breaker is open.'),
+            Delivery::empty('No samples.'),
         ];
-        for ($i = 0; $i < 7; ++$i) {
+        for ($i = 0; $i < 8; ++$i) {
             $this->sampler->willSample('handle');
         }
 
-        for ($i = 0; $i < 7; ++$i) {
+        for ($i = 0; $i < 8; ++$i) {
             $profiler->start();
             $profiler->stop();
         }
 
         $profiler->flush();
 
-        self::assertEquals(new Diagnostics(collectedProfiles: 7, droppedProfiles: 2, deliveredProfiles: 1, rejectedProfiles: 2, failedProfiles: 1, skippedProfiles: 1), $profiler->diagnostics());
+        self::assertEquals(new Diagnostics(collectedProfiles: 8, droppedProfiles: 2, deliveredProfiles: 1, rejectedProfiles: 2, failedProfiles: 1, skippedProfiles: 1, emptyProfiles: 1), $profiler->diagnostics());
         self::assertSame(
             [
                 'notice: Tracewick dropped a profile because {count} profiles already wait for the flush.',
@@ -279,7 +302,7 @@ final class UnitOfWorkProfilerTest extends TestCase
         );
         self::assertSame(
             [
-                ['count' => 5],
+                ['count' => 6],
                 ['reason' => 'Bad request.'],
                 ['reason' => 'HTTP 401'],
                 ['reason' => 'Timeout.'],

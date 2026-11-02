@@ -39,6 +39,11 @@ final readonly class Delivery
         return new self(DeliveryStatus::Skipped, $reason);
     }
 
+    public static function empty(string $reason): self
+    {
+        return new self(DeliveryStatus::Empty, $reason);
+    }
+
     public function isDelivered(): bool
     {
         return DeliveryStatus::Delivered === $this->status;

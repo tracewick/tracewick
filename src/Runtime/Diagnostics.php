@@ -22,6 +22,7 @@ final readonly class Diagnostics
      * @param int                     $failedProfiles    profiles that could not be delivered
      * @param int                     $skippedProfiles   profiles the sink did not try to deliver, such as while its
      *                                                   circuit breaker is open or its spool is full
+     * @param int                     $emptyProfiles     profiles with no samples (not counted as skipped)
      * @param int                     $swallowedErrors   exceptions the profiler caught to keep the application running
      * @param ?NullSamplerReason      $inactiveSampler   why a no-op sampler is in use, or null when sampling is active
      * @param int                     $samplerFailures   failures swallowed by the sampler since it was created
@@ -33,6 +34,7 @@ final readonly class Diagnostics
         public int $rejectedProfiles = 0,
         public int $failedProfiles = 0,
         public int $skippedProfiles = 0,
+        public int $emptyProfiles = 0,
         public int $swallowedErrors = 0,
         public ?NullSamplerReason $inactiveSampler = null,
         public int $samplerFailures = 0,

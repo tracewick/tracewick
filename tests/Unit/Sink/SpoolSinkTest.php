@@ -9,6 +9,8 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Clock\SystemClock;
+use Tracewick\Diagnostics\ArrayCounterStore;
+use Tracewick\Diagnostics\NullCounterStore;
 use Tracewick\Encoder\CompactStacksCodec;
 use Tracewick\Encoder\ProfileParts;
 use Tracewick\Exception\LogicException;
@@ -19,6 +21,7 @@ use Tracewick\Sampler\EventType;
 use Tracewick\Sampler\Frame;
 use Tracewick\Sampler\Sample;
 use Tracewick\Sampler\SampleBatch;
+use Tracewick\Sink\AggregationCardinalityLimiter;
 use Tracewick\Sink\ApplicationName;
 use Tracewick\Sink\SpoolAggregationKey;
 use Tracewick\Sink\SpoolFile;
@@ -46,6 +49,9 @@ use Tracewick\Transport\SpoolTransport;
 #[UsesClass(CompactStacksCodec::class)]
 #[UsesClass(ProfileParts::class)]
 #[UsesClass(SpoolAggregationKey::class)]
+#[UsesClass(AggregationCardinalityLimiter::class)]
+#[UsesClass(NullCounterStore::class)]
+#[UsesClass(ArrayCounterStore::class)]
 #[UsesClass(Profile::class)]
 #[UsesClass(Stack::class)]
 #[UsesClass(Labels::class)]
@@ -88,7 +94,7 @@ final class SpoolSinkTest extends TestCase
 
         $delivery = $sink->send(new Profile(EventType::Wall, 10_000_000, self::START_NS, self::START_NS + 1_000));
 
-        self::assertSame(DeliveryStatus::Skipped, $delivery->status);
+        self::assertSame(DeliveryStatus::Empty, $delivery->status);
         self::assertSame('The profile has no samples.', $delivery->reason);
         self::assertSame([], $transport->sent);
     }
@@ -120,6 +126,21 @@ final class SpoolSinkTest extends TestCase
         $this->expectException(LogicException::class);
 
         new SpoolSink('my app', new SpoolConfig('/unused'));
+    }
+
+    public function testCollapsesLabelsWhenCardinalityLimitIsExceeded(): void
+    {
+        $transport = new ScriptedTransport(Delivery::delivered(), Delivery::delivered());
+        $limiter = new AggregationCardinalityLimiter(new ArrayCounterStore(), 1);
+        $sink = new SpoolSink('blog', new SpoolConfig('/unused'), $transport, $limiter);
+        $profile = ProfileFixtures::webRequest()->withLabels(new Labels(['route' => 'first']));
+
+        self::assertTrue($sink->send($profile)->isDelivered());
+        self::assertTrue($sink->send($profile->withLabels(new Labels(['route' => 'second'])))->isDelivered());
+
+        self::assertCount(2, $transport->sent);
+        $second = SpoolFile::fromBytes($transport->sent[1]->body);
+        self::assertSame(['cardinality' => 'other'], $second->labels);
     }
 
     /**

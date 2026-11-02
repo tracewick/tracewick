@@ -6,6 +6,7 @@ namespace Tracewick\Sink;
 
 use Tracewick\Encoder\CompactStacksCodec;
 use Tracewick\Exception\LogicException;
+use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
 use Tracewick\Transport\Delivery;
 use Tracewick\Transport\Payload;
@@ -33,10 +34,13 @@ final readonly class SpoolSink implements Sink
 
     private CompactStacksCodec $codec;
 
+    private AggregationCardinalityLimiter $cardinalityLimiter;
+
     /**
-     * @param string      $applicationName becomes the service name of every profile
-     * @param SpoolConfig $config          the spool directory and its limits
-     * @param ?Transport  $transport       writes the files; a {@see SpoolTransport} by default
+     * @param string                           $applicationName becomes the service name of every profile
+     * @param SpoolConfig                      $config          the spool directory and its limits
+     * @param ?Transport                       $transport       writes the files; a {@see SpoolTransport} by default
+     * @param ?AggregationCardinalityLimiter   $cardinalityLimiter caps unique aggregation keys on the host
      *
      * @throws LogicException when the application name is invalid
      */
@@ -44,29 +48,39 @@ final readonly class SpoolSink implements Sink
         private string $applicationName,
         SpoolConfig $config,
         ?Transport $transport = null,
+        ?AggregationCardinalityLimiter $cardinalityLimiter = null,
     ) {
         ApplicationName::assertValid($applicationName);
         $this->transport = $transport ?? new SpoolTransport($config);
         $this->codec = new CompactStacksCodec();
+        $this->cardinalityLimiter = $cardinalityLimiter ?? new AggregationCardinalityLimiter();
     }
 
     public function send(Profile $profile): Delivery
     {
         try {
             if ($profile->isEmpty()) {
-                return Delivery::skipped('The profile has no samples.');
+                return Delivery::empty('The profile has no samples.');
             }
 
-            $labels = $profile->labels->toArray();
-            $file = new SpoolFile(
+            $labels = $this->cardinalityLimiter->limitLabels(
                 $this->applicationName,
+                $profile->labels->toArray(),
                 $profile->eventType,
                 $profile->periodNs,
-                $profile->startNs,
-                $profile->endNs,
+            );
+            $profileForDisk = $labels === $profile->labels->toArray()
+                ? $profile
+                : $profile->withLabels(new Labels($labels));
+            $file = new SpoolFile(
+                $this->applicationName,
+                $profileForDisk->eventType,
+                $profileForDisk->periodNs,
+                $profileForDisk->startNs,
+                $profileForDisk->endNs,
                 $labels,
                 SpoolFile::FORMAT_COMPACT_STACKS,
-                $this->codec->encode($profile),
+                $this->codec->encode($profileForDisk),
                 SpoolFile::VERSION_2,
             );
 
@@ -74,8 +88,8 @@ final readonly class SpoolSink implements Sink
                 SpoolTransport::PARAM_AGGREGATION_KEY_HASH => SpoolAggregationKey::hash(
                     $this->applicationName,
                     $labels,
-                    $profile->eventType,
-                    $profile->periodNs,
+                    $profileForDisk->eventType,
+                    $profileForDisk->periodNs,
                 ),
             ]));
         } catch (\Throwable $e) {
