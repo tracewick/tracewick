@@ -99,9 +99,13 @@ app-smoke: ## Check that the reference app answers on PHP-FPM and RoadRunner
 app-profiles: ## Check profiles in Pyroscope: stacks, wall/ns units, routes, no raw URLs
 	docker/reference-app/check-profiles.sh
 
-alpine-php-build: ## Proof-build PHP+excimer on Alpine (not the default stand image)
+# Packagist constraint for the Alpine PIE proof image (not the Bookworm PECL EXCIMER_VERSION).
+EXCIMER_PIE_CONSTRAINT ?= 1.2.7
+
+alpine-php-build: ## Proof-build PHP+excimer on Alpine via PIE (not the default stand image)
 	docker build -f docker/php/Dockerfile.alpine \
 		--build-arg PHP_VERSION=$(PHP_VERSION) \
+		--build-arg EXCIMER_PIE_CONSTRAINT=$(EXCIMER_PIE_CONSTRAINT) \
 		-t tracewick-php-alpine:local \
 		docker/php
 	docker run --rm tracewick-php-alpine:local php -r 'exit(extension_loaded("excimer") ? 0 : 1);'

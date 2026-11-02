@@ -1,9 +1,14 @@
 # syntax=docker/dockerfile:1
 
-# Proof recipe: PHP CLI on Alpine with ext-excimer from PECL.
-# Not a published Tracewick runtime image — copy the RUN block into your own Dockerfile
-# or follow docs/install-excimer.md. The Bookworm stand (`Dockerfile`) remains the default
-# development image.
+# Proof recipe: PHP CLI on Alpine with ext-excimer via PIE (recommended).
+# Not a published Tracewick runtime image — copy into your own Dockerfile or follow
+# docs/install-excimer.md. The Bookworm stand (`Dockerfile`) still uses PECL on purpose.
+#
+# PECL fallback (deprecated), if you cannot use PIE yet:
+#   RUN apk add --no-cache --virtual .build-deps $PHPIZE_DEPS \
+#       && pecl install "excimer-${EXCIMER_VERSION}" \
+#       && docker-php-ext-enable excimer \
+#       && apk del .build-deps
 #
 # Build:
 #   docker build -f docker/php/Dockerfile.alpine --build-arg PHP_VERSION=8.4 -t tracewick-php-alpine:local docker/php
@@ -14,17 +19,19 @@ FROM composer:2 AS composer
 
 FROM php:${PHP_VERSION}-cli-alpine
 
-ARG EXCIMER_VERSION=1.2.6
+# Packagist constraint for wikimedia/excimer (PIE). Not the same as EXCIMER_VERSION (PECL) on Bookworm.
+ARG EXCIMER_PIE_CONSTRAINT=1.2.7
+
+COPY --from=ghcr.io/php/pie:bin /pie /usr/local/bin/pie
 
 RUN apk add --no-cache --virtual .build-deps $PHPIZE_DEPS \
-    && pecl install "excimer-${EXCIMER_VERSION}" \
-    && docker-php-ext-enable excimer \
+    && apk add --no-cache git unzip \
+    && pie install "wikimedia/excimer:${EXCIMER_PIE_CONSTRAINT}" \
     && apk del .build-deps \
-    && rm -rf /tmp/pear \
     && php -r 'exit(extension_loaded("excimer") ? 0 : 1);'
 
 # Optional tooling for local experiments (not required for the extension itself).
-RUN apk add --no-cache git make unzip
+RUN apk add --no-cache make
 
 COPY --from=composer /usr/bin/composer /usr/local/bin/composer
 COPY conf.d/ /usr/local/etc/php/conf.d/

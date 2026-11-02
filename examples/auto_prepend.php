@@ -30,8 +30,8 @@ declare(strict_types=1);
  * - TRACEWICK_AUTOLOAD      — absolute path to Composer `autoload.php` when the default
  *                             vendor layout does not apply
  *
- * Install ext-excimer separately (PECL is deprecated; PIE is recommended — see docs/install-excimer.md
- * and wave 6g). Runtime details: docs/runtime.md
+ * Install ext-excimer separately (PIE recommended: pie install wikimedia/excimer — see
+ * docs/install-excimer.md). Runtime details: docs/runtime.md
  */
 
 $autoload = getenv('TRACEWICK_AUTOLOAD');

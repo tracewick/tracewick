@@ -2,6 +2,10 @@
 
 # PHP image for the development stand: the PHP CLI with ext-excimer and Composer.
 # Build arguments pin every version so that a rebuild is reproducible.
+#
+# ext-excimer is still installed with PECL here (`EXCIMER_VERSION`) for a stable stand pin.
+# Hosts and new Dockerfiles should prefer PIE (`pie install wikimedia/excimer`) — see
+# docs/install-excimer.md. The Alpine proof image (`Dockerfile.alpine`) uses PIE.
 
 ARG PHP_VERSION=8.4
 
