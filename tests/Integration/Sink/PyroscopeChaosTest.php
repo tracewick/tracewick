@@ -164,7 +164,9 @@ final class PyroscopeChaosTest extends TestCase
         self::assertSame(DeliveryStatus::Failed, $second->status);
         [$skipped, $elapsedMs] = $this->timed(static fn(): Delivery => $sink->send($profile));
         self::assertSame(DeliveryStatus::Skipped, $skipped->status);
-        self::assertLessThan(5, $elapsedMs);
+        // Open-circuit skip still takes a file lock and may rewrite state (AtomicFile). A sub-5 ms
+        // wall flakes on Stand PHP 8.5 (~10 ms observed); keep well under the HTTP timeout.
+        self::assertLessThan(100, $elapsedMs);
 
         $this->toxiproxy->setEnabled(self::PROXY, true);
         usleep(350_000);
