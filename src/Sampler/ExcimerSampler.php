@@ -58,7 +58,10 @@ final class ExcimerSampler implements Sampler
     }
 
     /**
-     * Invoked after each native Excimer flush has been ingested, for timed profile rotation.
+     * Invoked after each native Excimer flush has been ingested into the stack aggregator.
+     *
+     * The listener must stay light (for example set a flag). It must not call {@see flush()},
+     * write the spool, or send HTTP — those belong in the application loop (see ContinuousProfiler).
      *
      * @param ?\Closure(): void $listener
      */

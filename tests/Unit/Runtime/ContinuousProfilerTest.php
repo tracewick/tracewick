@@ -194,7 +194,7 @@ final class ContinuousProfilerTest extends TestCase
             self::markTestSkipped('ext-excimer is not loaded.');
         }
 
-        $sampler = new ExcimerSampler(new SamplerConfig());
+        $sampler = new ExcimerSampler(new SamplerConfig(periodNs: 100_000, maxSamples: 1));
         $profiler = new ContinuousProfiler(
             $sampler,
             $this->sink,
@@ -203,10 +203,32 @@ final class ContinuousProfilerTest extends TestCase
         );
 
         $profiler->start();
-        $profiler->pulse();
-        $profiler->stop();
+        $this->busyWorkUntil(static fn(): bool => $profiler->hasPendingSegment());
 
+        self::assertTrue($profiler->hasPendingSegment());
+        self::assertSame([], $this->sink->sent);
+
+        $profiler->pulse();
+        self::assertFalse($profiler->hasPendingSegment());
+
+        $profiler->stop();
         self::assertFalse($profiler->isRunning());
+    }
+
+    public function testSegmentListenerOnlyMarksPendingWithoutDelivering(): void
+    {
+        $profiler = $this->profiler();
+        $profiler->start();
+
+        $onSegment = new \ReflectionMethod(ContinuousProfiler::class, 'onSegment');
+        $onSegment->invoke($profiler);
+
+        self::assertTrue($profiler->hasPendingSegment());
+        self::assertSame([], $this->sink->sent);
+        self::assertSame(0, $profiler->diagnostics()->deliveredProfiles);
+
+        $profiler->flush();
+        self::assertFalse($profiler->hasPendingSegment());
     }
 
     public function testRegisterShutdownStopsOnce(): void
@@ -502,5 +524,20 @@ final class ContinuousProfilerTest extends TestCase
             $endNs,
             [new Sample([new Frame($function)], $count, $startNs)],
         );
+    }
+
+    /**
+     * @param callable(): bool $predicate
+     */
+    private function busyWorkUntil(callable $predicate, int $timeoutNs = 200_000_000): void
+    {
+        $deadline = hrtime(true) + $timeoutNs;
+        while (hrtime(true) < $deadline) {
+            if ($predicate()) {
+                return;
+            }
+        }
+
+        self::fail('Timed out waiting for Excimer segment callback.');
     }
 }
