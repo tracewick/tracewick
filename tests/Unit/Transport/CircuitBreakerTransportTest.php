@@ -39,6 +39,7 @@ final class CircuitBreakerTransportTest extends TestCase
 
     protected function setUp(): void
     {
+        DiagnosticLogger::resetRateLimits();
         $this->clock = new ManualClock();
     }
 

@@ -7,12 +7,21 @@ namespace Tracewick\Diagnostics;
 use Tracewick\Transport\AtomicFile;
 
 /**
- * Counter store persisted as one JSON object under an exclusive lock.
+ * Counter store persisted as one JSON object under a non-blocking exclusive lock.
  *
- * @internal prefer {@see CounterStoreFactory}
+ * When the lock cannot be opened or taken within a short budget, the increment is skipped (no
+ * unlocked read-modify-write). Prefer {@see CounterStoreFactory}.
+ *
+ * @internal
  */
 final readonly class FileCounterStore implements CounterStore
 {
+    /** Microseconds to keep trying {@see \LOCK_NB} before degrading. */
+    private const LOCK_WAIT_BUDGET_US = 50_000;
+
+    /** Pause between non-blocking lock attempts. */
+    private const LOCK_RETRY_SLEEP_US = 1_000;
+
     /** @var \Closure(string): (resource|false) */
     private \Closure $openLock;
 
@@ -38,7 +47,7 @@ final readonly class FileCounterStore implements CounterStore
         $this->openLock = $openLock ?? static fn(string $lockPath) => @fopen($lockPath, 'c+');
         $this->acquireExclusiveLock = $acquireExclusiveLock ?? static function ($handle): bool {
             /** @var resource $handle */
-            return @flock($handle, \LOCK_EX);
+            return @flock($handle, \LOCK_EX | \LOCK_NB);
         };
         $this->releaseLock = $releaseLock ?? static function ($handle): void {
             /** @var resource $handle */
@@ -88,15 +97,11 @@ final readonly class FileCounterStore implements CounterStore
         $lockPath = $this->path . '.lock';
         $lock = ($this->openLock)($lockPath);
         if (false === $lock) {
-            $this->save($updater($this->load()));
-
             return;
         }
 
         try {
-            if (!($this->acquireExclusiveLock)($lock)) {
-                $this->save($updater($this->load()));
-
+            if (!$this->waitForExclusiveLock($lock)) {
                 return;
             }
 
@@ -105,6 +110,23 @@ final readonly class FileCounterStore implements CounterStore
             ($this->releaseLock)($lock);
             fclose($lock);
         }
+    }
+
+    /**
+     * @param resource $lock
+     */
+    private function waitForExclusiveLock($lock): bool
+    {
+        $deadline = hrtime(true) + self::LOCK_WAIT_BUDGET_US * 1_000;
+        while (!($this->acquireExclusiveLock)($lock)) {
+            if (hrtime(true) >= $deadline) {
+                return false;
+            }
+
+            usleep(self::LOCK_RETRY_SLEEP_US);
+        }
+
+        return true;
     }
 
     /**

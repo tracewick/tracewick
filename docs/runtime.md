@@ -260,7 +260,7 @@ $profiler = UnitOfWorkProfiler::create($sink, $config, logger: $logger);
 Tracewick never logs above warning: a profiler that cannot deliver is not an error of the
 application. Filter by level or by channel in the logger.
 
-Each message is written at most once a minute per host, and the next copy carries the number of
-copies suppressed in between as `suppressed`. The minute is kept in a small file per message in
-the system temporary directory, because PHP-FPM requests share no memory; the file is only touched
-when there is something to log.
+Each message is written at most once a minute per process, and the next copy carries the number of
+copies suppressed in between as `suppressed`. The interval lives in process memory, so suppress
+does not touch the disk. Separate PHP-FPM workers each keep their own limits (an approximate
+host-wide rate).

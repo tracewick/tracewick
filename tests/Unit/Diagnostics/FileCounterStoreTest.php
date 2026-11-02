@@ -81,7 +81,7 @@ final class FileCounterStoreTest extends TestCase
         self::assertSame([], $store->all());
     }
 
-    public function testIncrementsWhenLockCannotBeOpened(): void
+    public function testSkipsIncrementWhenLockCannotBeOpened(): void
     {
         @mkdir($this->directory, 0o700, true);
         $store = new FileCounterStore(
@@ -90,10 +90,10 @@ final class FileCounterStoreTest extends TestCase
         );
         $store->increment('a', 2);
 
-        self::assertSame(2, $store->get('a'));
+        self::assertSame(0, $store->get('a'));
     }
 
-    public function testIncrementsWhenExclusiveLockFails(): void
+    public function testSkipsIncrementWhenExclusiveLockFails(): void
     {
         @mkdir($this->directory, 0o700, true);
         $store = new FileCounterStore(
@@ -103,7 +103,7 @@ final class FileCounterStoreTest extends TestCase
         );
         $store->increment('a', 3);
 
-        self::assertSame(3, $store->get('a'));
+        self::assertSame(0, $store->get('a'));
     }
 
     public function testIgnoresKeysThatCannotBeEncoded(): void

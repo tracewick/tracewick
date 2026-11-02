@@ -60,14 +60,15 @@ final class FallbackCircuitBreakerStore implements CircuitBreakerStore
             return $this->active->update($updater);
         }
 
-        $state = $this->file->update($updater);
-        if ($this->file->persisted($state)) {
-            return $state;
+        $desired = $updater($this->file->load());
+        $this->file->update(static fn(CircuitBreakerState $_): CircuitBreakerState => $desired);
+        if ($this->file->persisted($desired)) {
+            return $desired;
         }
 
-        $this->fallBack($state);
+        $this->fallBack($desired);
 
-        return $state;
+        return $desired;
     }
 
     private function fallBack(CircuitBreakerState $state): void

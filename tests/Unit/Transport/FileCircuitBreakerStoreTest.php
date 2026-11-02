@@ -127,7 +127,7 @@ final class FileCircuitBreakerStoreTest extends TestCase
         self::assertFileExists($this->directory->path . '/state.lock');
     }
 
-    public function testUpdateStillWorksWhenTheLockFileCannotBeOpened(): void
+    public function testUpdateLeavesStateUnchangedWhenTheLockFileCannotBeOpened(): void
     {
         $path = $this->directory->path . '/state';
         $store = new FileCircuitBreakerStore($path);
@@ -136,8 +136,29 @@ final class FileCircuitBreakerStoreTest extends TestCase
 
         $state = $store->update(static fn(CircuitBreakerState $current): CircuitBreakerState => new CircuitBreakerState(3, 11));
 
-        self::assertEquals(new CircuitBreakerState(3, 11), $state);
-        self::assertEquals(new CircuitBreakerState(3, 11), $store->load());
+        self::assertEquals(new CircuitBreakerState(1), $state);
+        self::assertEquals(new CircuitBreakerState(1), $store->load());
+    }
+
+    public function testUpdateLeavesStateUnchangedWhenTheLockIsBusy(): void
+    {
+        $path = $this->directory->path . '/state';
+        $store = new FileCircuitBreakerStore($path);
+        $store->save(new CircuitBreakerState(1));
+
+        $holder = fopen($path . '.lock', 'c+');
+        self::assertIsResource($holder);
+        self::assertTrue(flock($holder, \LOCK_EX));
+
+        try {
+            $state = $store->update(static fn(CircuitBreakerState $current): CircuitBreakerState => new CircuitBreakerState(3, 11));
+
+            self::assertEquals(new CircuitBreakerState(1), $state);
+            self::assertEquals(new CircuitBreakerState(1), $store->load());
+        } finally {
+            flock($holder, \LOCK_UN);
+            fclose($holder);
+        }
     }
 
     #[RequiresPhpExtension('pcntl')]

@@ -26,26 +26,39 @@ final class AtomicFileTest extends TestCase
 
     public function testCreatesAndReplacesTheFile(): void
     {
-        AtomicFile::write($this->directory->path . '/state', 'first');
-        AtomicFile::write($this->directory->path . '/state', 'second');
+        self::assertTrue(AtomicFile::write($this->directory->path . '/state', 'first'));
+        self::assertTrue(AtomicFile::write($this->directory->path . '/state', 'second'));
 
         self::assertSame('second', file_get_contents($this->directory->path . '/state'));
         self::assertSame(['state'], $this->directory->entries());
     }
 
-    public function testLeavesNothingBehindWhenTheRenameFails(): void
+    public function testReturnsFalseAndLeavesNothingBehindWhenTheRenameFails(): void
     {
         mkdir($this->directory->path . '/state');
 
-        AtomicFile::write($this->directory->path . '/state', 'contents');
+        self::assertFalse(AtomicFile::write($this->directory->path . '/state', 'contents'));
 
         self::assertSame(['state'], $this->directory->entries());
     }
 
-    public function testIgnoresADirectoryThatDoesNotExist(): void
+    public function testReturnsFalseWhenTheDirectoryDoesNotExist(): void
     {
-        AtomicFile::write($this->directory->path . '/missing/state', 'contents');
+        self::assertFalse(AtomicFile::write($this->directory->path . '/missing/state', 'contents'));
 
         self::assertSame([], $this->directory->entries());
+    }
+
+    public function testExclusiveCreateRefusesAnExistingTemporaryPath(): void
+    {
+        $temporary = $this->directory->path . '/state.' . bin2hex(random_bytes(8)) . '.tmp';
+        $trap = $this->directory->path . '/trap';
+        file_put_contents($trap, 'secret');
+        symlink($trap, $temporary);
+
+        $handle = @fopen($temporary, 'xb');
+
+        self::assertFalse($handle);
+        self::assertSame('secret', file_get_contents($trap));
     }
 }
