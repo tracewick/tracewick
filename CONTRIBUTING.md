@@ -145,7 +145,8 @@ Proxies are defined in [`docker/toxiproxy/toxiproxy.json`](docker/toxiproxy/toxi
 The backend images and the ext-excimer version are pinned, so the stand does not change under
 you; Dependabot proposes backend image updates in `compose.yaml` into `develop`. The PHP base image
 follows its minor version tag (`php:8.4-cli-bookworm`), so a rebuild picks up PHP patch releases.
-ext-excimer (`EXCIMER_VERSION` in `compose.yaml` and `docker/php/Dockerfile`) is updated by hand
+ext-excimer (`EXCIMER_VERSION` in `compose.yaml`, `docker/php/Dockerfile`, and
+`docker/php/Dockerfile.alpine`) is updated by hand
 when PECL publishes a release. The `Stand` workflow builds and tests the stand on every pull
 request that touches it, on PHP 8.4, and on all supported PHP versions after the merge.
 

@@ -9,7 +9,7 @@ STAND_RUN = $(STAND_ENV) docker compose run --rm php
 
 .PHONY: help install lint cs-fix stan rector rector-fix deps test test-unit test-integration coverage infection audit ci \
 	stand-build stand-up stand-down stand-smoke stand-shell stand-install stand-test stand-ci \
-	app-build app-up app-smoke app-profiles
+	app-build app-up app-smoke app-profiles alpine-php-build
 
 help: ## Show available targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-18s %s\n", $$1, $$2}'
@@ -98,3 +98,10 @@ app-smoke: ## Check that the reference app answers on PHP-FPM and RoadRunner
 
 app-profiles: ## Check profiles in Pyroscope: stacks, wall/ns units, routes, no raw URLs
 	docker/reference-app/check-profiles.sh
+
+alpine-php-build: ## Proof-build PHP+excimer on Alpine (not the default stand image)
+	docker build -f docker/php/Dockerfile.alpine \
+		--build-arg PHP_VERSION=$(PHP_VERSION) \
+		-t tracewick-php-alpine:local \
+		docker/php
+	docker run --rm tracewick-php-alpine:local php -r 'exit(extension_loaded("excimer") ? 0 : 1);'
