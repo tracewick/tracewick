@@ -22,8 +22,9 @@ final readonly class CircuitBreakerConfig
      * @param int     $openDurationMs               how long the circuit stays open after transient failures
      *                                              before one trial delivery
      * @param int     $configurationOpenDurationMs  how long the circuit stays open after a configuration error
-     * @param ?string $stateDirectory               where sinks keep the circuit state that the processes of a
-     *                                              host share; the system temporary directory by default
+     * @param ?string $stateDirectory               optional shared-file directory for multi-process delivery
+     *                                              (drain sidecars that share a host). Null = in-memory only
+     *                                              (default; correct for FPM→spool and single drain)
      *
      * @throws LogicException when a value is out of range
      */
@@ -50,16 +51,16 @@ final readonly class CircuitBreakerConfig
     }
 
     /**
-     * A store shared by the processes of this host for the given destination.
-     *
-     * Falls back to an in-memory store for this process when the directory cannot be used.
+     * Store for this destination: in-memory unless {@see $stateDirectory} opts into a shared file.
      *
      * @param string $destination anything that identifies the destination, such as its URL
      */
-    public function sharedStore(string $destination): CircuitBreakerStore
+    public function storeFor(string $destination): CircuitBreakerStore
     {
-        $directory = $this->stateDirectory ?? sys_get_temp_dir();
+        if (null === $this->stateDirectory) {
+            return new InMemoryCircuitBreakerStore();
+        }
 
-        return FallbackCircuitBreakerStore::forDestination($directory, $destination);
+        return FallbackCircuitBreakerStore::forDestination($this->stateDirectory, $destination);
     }
 }

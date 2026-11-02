@@ -15,6 +15,7 @@ use Tracewick\Tests\Support\RecordingLogger;
 use Tracewick\Tests\Support\ScriptedTransport;
 use Tracewick\Tests\Support\TemporaryDirectory;
 use Tracewick\Transport\AtomicFile;
+use Tracewick\Transport\CircuitBreakerAttempt;
 use Tracewick\Transport\CircuitBreakerConfig;
 use Tracewick\Transport\CircuitBreakerState;
 use Tracewick\Transport\CircuitBreakerTransport;
@@ -30,6 +31,7 @@ use Tracewick\Transport\Transport;
 #[UsesClass(Payload::class)]
 #[UsesClass(SystemClock::class)]
 #[UsesClass(CircuitBreakerState::class)]
+#[UsesClass(CircuitBreakerAttempt::class)]
 #[UsesClass(InMemoryCircuitBreakerStore::class)]
 #[UsesClass(DiagnosticLogger::class)]
 #[UsesClass(AtomicFile::class)]
@@ -101,7 +103,8 @@ final class CircuitBreakerTransportTest extends TestCase
 
         self::assertSame(DeliveryStatus::Rejected, $this->send($breaker)->status);
         self::assertSame([], $store->saved);
-        self::assertEquals(new CircuitBreakerState(2), $store->load());
+        self::assertSame(2, $store->load()->consecutiveFailures);
+        self::assertNull($store->load()->openUntilNs);
         self::assertFalse($breaker->isOpen());
     }
 
@@ -150,7 +153,8 @@ final class CircuitBreakerTransportTest extends TestCase
         );
 
         self::assertTrue($breaker->isOpen());
-        self::assertEquals(new CircuitBreakerState(3, $this->clock->nowNs() + 5_000_000_000), $store->load());
+        self::assertSame(3, $store->load()->consecutiveFailures);
+        self::assertSame($this->clock->nowNs() + 5_000_000_000, $store->load()->openUntilNs);
         self::assertSame(DeliveryStatus::Skipped, $this->send($breaker)->status);
 
         $this->clock->advanceMs(5_000);
@@ -275,7 +279,8 @@ final class CircuitBreakerTransportTest extends TestCase
         $this->clock->advanceMs(1_000);
         $this->send($breaker);
 
-        self::assertEquals(new CircuitBreakerState(2, $this->clock->nowNs() + 1_000_000_000), $store->load());
+        self::assertSame(2, $store->load()->consecutiveFailures);
+        self::assertSame($this->clock->nowNs() + 1_000_000_000, $store->load()->openUntilNs);
     }
 
     public function testWritesNothingWhileTheCircuitStaysClosed(): void
@@ -298,7 +303,7 @@ final class CircuitBreakerTransportTest extends TestCase
 
         self::assertTrue($this->send($breaker)->isDelivered());
 
-        self::assertEquals(new CircuitBreakerState(), $store->load());
+        self::assertTrue($store->load()->isClosed());
     }
 
     public function testAFailedTrialReopensEvenBelowTheThreshold(): void
@@ -308,7 +313,8 @@ final class CircuitBreakerTransportTest extends TestCase
 
         $this->send($breaker);
 
-        self::assertEquals(new CircuitBreakerState(2, $this->clock->nowNs() + 1_000_000_000), $store->load());
+        self::assertSame(2, $store->load()->consecutiveFailures);
+        self::assertSame($this->clock->nowNs() + 1_000_000_000, $store->load()->openUntilNs);
     }
 
     public function testResetsTheFailureCountAfterASuccess(): void
@@ -318,7 +324,8 @@ final class CircuitBreakerTransportTest extends TestCase
 
         $this->send($breaker);
 
-        self::assertEquals([new CircuitBreakerState()], $store->saved);
+        self::assertCount(1, $store->saved);
+        self::assertTrue($store->saved[0]->isClosed());
     }
 
     public function testKeepsOtherProcessesSkippingDuringTheTrial(): void
@@ -343,10 +350,30 @@ final class CircuitBreakerTransportTest extends TestCase
         self::assertTrue($this->send($this->breaker($inner, store: $store))->isDelivered());
 
         self::assertSame(DeliveryStatus::Skipped, $statusSeenByOther);
-        self::assertEquals(
-            [new CircuitBreakerState(3, $this->clock->nowNs() + 1_000_000_000), new CircuitBreakerState()],
-            $store->saved,
-        );
+        self::assertCount(2, $store->saved);
+        self::assertSame(3, $store->saved[0]->consecutiveFailures);
+        self::assertSame($this->clock->nowNs() + 1_000_000_000, $store->saved[0]->openUntilNs);
+        self::assertTrue($store->saved[1]->isClosed());
+    }
+
+    public function testStaleSuccessDoesNotCloseANewerOpenCircuit(): void
+    {
+        $store = new RecordingCircuitBreakerStore();
+        $slow = $this->breaker(new ScriptedTransport(Delivery::delivered()), store: $store);
+        $fast = $this->breaker(new ScriptedTransport(Delivery::failed('1'), Delivery::failed('2'), Delivery::failed('3')), new CircuitBreakerConfig(3, 1_000), $store);
+
+        // Open the shared circuit from the fast sender.
+        $this->send($fast);
+        $this->send($fast);
+        $this->send($fast);
+        self::assertTrue($fast->isOpen());
+        $openGeneration = $store->load()->generation;
+
+        // A late complete from an older generation must not wipe the open state.
+        self::assertFalse($store->complete($openGeneration - 1, new CircuitBreakerState()));
+        self::assertTrue($slow->isOpen());
+        self::assertSame($openGeneration, $store->load()->generation);
+        self::assertNotNull($store->load()->openUntilNs);
     }
 
     public function testLogsWhenTheCircuitOpensAndCloses(): void

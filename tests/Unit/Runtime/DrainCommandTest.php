@@ -40,6 +40,7 @@ use Tracewick\Tests\Support\ScriptedForwarder;
 use Tracewick\Tests\Support\TemporaryDirectory;
 use Tracewick\Transport\AtomicFile;
 use Tracewick\Transport\CachingDnsResolver;
+use Tracewick\Transport\CircuitBreakerAttempt;
 use Tracewick\Transport\CircuitBreakerConfig;
 use Tracewick\Transport\CircuitBreakerState;
 use Tracewick\Transport\CircuitBreakerTransport;
@@ -81,6 +82,7 @@ use Tracewick\Transport\SystemDnsResolver;
 #[UsesClass(CircuitBreakerConfig::class)]
 #[UsesClass(CircuitBreakerTransport::class)]
 #[UsesClass(CircuitBreakerState::class)]
+#[UsesClass(CircuitBreakerAttempt::class)]
 #[UsesClass(FileCircuitBreakerStore::class)]
 #[UsesClass(FallbackCircuitBreakerStore::class)]
 #[UsesClass(InMemoryCircuitBreakerStore::class)]

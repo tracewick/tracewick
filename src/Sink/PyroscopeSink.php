@@ -27,10 +27,11 @@ use Tracewick\Transport\Transport;
  * type (wall or cpu in nanoseconds) and, when present, only a span_id sample label. The profile
  * type name on the series is wall or process_cpu.
  *
- * By default payloads go through an {@see HttpTransport} behind a {@see CircuitBreakerTransport},
- * whose state the processes of a host share per server and tenant. Use this sink from drain,
- * CLI, staging, or long-running workers — not from PHP-FPM request handlers. Under FPM prefer
- * {@see SpoolSink} and `tracewick-drain`, so the worker never waits on the network.
+ * By default payloads go through an {@see HttpTransport} behind a {@see CircuitBreakerTransport}
+ * with in-memory state. Set {@see CircuitBreakerConfig::$stateDirectory} when several delivery
+ * processes on one host must share one trial. Use this sink from drain, CLI, staging, or
+ * long-running workers — not from PHP-FPM request handlers. Under FPM prefer {@see SpoolSink} and
+ * `tracewick-drain`, so the worker never waits on the network.
  *
  * @see https://grafana.com/docs/pyroscope/latest/reference-server-api/
  */
@@ -129,7 +130,7 @@ final readonly class PyroscopeSink implements Sink, SpoolForwarder
             new HttpTransport($http, $clock, new CachingDnsResolver(clock: $clock)),
             $config->circuitBreaker,
             $clock,
-            $config->circuitBreaker->sharedStore($http->url . "\n" . $config->tenantId),
+            $config->circuitBreaker->storeFor($http->url . "\n" . $config->tenantId),
             new DiagnosticLogger($logger, $config->circuitBreaker->stateDirectory),
         );
     }

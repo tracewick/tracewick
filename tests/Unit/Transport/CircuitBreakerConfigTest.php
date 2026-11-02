@@ -13,6 +13,7 @@ use Tracewick\Diagnostics\DiagnosticLogger;
 use Tracewick\Exception\LogicException;
 use Tracewick\Tests\Support\TemporaryDirectory;
 use Tracewick\Transport\AtomicFile;
+use Tracewick\Transport\CircuitBreakerAttempt;
 use Tracewick\Transport\CircuitBreakerConfig;
 use Tracewick\Transport\CircuitBreakerState;
 use Tracewick\Transport\FallbackCircuitBreakerStore;
@@ -27,6 +28,7 @@ use Tracewick\Transport\InMemoryCircuitBreakerStore;
 #[UsesClass(SystemClock::class)]
 #[UsesClass(AtomicFile::class)]
 #[UsesClass(CircuitBreakerState::class)]
+#[UsesClass(CircuitBreakerAttempt::class)]
 final class CircuitBreakerConfigTest extends TestCase
 {
     public function testDefaults(): void
@@ -39,30 +41,30 @@ final class CircuitBreakerConfigTest extends TestCase
         self::assertNull($config->stateDirectory);
     }
 
-    public function testSharesTheStateInTheConfiguredDirectory(): void
+    public function testStoreForDefaultsToInMemory(): void
+    {
+        $store = (new CircuitBreakerConfig())->storeFor('http://pyroscope');
+
+        self::assertInstanceOf(InMemoryCircuitBreakerStore::class, $store);
+        $destination = 'http://pyroscope/' . bin2hex(random_bytes(8));
+        $path = sys_get_temp_dir() . '/tracewick-circuit-' . md5($destination);
+        (new CircuitBreakerConfig())->storeFor($destination)->acquire(0, 1_000, 5_000);
+        self::assertFileDoesNotExist($path);
+    }
+
+    public function testStoreForUsesASharedFileWhenADirectoryIsSet(): void
     {
         $directory = new TemporaryDirectory();
 
         try {
-            (new CircuitBreakerConfig(stateDirectory: $directory->path))->sharedStore('http://pyroscope')->save(new CircuitBreakerState(1));
+            $store = (new CircuitBreakerConfig(stateDirectory: $directory->path))->storeFor('http://pyroscope');
+            $attempt = $store->acquire(0, 1_000, 5_000);
+            self::assertInstanceOf(CircuitBreakerAttempt::class, $attempt);
+            $store->complete($attempt->generation, new CircuitBreakerState(1, null, $attempt->generation));
 
             self::assertContains('tracewick-circuit-' . md5('http://pyroscope'), $directory->entries());
         } finally {
             $directory->remove();
-        }
-    }
-
-    public function testSharesTheStateInTheTemporaryDirectoryByDefault(): void
-    {
-        $destination = 'http://pyroscope/' . bin2hex(random_bytes(8));
-        $path = sys_get_temp_dir() . '/tracewick-circuit-' . md5($destination);
-
-        try {
-            (new CircuitBreakerConfig())->sharedStore($destination)->save(new CircuitBreakerState(1));
-
-            self::assertFileExists($path);
-        } finally {
-            @unlink($path);
         }
     }
 
