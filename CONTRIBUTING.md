@@ -88,7 +88,7 @@ picks up changes to `src/`):
 ```bash
 make app-up        # start the stand plus the reference app, load the demo fixtures
 make app-smoke     # check that both variants answer
-make app-profiles  # send requests and check that their profiles reach Pyroscope
+make app-profiles  # stacks, wall/ns units, route labels, no raw URLs in Pyroscope
 make stand-down    # stop everything
 ```
 

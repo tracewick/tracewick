@@ -8,6 +8,10 @@ name: Reference app
 on:
   pull_request:
     paths:
+      # Library changes must re-run profile smoke (stacks / units / labels), not only app Docker files.
+      - bin/**
+      - composer.json
+      - src/**
       - .dockerignore
       - compose.yaml
       - docker/reference-app/**
