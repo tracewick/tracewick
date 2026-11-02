@@ -9,13 +9,21 @@ namespace Tracewick\Transport;
  * PHP-FPM workers stop sending to a destination that keeps failing, not each of them on its own.
  *
  * The file holds one line, the failure count and the end of the open period or `-`. It is
- * replaced by an atomic rename, so a reader never sees half of it. {@see update()} takes an
- * exclusive flock on a sibling lock file so concurrent workers do not race the trial delivery.
- * A missing or unreadable file means a closed circuit; a write that cannot persist leaves the
- * previous state as it was.
+ * replaced by an atomic rename, so a reader never sees half of it. {@see update()} takes a
+ * non-blocking exclusive flock on a sibling lock file (with a short retry budget) so concurrent
+ * workers do not race the trial delivery and a stuck holder cannot hang the caller. When the lock
+ * cannot be taken, the updater is not applied and the previous state is returned. A missing or
+ * unreadable file means a closed circuit; a write that cannot persist leaves the previous state
+ * as it was.
  */
 final readonly class FileCircuitBreakerStore implements CircuitBreakerStore
 {
+    /** Microseconds to keep trying {@see \LOCK_NB} before degrading. */
+    private const LOCK_WAIT_BUDGET_US = 50_000;
+
+    /** Pause between non-blocking lock attempts. */
+    private const LOCK_RETRY_SLEEP_US = 1_000;
+
     public function __construct(private string $path) {}
 
     /**
@@ -54,18 +62,12 @@ final readonly class FileCircuitBreakerStore implements CircuitBreakerStore
         $lockPath = $this->path . '.lock';
         $lock = @fopen($lockPath, 'c+');
         if (false === $lock) {
-            $state = $updater($this->load());
-            $this->save($state);
-
-            return $state;
+            return $this->load();
         }
 
         try {
-            if (!@flock($lock, \LOCK_EX)) {
-                $state = $updater($this->load());
-                $this->save($state);
-
-                return $state;
+            if (!$this->acquireExclusiveLock($lock)) {
+                return $this->load();
             }
 
             $state = $updater($this->load());
@@ -87,6 +89,23 @@ final readonly class FileCircuitBreakerStore implements CircuitBreakerStore
 
         return $loaded->consecutiveFailures === $expected->consecutiveFailures
             && $loaded->openUntilNs === $expected->openUntilNs;
+    }
+
+    /**
+     * @param resource $lock
+     */
+    private function acquireExclusiveLock($lock): bool
+    {
+        $deadline = hrtime(true) + self::LOCK_WAIT_BUDGET_US * 1_000;
+        while (!@flock($lock, \LOCK_EX | \LOCK_NB)) {
+            if (hrtime(true) >= $deadline) {
+                return false;
+            }
+
+            usleep(self::LOCK_RETRY_SLEEP_US);
+        }
+
+        return true;
     }
 
     private static function ensureDirectory(string $directory): void

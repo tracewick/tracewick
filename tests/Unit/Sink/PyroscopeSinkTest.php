@@ -81,6 +81,11 @@ final class PyroscopeSinkTest extends TestCase
 {
     private const START_NS = 1_798_000_000_500_000_000;
 
+    protected function setUp(): void
+    {
+        DiagnosticLogger::resetRateLimits();
+    }
+
     public function testSendsAPushRequestWithSeriesLabels(): void
     {
         $transport = new ScriptedTransport(Delivery::delivered());
@@ -204,11 +209,10 @@ final class PyroscopeSinkTest extends TestCase
             self::assertSame(DeliveryStatus::Failed, $first->status);
             self::assertStringStartsWith('Cannot connect to ' . $address, $first->reason);
             self::assertSame(DeliveryStatus::Skipped, $second->status);
-            self::assertContains(
-                'tracewick-circuit-' . md5('http://' . $address . PyroscopePushRequest::PATH . "\nteam-a"),
+            self::assertSame(
+                ['tracewick-circuit-' . md5('http://' . $address . PyroscopePushRequest::PATH . "\nteam-a")],
                 $directory->entries(),
             );
-            self::assertCount(2, $directory->entries());
             self::assertSame(['warning: Tracewick stopped sending profiles for {pauseMs} ms after {failures} failed deliveries in a row: {reason}'], $logger->lines());
         } finally {
             $directory->remove();

@@ -89,6 +89,7 @@ final class ContinuousProfilerTest extends TestCase
     protected function setUp(): void
     {
         ContinuousProfiler::resetInactiveSamplerWarning();
+        DiagnosticLogger::resetRateLimits();
         $this->sampler = new ScriptedSampler();
         $this->sink = new RecordingSink();
         $this->clock = new ManualClock(1_000_000_000);

@@ -87,6 +87,7 @@ final class AutoPrependTest extends TestCase
         ProcessProfiler::clear();
         AutoPrepend::resetWarningsForTests();
         UnitOfWorkProfiler::resetInactiveSamplerWarning();
+        DiagnosticLogger::resetRateLimits();
         $this->spool = new TemporaryDirectory();
     }
 

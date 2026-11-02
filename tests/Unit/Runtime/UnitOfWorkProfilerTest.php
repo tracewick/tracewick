@@ -80,6 +80,7 @@ final class UnitOfWorkProfilerTest extends TestCase
     protected function setUp(): void
     {
         UnitOfWorkProfiler::resetInactiveSamplerWarning();
+        DiagnosticLogger::resetRateLimits();
         $this->sampler = new ScriptedSampler();
         $this->sink = new RecordingSink();
         $this->logger = new RecordingLogger();

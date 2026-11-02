@@ -27,6 +27,11 @@ use Tracewick\Transport\InMemoryCircuitBreakerStore;
 #[UsesClass(SystemClock::class)]
 final class FallbackCircuitBreakerStoreTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        DiagnosticLogger::resetRateLimits();
+    }
+
     public function testUsesTheFileStoreWhenItPersists(): void
     {
         $directory = new TemporaryDirectory();
