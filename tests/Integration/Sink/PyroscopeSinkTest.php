@@ -12,6 +12,7 @@ use Tracewick\Diagnostics\DiagnosticLogger;
 use Tracewick\Encoder\Pprof\ProtobufWriter;
 use Tracewick\Encoder\Pprof\StringTable;
 use Tracewick\Encoder\PprofEncoder;
+use Tracewick\Profile\BoundedProfileBuilder;
 use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
 use Tracewick\Profile\Stack;
@@ -57,6 +58,7 @@ use Tracewick\Transport\Payload;
 #[UsesClass(ProtobufWriter::class)]
 #[UsesClass(StringTable::class)]
 #[UsesClass(Profile::class)]
+#[UsesClass(BoundedProfileBuilder::class)]
 #[UsesClass(Stack::class)]
 #[UsesClass(Labels::class)]
 #[UsesClass(Frame::class)]

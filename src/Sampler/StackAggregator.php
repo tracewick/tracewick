@@ -4,74 +4,37 @@ declare(strict_types=1);
 
 namespace Tracewick\Sampler;
 
+use Tracewick\Profile\BoundedProfileBuilder;
+
 /**
  * Merges stacks by identity into counts without keeping one Sample per hit.
  *
  * Used by {@see ExcimerSampler} while the native flush callback drains the Excimer log, so a long
- * profile stays proportional to unique stacks rather than to sample count.
+ * profile stays proportional to unique stacks rather than to sample count. Admission is
+ * transactional via {@see BoundedProfileBuilder}: rejected stacks do not intern frames.
  *
  * @internal
  */
-final class StackAggregator
+final readonly class StackAggregator
 {
-    public const OVERFLOW_FUNCTION = '[overflow]';
+    public const OVERFLOW_FUNCTION = BoundedProfileBuilder::OVERFLOW_FUNCTION;
 
-    /** @var array<string, int> */
-    private array $frameIds = [];
-
-    /** @var list<Frame> */
-    private array $frames = [];
-
-    /** @var array<string, array{list<int>, int, bool}> */
-    private array $stacks = [];
-
-    private int $overflowCount = 0;
-
-    private bool $capped = false;
+    private BoundedProfileBuilder $builder;
 
     public function __construct(
-        private readonly int $maxUniqueStacks,
-    ) {}
+        int $maxUniqueStacks,
+        int $maxUniqueFrames = BoundedProfileBuilder::DEFAULT_MAX_FRAMES,
+        int $maxUniqueStrings = BoundedProfileBuilder::DEFAULT_MAX_STRINGS,
+    ) {
+        $this->builder = new BoundedProfileBuilder($maxUniqueStacks, $maxUniqueFrames, $maxUniqueStrings);
+    }
 
     /**
      * @param list<Frame> $frames outermost caller first
      */
     public function add(array $frames, int $count, bool $truncated = false): void
     {
-        if ($count < 1) {
-            return;
-        }
-
-        $ids = [];
-        foreach ($frames as $frame) {
-            $frameKey = $this->frameKey($frame);
-            if (!isset($this->frameIds[$frameKey])) {
-                $this->frameIds[$frameKey] = \count($this->frames);
-                $this->frames[] = $frame;
-            }
-
-            $ids[] = $this->frameIds[$frameKey];
-        }
-
-        $stackKey = implode(',', $ids);
-        if ($truncated) {
-            $stackKey .= ',truncated';
-        }
-
-        if (isset($this->stacks[$stackKey])) {
-            $this->stacks[$stackKey][1] += $count;
-
-            return;
-        }
-
-        if (\count($this->stacks) >= $this->maxUniqueStacks) {
-            $this->capped = true;
-            $this->overflowCount += $count;
-
-            return;
-        }
-
-        $this->stacks[$stackKey] = [$ids, $count, $truncated];
+        $this->builder->add($frames, $count, $truncated);
     }
 
     /**
@@ -79,27 +42,16 @@ final class StackAggregator
      */
     public function toSamples(int $timestampNs): array
     {
+        [$frames, $stacks] = $this->builder->toProfileParts();
         $samples = [];
-        foreach ($this->stacks as [$ids, $count, $truncated]) {
-            $frames = [];
-            foreach ($ids as $id) {
-                if (!isset($this->frames[$id])) {
-                    continue;
-                }
-
-                $frames[] = $this->frames[$id];
+        foreach ($stacks as $stack) {
+            $stackFrames = [];
+            foreach ($stack->frameIds as $id) {
+                // Ids come from toProfileParts(); every stack id indexes $frames.
+                $stackFrames[] = $frames[$id]; // @phpstan-ignore offsetAccess.notFound
             }
 
-            $samples[] = new Sample($frames, $count, $timestampNs, $truncated);
-        }
-
-        if ($this->overflowCount > 0) {
-            $samples[] = new Sample(
-                [new Frame(self::OVERFLOW_FUNCTION)],
-                $this->overflowCount,
-                $timestampNs,
-                true,
-            );
+            $samples[] = new Sample($stackFrames, $stack->count, $timestampNs, $stack->truncated);
         }
 
         return $samples;
@@ -107,36 +59,26 @@ final class StackAggregator
 
     public function isEmpty(): bool
     {
-        return [] === $this->stacks && 0 === $this->overflowCount;
+        return $this->builder->isEmpty();
     }
 
     public function uniqueStackCount(): int
     {
-        return \count($this->stacks) + ($this->overflowCount > 0 ? 1 : 0);
+        return $this->builder->uniqueStackCount();
     }
 
     public function wasCapped(): bool
     {
-        return $this->capped;
+        return $this->builder->wasCapped();
+    }
+
+    public function frameCount(): int
+    {
+        return $this->builder->frameCount();
     }
 
     public function reset(): void
     {
-        $this->frameIds = [];
-        $this->frames = [];
-        $this->stacks = [];
-        $this->overflowCount = 0;
-        $this->capped = false;
-    }
-
-    private function frameKey(Frame $frame): string
-    {
-        return implode("\0", [
-            $frame->function ?? '',
-            $frame->class ?? '',
-            $frame->file ?? '',
-            $frame->line,
-            $frame->closureLine ?? '',
-        ]);
+        $this->builder->reset();
     }
 }

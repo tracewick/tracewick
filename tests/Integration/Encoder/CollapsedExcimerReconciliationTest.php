@@ -9,6 +9,7 @@ use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Encoder\CollapsedEncoder;
+use Tracewick\Profile\BoundedProfileBuilder;
 use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
 use Tracewick\Profile\Stack;
@@ -28,6 +29,7 @@ use Tracewick\Sampler\SampleBatch;
 #[CoversClass(CollapsedEncoder::class)]
 #[CoversClass(ExcimerTraceConverter::class)]
 #[UsesClass(Profile::class)]
+#[UsesClass(BoundedProfileBuilder::class)]
 #[UsesClass(Stack::class)]
 #[UsesClass(Labels::class)]
 #[UsesClass(Frame::class)]

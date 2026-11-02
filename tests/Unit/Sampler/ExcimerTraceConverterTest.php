@@ -7,6 +7,8 @@ namespace Tracewick\Tests\Unit\Sampler;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Tracewick\Profile\BoundedProfileBuilder;
+use Tracewick\Profile\Stack;
 use Tracewick\Sampler\ExcimerTraceConverter;
 use Tracewick\Sampler\Frame;
 use Tracewick\Sampler\Sample;
@@ -16,6 +18,8 @@ use Tracewick\Sampler\StackAggregator;
 #[UsesClass(Frame::class)]
 #[UsesClass(Sample::class)]
 #[UsesClass(StackAggregator::class)]
+#[UsesClass(BoundedProfileBuilder::class)]
+#[UsesClass(Stack::class)]
 final class ExcimerTraceConverterTest extends TestCase
 {
     private const ORIGIN_NS = 1_700_000_000_000_000_000;

@@ -14,6 +14,7 @@ use Tracewick\Diagnostics\HostCounterKeys;
 use Tracewick\Diagnostics\NullCounterStore;
 use Tracewick\Encoder\CompactStacksCodec;
 use Tracewick\Exception\LogicException;
+use Tracewick\Profile\BoundedProfileBuilder;
 use Tracewick\Profile\LabelPolicy;
 use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
@@ -56,6 +57,7 @@ use Tracewick\Transport\SpoolTransport;
 #[UsesClass(ExcimerSampler::class)]
 #[UsesClass(ExcimerTraceConverter::class)]
 #[UsesClass(StackAggregator::class)]
+#[UsesClass(BoundedProfileBuilder::class)]
 #[UsesClass(Sample::class)]
 #[UsesClass(SampleBatch::class)]
 #[UsesClass(Frame::class)]

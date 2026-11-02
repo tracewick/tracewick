@@ -10,6 +10,7 @@ use PHPUnit\Framework\TestCase;
 use Tracewick\Encoder\CompactStacksCodec;
 use Tracewick\Encoder\ProfileParts;
 use Tracewick\Exception\LogicException;
+use Tracewick\Profile\BoundedProfileBuilder;
 use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
 use Tracewick\Profile\Stack;
@@ -22,6 +23,7 @@ use Tracewick\Tests\Support\ProfileFixtures;
 #[CoversClass(CompactStacksCodec::class)]
 #[CoversClass(ProfileParts::class)]
 #[UsesClass(Profile::class)]
+#[UsesClass(BoundedProfileBuilder::class)]
 #[UsesClass(Stack::class)]
 #[UsesClass(Labels::class)]
 #[UsesClass(Frame::class)]

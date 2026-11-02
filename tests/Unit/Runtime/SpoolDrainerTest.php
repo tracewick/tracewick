@@ -10,6 +10,7 @@ use PHPUnit\Framework\TestCase;
 use Tracewick\Clock\SystemClock;
 use Tracewick\Encoder\CompactStacksCodec;
 use Tracewick\Encoder\ProfileParts;
+use Tracewick\Profile\BoundedProfileBuilder;
 use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
 use Tracewick\Profile\ProfileMerger;
@@ -48,6 +49,7 @@ use Tracewick\Transport\SpoolTransport;
 #[UsesClass(CompactStacksCodec::class)]
 #[UsesClass(ProfileParts::class)]
 #[UsesClass(Profile::class)]
+#[UsesClass(BoundedProfileBuilder::class)]
 #[UsesClass(ProfileMerger::class)]
 #[UsesClass(Stack::class)]
 #[UsesClass(Labels::class)]

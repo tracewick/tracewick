@@ -46,35 +46,12 @@ final readonly class Profile
      */
     public static function fromBatch(SampleBatch $batch, Labels $labels = new Labels()): self
     {
-        /** @var array<string, int> $frameIds */
-        $frameIds = [];
-        $frames = [];
-        /** @var array<string, array{list<int>, int, bool}> $stacks */
-        $stacks = [];
-
+        $builder = new BoundedProfileBuilder();
         foreach ($batch->samples as $sample) {
-            $ids = [];
-            foreach ($sample->frames as $frame) {
-                $frameKey = self::frameKey($frame);
-                if (!isset($frameIds[$frameKey])) {
-                    $frameIds[$frameKey] = \count($frames);
-                    $frames[] = $frame;
-                }
-
-                $ids[] = $frameIds[$frameKey];
-            }
-
-            $stackKey = implode(',', $ids);
-            if ($sample->truncated) {
-                $stackKey .= ',truncated';
-            }
-
-            if (isset($stacks[$stackKey])) {
-                $stacks[$stackKey][1] += $sample->count;
-            } else {
-                $stacks[$stackKey] = [$ids, $sample->count, $sample->truncated];
-            }
+            $builder->add($sample->frames, $sample->count, $sample->truncated);
         }
+
+        [$frames, $stacks] = $builder->toProfileParts();
 
         return new self(
             $batch->eventType,
@@ -82,10 +59,7 @@ final readonly class Profile
             $batch->startNs,
             $batch->endNs,
             $frames,
-            array_values(array_map(
-                static fn(array $stack): Stack => new Stack($stack[0], $stack[1], $stack[2]),
-                $stacks,
-            )),
+            $stacks,
             $labels,
         );
     }
@@ -146,15 +120,4 @@ final readonly class Profile
         return $frames;
     }
 
-    private static function frameKey(Frame $frame): string
-    {
-        // NUL cannot occur in PHP identifiers or paths, so the key is unambiguous.
-        return implode("\0", [
-            $frame->function ?? '',
-            $frame->class ?? '',
-            $frame->file ?? '',
-            $frame->line,
-            $frame->closureLine ?? '',
-        ]);
-    }
 }

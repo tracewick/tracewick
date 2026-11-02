@@ -8,6 +8,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Exception\LogicException;
+use Tracewick\Profile\BoundedProfileBuilder;
 use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
 use Tracewick\Profile\ProfileMerger;
@@ -16,6 +17,7 @@ use Tracewick\Sampler\EventType;
 use Tracewick\Sampler\Frame;
 
 #[CoversClass(ProfileMerger::class)]
+#[UsesClass(BoundedProfileBuilder::class)]
 #[UsesClass(Profile::class)]
 #[UsesClass(Stack::class)]
 #[UsesClass(Labels::class)]
@@ -81,5 +83,23 @@ final class ProfileMergerTest extends TestCase
         $this->expectExceptionMessage('Stack references missing frame 99.');
 
         (new ProfileMerger())->merge([$profile]);
+    }
+
+    public function testCapsMergedStacksAndPreservesTotalWeight(): void
+    {
+        $a = new Profile(EventType::Wall, 1, 1, 2, [new Frame('a')], [new Stack([0], 2)]);
+        $b = new Profile(EventType::Wall, 1, 1, 2, [new Frame('b')], [new Stack([0], 3)]);
+        $c = new Profile(EventType::Wall, 1, 1, 2, [new Frame('c')], [new Stack([0], 5)]);
+
+        $merged = (new ProfileMerger(maxStacks: 2))->merge([$a, $b, $c]);
+
+        self::assertSame(10, $merged->eventCount());
+        $overflowFrame = null;
+        foreach ($merged->frames as $frame) {
+            if (BoundedProfileBuilder::OVERFLOW_FUNCTION === $frame->function) {
+                $overflowFrame = $frame;
+            }
+        }
+        self::assertNotNull($overflowFrame);
     }
 }

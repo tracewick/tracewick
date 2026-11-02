@@ -11,6 +11,7 @@ use Tracewick\Clock\SystemClock;
 use Tracewick\Diagnostics\DiagnosticLogger;
 use Tracewick\Diagnostics\HostCounterKeys;
 use Tracewick\Diagnostics\NullCounterStore;
+use Tracewick\Profile\BoundedProfileBuilder;
 use Tracewick\Profile\LabelPolicy;
 use Tracewick\Profile\Labels;
 use Tracewick\Runtime\Diagnostics;
@@ -38,6 +39,7 @@ use Tracewick\Tests\Support\RecordingSink;
 #[UsesClass(ExcimerSampler::class)]
 #[UsesClass(ExcimerTraceConverter::class)]
 #[UsesClass(StackAggregator::class)]
+#[UsesClass(BoundedProfileBuilder::class)]
 #[UsesClass(SystemClock::class)]
 #[UsesClass(Diagnostics::class)]
 #[UsesClass(DiagnosticLogger::class)]
