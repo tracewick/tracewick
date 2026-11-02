@@ -28,7 +28,7 @@ meant to run continuously in production.
 ## Requirements
 
 - PHP 8.2 or newer
-- [ext-excimer](https://pecl.php.net/package/excimer) to collect profiles (optional at install time;
+- [ext-excimer](https://www.mediawiki.org/wiki/Excimer) to collect profiles (optional at install time;
   without it Tracewick is a no-op — see [ADR 5](docs/adr/0005-fail-open-policy.md))
 
 ## Installation
@@ -37,17 +37,16 @@ meant to run continuously in production.
 composer require tracewick/tracewick
 ```
 
-Install the extension separately. On Alpine there is no distro package — build from PECL:
+Install the extension separately. Prefer [PIE](https://php.github.io/pie/) (PECL is deprecated):
 
 ```bash
-apk add --no-cache $PHPIZE_DEPS
-pecl install excimer-1.2.6
-docker-php-ext-enable excimer   # official php:* Docker images
+pie install wikimedia/excimer
 php -m | grep -i excimer
 ```
 
-Full Debian/Ubuntu and Alpine steps, plus a local proof Dockerfile (`docker/php/Dockerfile.alpine`,
-not a Docker Hub image), are in [docs/install-excimer.md](docs/install-excimer.md).
+Debian/Ubuntu, Alpine, PECL fallback, and a local Alpine proof Dockerfile
+(`docker/php/Dockerfile.alpine`, not a Docker Hub image) are in
+[docs/install-excimer.md](docs/install-excimer.md).
 
 For PHP-FPM without a framework package, [`examples/auto_prepend.php`](examples/auto_prepend.php)
 can start profiling before the app boots (`auto_prepend_file`); see [docs/runtime.md](docs/runtime.md).

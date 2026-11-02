@@ -43,7 +43,7 @@
     },
     "suggest": {
         "ext-apcu": "Host-wide CounterStore across PHP-FPM workers (falls back to a file store)",
-        "ext-excimer": "Required to collect profiles (https://pecl.php.net/package/excimer)",
+        "ext-excimer": "Required to collect profiles (install with PIE: https://php.github.io/pie/ — pie install wikimedia/excimer)",
         "ext-pcntl": "Lets tracewick-drain finish the current file on SIGTERM and SIGINT"
     },
     "minimum-stability": "stable",

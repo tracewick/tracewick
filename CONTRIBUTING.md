@@ -10,8 +10,10 @@ Thank you for your interest in Tracewick! This guide explains how to propose cha
 
 ## Development setup
 
-You need PHP 8.2+ and Composer. Install [ext-excimer](https://pecl.php.net/package/excimer) to run
-the integration tests; without it they are skipped.
+You need PHP 8.2+ and Composer. Install [ext-excimer](https://www.mediawiki.org/wiki/Excimer) to run
+the integration tests; without it they are skipped. Prefer
+[PIE](https://php.github.io/pie/) (`pie install wikimedia/excimer`); PECL is deprecated — see
+[docs/install-excimer.md](docs/install-excimer.md).
 
 ```bash
 composer install
@@ -145,10 +147,13 @@ Proxies are defined in [`docker/toxiproxy/toxiproxy.json`](docker/toxiproxy/toxi
 The backend images and the ext-excimer version are pinned, so the stand does not change under
 you; Dependabot proposes backend image updates in `compose.yaml` into `develop`. The PHP base image
 follows its minor version tag (`php:8.4-cli-bookworm`), so a rebuild picks up PHP patch releases.
-ext-excimer (`EXCIMER_VERSION` in `compose.yaml`, `docker/php/Dockerfile`, and
-`docker/php/Dockerfile.alpine`) is updated by hand
-when PECL publishes a release. The `Stand` workflow builds and tests the stand on every pull
-request that touches it, on PHP 8.4, and on all supported PHP versions after the merge.
+ext-excimer on the Bookworm stand is still installed with PECL (`EXCIMER_VERSION` in
+`compose.yaml` and `docker/php/Dockerfile`) and is bumped by hand when that PECL release is
+acceptable for the stand. Host docs and `docker/php/Dockerfile.alpine` prefer
+[PIE](https://php.github.io/pie/) and pin the Packagist constraint (`EXCIMER_PIE_CONSTRAINT`,
+currently `wikimedia/excimer:1.2.7`) separately — the two version strings are not kept in lockstep
+on purpose until the stand migrates off PECL. The `Stand` workflow builds and tests the stand on
+every pull request that touches it, on PHP 8.4, and on all supported PHP versions after the merge.
 
 ## Rules
 
