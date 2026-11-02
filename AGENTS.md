@@ -82,3 +82,22 @@ Cross-cutting helpers (`Clock`, `Diagnostics`, `Exception`) sit beside these lay
   failures and coverage gaps yourself, then tick the checklist. Do not ask the maintainer to watch
   CI; only report when the PR is review-ready or when a secret/decision blocks you.
 - Write ADRs in plain language: Context, Decision, Consequences. Prefer short sentences over rhetoric.
+
+## Releasing
+
+Full procedure: [CONTRIBUTING.md](CONTRIBUTING.md) § Releasing. Agents also follow
+`.cursor/rules/releasing.mdc` when present (local Cursor rules; may be gitignored).
+
+Short path: `release/<version>` from `develop` → merge commit into `main` (not squash) →
+release-please opens `chore: release <version>` → merge tags `v<version>` → back-merge `main` into
+`develop`. Force a version with a `Release-As: x.y.z` footer on a commit that lands on `main`
+(needed for the first public alpha `0.1.0` if the auto-bump is unclear). Do not hand-edit
+`CHANGELOG.md`, do not invent tags outside release-please, and do not push/merge to `main` unless
+the maintainer asks.
+
+## Docs honesty (alpha)
+
+Do not claim a hard spool byte ceiling or host-wide cardinality by default. Spool admission is
+**soft**; operators use volume/tmpfs/quota. `CardinalityGate` is **drain-scoped** (process-local)
+in alpha; `SpoolSink` / `ContinuousProfiler` do not collapse keys unless a real `CounterStore` is
+injected. See [ADR 12](docs/adr/0012-aggregate-before-delivery.md) and the README Quick start.
