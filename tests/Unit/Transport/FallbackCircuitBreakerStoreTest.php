@@ -13,6 +13,7 @@ use Tracewick\Tests\Support\ManualClock;
 use Tracewick\Tests\Support\RecordingLogger;
 use Tracewick\Tests\Support\TemporaryDirectory;
 use Tracewick\Transport\AtomicFile;
+use Tracewick\Transport\CircuitBreakerAttempt;
 use Tracewick\Transport\CircuitBreakerState;
 use Tracewick\Transport\FallbackCircuitBreakerStore;
 use Tracewick\Transport\FileCircuitBreakerStore;
@@ -22,6 +23,7 @@ use Tracewick\Transport\InMemoryCircuitBreakerStore;
 #[UsesClass(FileCircuitBreakerStore::class)]
 #[UsesClass(InMemoryCircuitBreakerStore::class)]
 #[UsesClass(CircuitBreakerState::class)]
+#[UsesClass(CircuitBreakerAttempt::class)]
 #[UsesClass(AtomicFile::class)]
 #[UsesClass(DiagnosticLogger::class)]
 #[UsesClass(SystemClock::class)]
@@ -38,11 +40,13 @@ final class FallbackCircuitBreakerStoreTest extends TestCase
 
         try {
             $store = FallbackCircuitBreakerStore::forDestination($directory->path, 'http://pyroscope');
-            $store->save(new CircuitBreakerState(2, 10));
+            $attempt = $store->acquire(0, 1_000, 5_000);
+            self::assertInstanceOf(CircuitBreakerAttempt::class, $attempt);
+            $store->complete($attempt->generation, new CircuitBreakerState(2, 10, $attempt->generation));
 
-            self::assertEquals(new CircuitBreakerState(2, 10), $store->load());
+            self::assertEquals(new CircuitBreakerState(2, 10, $attempt->generation), $store->load());
             self::assertEquals(
-                new CircuitBreakerState(2, 10),
+                new CircuitBreakerState(2, 10, $attempt->generation),
                 FileCircuitBreakerStore::forDestination($directory->path, 'http://pyroscope')->load(),
             );
         } finally {
@@ -60,72 +64,46 @@ final class FallbackCircuitBreakerStoreTest extends TestCase
             $file = new FileCircuitBreakerStore($directory->path . '/blocked/state');
             $store = new FallbackCircuitBreakerStore(
                 $file,
-                new InMemoryCircuitBreakerStore(),
                 new DiagnosticLogger($logger, $directory->path . '/logs', clock: new ManualClock()),
             );
 
-            $store->save(new CircuitBreakerState(4, 20));
+            $attempt = $store->acquire(0, 1_000, 5_000);
+            self::assertInstanceOf(CircuitBreakerAttempt::class, $attempt);
+            self::assertTrue($store->complete($attempt->generation, new CircuitBreakerState(4, null, $attempt->generation)));
 
-            self::assertEquals(new CircuitBreakerState(4, 20), $store->load());
+            self::assertEquals(new CircuitBreakerState(4, null, $attempt->generation), $store->load());
             self::assertEquals(new CircuitBreakerState(), $file->load());
             self::assertSame(
                 ['warning: Tracewick could not persist the circuit breaker state to disk; using in-memory state for this process.'],
                 $logger->lines(),
             );
 
-            $store->save(new CircuitBreakerState(5));
-            self::assertEquals(new CircuitBreakerState(5), $store->load());
+            $next = $store->acquire(0, 1_000, 5_000);
+            self::assertInstanceOf(CircuitBreakerAttempt::class, $next);
+            $store->complete($next->generation, new CircuitBreakerState(5, null, $next->generation));
+            self::assertEquals(new CircuitBreakerState(5, null, $next->generation), $store->load());
             self::assertSame(
                 ['warning: Tracewick could not persist the circuit breaker state to disk; using in-memory state for this process.'],
                 $logger->lines(),
             );
-
-            $updated = $store->update(static fn(CircuitBreakerState $state): CircuitBreakerState => new CircuitBreakerState(6, 30));
-            self::assertEquals(new CircuitBreakerState(6, 30), $updated);
-            self::assertEquals(new CircuitBreakerState(6, 30), $store->load());
         } finally {
             $directory->remove();
         }
     }
 
-    public function testUpdateUsesTheFileStoreWhenItPersists(): void
+    public function testAcquireReturnsNullWhenTheSharedFileSaysOpen(): void
     {
         $directory = new TemporaryDirectory();
 
         try {
-            $store = FallbackCircuitBreakerStore::forDestination($directory->path, 'http://pyroscope');
-            $updated = $store->update(static fn(CircuitBreakerState $state): CircuitBreakerState => new CircuitBreakerState(3, 40));
+            $file = FileCircuitBreakerStore::forDestination($directory->path, 'http://pyroscope');
+            $seed = $file->acquire(0, 1_000, 5_000);
+            self::assertInstanceOf(CircuitBreakerAttempt::class, $seed);
+            $file->complete($seed->generation, new CircuitBreakerState(3, 10_000_000_000, $seed->generation));
 
-            self::assertEquals(new CircuitBreakerState(3, 40), $updated);
-            self::assertEquals(new CircuitBreakerState(3, 40), $store->load());
-        } finally {
-            $directory->remove();
-        }
-    }
-
-    public function testUpdateFallsBackToMemoryWhenTheFileCannotBeWritten(): void
-    {
-        $directory = new TemporaryDirectory();
-        $logger = new RecordingLogger();
-
-        try {
-            file_put_contents($directory->path . '/blocked', 'x');
-            $file = new FileCircuitBreakerStore($directory->path . '/blocked/state');
-            $store = new FallbackCircuitBreakerStore(
-                $file,
-                new InMemoryCircuitBreakerStore(),
-                new DiagnosticLogger($logger, $directory->path . '/logs', clock: new ManualClock()),
-            );
-
-            $updated = $store->update(static fn(CircuitBreakerState $state): CircuitBreakerState => new CircuitBreakerState(7, 50));
-
-            self::assertEquals(new CircuitBreakerState(7, 50), $updated);
-            self::assertEquals(new CircuitBreakerState(7, 50), $store->load());
-            self::assertEquals(new CircuitBreakerState(), $file->load());
-            self::assertSame(
-                ['warning: Tracewick could not persist the circuit breaker state to disk; using in-memory state for this process.'],
-                $logger->lines(),
-            );
+            $store = new FallbackCircuitBreakerStore($file);
+            self::assertNull($store->acquire(0, 1_000, 5_000));
+            self::assertFalse($store->complete($seed->generation - 1, new CircuitBreakerState()));
         } finally {
             $directory->remove();
         }

@@ -92,10 +92,11 @@ deadline ([ADR 8](adr/0008-own-http-transport.md)). Production FPM should use `S
 
 The circuit breaker classifies outcomes: transient failures (timeouts, 5xx) open after a few in a
 row (default 3) for 30 seconds; configuration errors (401/403/404/413) open at once for 5 minutes;
-a rejected payload leaves the breaker alone. State is a small file under `stateDirectory` (default:
-system temp dir), created with mode `0700`, updated under an exclusive lock so FPM workers share
-one trial. If the file cannot be written, that process falls back to in-memory state and logs a
-warning.
+a rejected payload leaves the breaker alone. State is **in-memory by default** (correct for a
+single `tracewick-drain` and for any path that does not share HTTP delivery across processes). Set
+`CircuitBreakerConfig::$stateDirectory` to opt into a shared file (mode `0700`) when several
+delivery processes on one host must share one trial; if that file cannot be written, the process
+falls back to in-memory state and logs a warning. FPM with `SpoolSink` does not use a breaker.
 
 ### PHP-FPM
 

@@ -34,6 +34,7 @@ use Tracewick\Tests\Support\ScriptedTransport;
 use Tracewick\Tests\Support\TemporaryDirectory;
 use Tracewick\Transport\AtomicFile;
 use Tracewick\Transport\CachingDnsResolver;
+use Tracewick\Transport\CircuitBreakerAttempt;
 use Tracewick\Transport\CircuitBreakerConfig;
 use Tracewick\Transport\CircuitBreakerState;
 use Tracewick\Transport\CircuitBreakerTransport;
@@ -58,6 +59,7 @@ use Tracewick\Transport\SystemDnsResolver;
 #[UsesClass(CircuitBreakerConfig::class)]
 #[UsesClass(CircuitBreakerTransport::class)]
 #[UsesClass(CircuitBreakerState::class)]
+#[UsesClass(CircuitBreakerAttempt::class)]
 #[UsesClass(FileCircuitBreakerStore::class)]
 #[UsesClass(FallbackCircuitBreakerStore::class)]
 #[UsesClass(InMemoryCircuitBreakerStore::class)]
@@ -192,7 +194,33 @@ final class PyroscopeSinkTest extends TestCase
         self::assertSame('Cannot send the profile to Pyroscope: boom', $delivery->reason);
     }
 
-    public function testSendsOverHttpBehindACircuitBreakerSharedByTheProcessesOfTheHost(): void
+    public function testDefaultsToAnInMemoryCircuitBreaker(): void
+    {
+        $server = stream_socket_server('tcp://127.0.0.1:0');
+        self::assertIsResource($server);
+        $address = (string) stream_socket_get_name($server, false);
+        fclose($server);
+        $destination = 'http://' . $address . PyroscopePushRequest::PATH . "\n";
+        $path = sys_get_temp_dir() . '/tracewick-circuit-' . md5($destination);
+
+        try {
+            @unlink($path);
+            $profile = $this->profile(10_000_000, self::START_NS + 200_000_000);
+            $logger = new RecordingLogger();
+            $first = (new PyroscopeSink(new PyroscopeConfig('http://' . $address, 'blog', circuitBreaker: new CircuitBreakerConfig(1, 60_000)), logger: $logger))->send($profile);
+            $second = (new PyroscopeSink(new PyroscopeConfig('http://' . $address, 'blog', circuitBreaker: new CircuitBreakerConfig(1, 60_000))))->send($profile);
+
+            self::assertSame(DeliveryStatus::Failed, $first->status);
+            // Separate sink instances do not share in-memory state.
+            self::assertSame(DeliveryStatus::Failed, $second->status);
+            self::assertFileDoesNotExist($path);
+            self::assertSame(['warning: Tracewick stopped sending profiles for {pauseMs} ms after {failures} failed deliveries in a row: {reason}'], $logger->lines());
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    public function testSharesACircuitBreakerWhenAStateDirectoryIsSet(): void
     {
         $server = stream_socket_server('tcp://127.0.0.1:0');
         self::assertIsResource($server);
@@ -211,8 +239,8 @@ final class PyroscopeSinkTest extends TestCase
             self::assertSame(DeliveryStatus::Failed, $first->status);
             self::assertStringStartsWith('Cannot connect to ' . $address, $first->reason);
             self::assertSame(DeliveryStatus::Skipped, $second->status);
-            self::assertSame(
-                ['tracewick-circuit-' . md5('http://' . $address . PyroscopePushRequest::PATH . "\nteam-a")],
+            self::assertContains(
+                'tracewick-circuit-' . md5('http://' . $address . PyroscopePushRequest::PATH . "\nteam-a"),
                 $directory->entries(),
             );
             self::assertSame(['warning: Tracewick stopped sending profiles for {pauseMs} ms after {failures} failed deliveries in a row: {reason}'], $logger->lines());

@@ -9,7 +9,7 @@ use Tracewick\Diagnostics\DiagnosticLogger;
 
 /**
  * Prefers a shared file store, and falls back to an in-memory store for this process when the
- * file cannot be written. The switch happens at most once per process and is logged.
+ * file cannot be used. The switch happens at most once per process and is logged.
  */
 final class FallbackCircuitBreakerStore implements CircuitBreakerStore
 {
@@ -19,7 +19,6 @@ final class FallbackCircuitBreakerStore implements CircuitBreakerStore
 
     public function __construct(
         private readonly FileCircuitBreakerStore $file,
-        private readonly InMemoryCircuitBreakerStore $memory = new InMemoryCircuitBreakerStore(),
         private readonly DiagnosticLogger $logger = new DiagnosticLogger(),
     ) {
         $this->active = $file;
@@ -38,44 +37,41 @@ final class FallbackCircuitBreakerStore implements CircuitBreakerStore
         return $this->active->load();
     }
 
-    public function save(CircuitBreakerState $state): void
+    public function acquire(int $nowNs, int $trialExtendMs, int $maxPauseMs): ?CircuitBreakerAttempt
     {
         if ($this->fellBack) {
-            $this->active->save($state);
-
-            return;
+            return $this->active->acquire($nowNs, $trialExtendMs, $maxPauseMs);
         }
 
-        $this->file->save($state);
-        if ($this->file->persisted($state)) {
-            return;
+        $attempt = $this->file->acquire($nowNs, $trialExtendMs, $maxPauseMs);
+        if ($attempt instanceof CircuitBreakerAttempt) {
+            return $attempt;
         }
 
+        $state = $this->file->load();
+        if (null !== $state->openUntilNs && $nowNs < $state->openUntilNs) {
+            return null;
+        }
+
+        // Lock or write failed while the circuit looks closed — degrade to memory.
         $this->fallBack($state);
+
+        return $this->active->acquire($nowNs, $trialExtendMs, $maxPauseMs);
     }
 
-    public function update(callable $updater): CircuitBreakerState
+    public function complete(int $generation, CircuitBreakerState $next): bool
     {
         if ($this->fellBack) {
-            return $this->active->update($updater);
+            return $this->active->complete($generation, $next);
         }
 
-        $desired = $updater($this->file->load());
-        $this->file->update(static fn(CircuitBreakerState $_): CircuitBreakerState => $desired);
-        if ($this->file->persisted($desired)) {
-            return $desired;
-        }
-
-        $this->fallBack($desired);
-
-        return $desired;
+        return $this->file->complete($generation, $next);
     }
 
     private function fallBack(CircuitBreakerState $state): void
     {
         $this->fellBack = true;
-        $this->memory->save($state);
-        $this->active = $this->memory;
+        $this->active = new InMemoryCircuitBreakerStore($state);
         $this->logger->log(
             LogLevel::WARNING,
             'Tracewick could not persist the circuit breaker state to disk; using in-memory state for this process.',

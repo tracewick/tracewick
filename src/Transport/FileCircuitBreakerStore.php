@@ -5,16 +5,13 @@ declare(strict_types=1);
 namespace Tracewick\Transport;
 
 /**
- * Shares the circuit state between the processes of a host through a small file, so that all
- * PHP-FPM workers stop sending to a destination that keeps failing, not each of them on its own.
+ * Shares the circuit state between processes of a host through a small file (opt-in via
+ * {@see CircuitBreakerConfig::$stateDirectory}).
  *
- * The file holds one line, the failure count and the end of the open period or `-`. It is
- * replaced by an atomic rename, so a reader never sees half of it. {@see update()} takes a
- * non-blocking exclusive flock on a sibling lock file (with a short retry budget) so concurrent
- * workers do not race the trial delivery and a stuck holder cannot hang the caller. When the lock
- * cannot be taken, the updater is not applied and the previous state is returned. A missing or
- * unreadable file means a closed circuit; a write that cannot persist leaves the previous state
- * as it was.
+ * The file holds one line: failure count, open deadline or `-`, and a generation. It is replaced
+ * by an atomic rename. {@see acquire()} / {@see complete()} take a non-blocking exclusive flock on
+ * a sibling lock file (with a short retry budget). When the lock cannot be taken, acquire denies
+ * the send (Skipped) and complete returns false — never an unlocked read-modify-write.
  */
 final readonly class FileCircuitBreakerStore implements CircuitBreakerStore
 {
@@ -42,53 +39,135 @@ final readonly class FileCircuitBreakerStore implements CircuitBreakerStore
 
     public function load(): CircuitBreakerState
     {
-        $line = @file_get_contents($this->path);
-        if (false === $line || 1 !== preg_match('/^(?<failures>\d{1,9}) (?<openUntil>\d{1,19}|-)\n$/D', $line, $matches)) {
-            return new CircuitBreakerState();
-        }
-
-        return new CircuitBreakerState((int) $matches['failures'], '-' === $matches['openUntil'] ? null : (int) $matches['openUntil']);
+        return $this->read();
     }
 
-    public function save(CircuitBreakerState $state): void
+    public function acquire(int $nowNs, int $trialExtendMs, int $maxPauseMs): ?CircuitBreakerAttempt
     {
-        self::ensureDirectory(\dirname($this->path));
-        AtomicFile::write($this->path, \sprintf("%d %s\n", $state->consecutiveFailures, $state->openUntilNs ?? '-'));
+        return $this->withLock(function () use ($nowNs, $trialExtendMs, $maxPauseMs): ?CircuitBreakerAttempt {
+            $state = $this->clamp($this->read(), $nowNs, $maxPauseMs);
+            if (null !== $state->openUntilNs && $nowNs < $state->openUntilNs) {
+                $this->write($state);
+
+                return null;
+            }
+
+            $takingTrial = null !== $state->openUntilNs;
+            $generation = $state->generation + 1;
+            $next = $takingTrial
+                ? new CircuitBreakerState($state->consecutiveFailures, $nowNs + $trialExtendMs * 1_000_000, $generation)
+                : new CircuitBreakerState($state->consecutiveFailures, null, $generation);
+            if (!$this->write($next)) {
+                return null;
+            }
+
+            return new CircuitBreakerAttempt($generation, $state, $takingTrial);
+        });
     }
 
-    public function update(callable $updater): CircuitBreakerState
+    public function complete(int $generation, CircuitBreakerState $next): bool
+    {
+        $applied = false;
+        $this->withLock(function () use ($generation, $next, &$applied): ?CircuitBreakerAttempt {
+            $current = $this->read();
+            if ($current->generation !== $generation) {
+                return null;
+            }
+
+            if (!$this->write(new CircuitBreakerState($next->consecutiveFailures, $next->openUntilNs, $generation))) {
+                return null;
+            }
+            $applied = true;
+
+            return null;
+        });
+
+        return $applied;
+    }
+
+    /**
+     * Whether the last written content is what {@see load()} would read now.
+     */
+    public function persisted(CircuitBreakerState $expected): bool
+    {
+        $loaded = $this->read();
+
+        return $loaded->consecutiveFailures === $expected->consecutiveFailures
+            && $loaded->openUntilNs === $expected->openUntilNs
+            && $loaded->generation === $expected->generation;
+    }
+
+    /**
+     * @template T
+     *
+     * @param callable(): T $body
+     *
+     * @return T|null null when the lock could not be taken (acquire denials / complete false)
+     */
+    private function withLock(callable $body): mixed
     {
         self::ensureDirectory(\dirname($this->path));
         $lockPath = $this->path . '.lock';
         $lock = @fopen($lockPath, 'c+');
         if (false === $lock) {
-            return $this->load();
+            return null;
         }
 
         try {
             if (!$this->acquireExclusiveLock($lock)) {
-                return $this->load();
+                return null;
             }
 
-            $state = $updater($this->load());
-            $this->save($state);
-
-            return $state;
+            return $body();
         } finally {
             @flock($lock, \LOCK_UN);
             fclose($lock);
         }
     }
 
-    /**
-     * Whether the last {@see save()} content is what {@see load()} would read now.
-     */
-    public function persisted(CircuitBreakerState $expected): bool
+    private function read(): CircuitBreakerState
     {
-        $loaded = $this->load();
+        $line = @file_get_contents($this->path);
+        if (false === $line) {
+            return new CircuitBreakerState();
+        }
 
-        return $loaded->consecutiveFailures === $expected->consecutiveFailures
-            && $loaded->openUntilNs === $expected->openUntilNs;
+        if (1 === preg_match('/^(?<failures>\d{1,9}) (?<openUntil>\d{1,19}|-) (?<generation>\d{1,9})\n$/D', $line, $matches)) {
+            return new CircuitBreakerState(
+                (int) $matches['failures'],
+                '-' === $matches['openUntil'] ? null : (int) $matches['openUntil'],
+                (int) $matches['generation'],
+            );
+        }
+
+        // Pre-S5 lines without a generation.
+        if (1 === preg_match('/^(?<failures>\d{1,9}) (?<openUntil>\d{1,19}|-)\n$/D', $line, $matches)) {
+            return new CircuitBreakerState((int) $matches['failures'], '-' === $matches['openUntil'] ? null : (int) $matches['openUntil']);
+        }
+
+        return new CircuitBreakerState();
+    }
+
+    private function write(CircuitBreakerState $state): bool
+    {
+        return AtomicFile::write(
+            $this->path,
+            \sprintf("%d %s %d\n", $state->consecutiveFailures, $state->openUntilNs ?? '-', $state->generation),
+        );
+    }
+
+    private function clamp(CircuitBreakerState $state, int $nowNs, int $maxPauseMs): CircuitBreakerState
+    {
+        if (null === $state->openUntilNs) {
+            return $state;
+        }
+
+        $latestAllowed = $nowNs + $maxPauseMs * 1_000_000;
+        if ($state->openUntilNs <= $latestAllowed) {
+            return $state;
+        }
+
+        return new CircuitBreakerState($state->consecutiveFailures, $latestAllowed, $state->generation);
     }
 
     /**

@@ -19,11 +19,13 @@ use Tracewick\Diagnostics\DiagnosticLogger;
  * {@see DeliveryStatus::Rejected} leaves the circuit alone: the payload was bad, not the destination.
  * While open, payloads are skipped without touching the network. Once the open duration has
  * passed, the next payload is sent as a trial: success closes the circuit, a transient or
- * configuration failure opens it again. A process that takes the trial pushes the end of the open
- * period forward first, so that the other processes keep skipping while the trial runs.
+ * configuration failure opens it again. A process that takes the trial extends the open period
+ * first, so that the other processes keep skipping while the trial runs.
  *
- * The state lives in a {@see CircuitBreakerStore}. The default keeps it in the process; a shared
- * file store coordinates PHP-FPM workers on one host.
+ * Protocol: {@see CircuitBreakerStore::acquire()} → HTTP → {@see CircuitBreakerStore::complete()}.
+ * A stale complete (wrong generation) is ignored, so a late success cannot close a newer open.
+ * Default store is in-process memory; set {@see CircuitBreakerConfig::$stateDirectory} for a
+ * shared file store across workers.
  */
 final readonly class CircuitBreakerTransport implements Transport
 {
@@ -38,87 +40,59 @@ final readonly class CircuitBreakerTransport implements Transport
     public function send(Payload $payload): Delivery
     {
         $nowNs = $this->clock->nowNs();
-        $state = $this->loadClamped($nowNs);
-
-        if (null !== $state->openUntilNs && $nowNs < $state->openUntilNs) {
+        $maxPauseMs = max($this->config->openDurationMs, $this->config->configurationOpenDurationMs);
+        $attempt = $this->store->acquire($nowNs, $this->config->openDurationMs, $maxPauseMs);
+        if (!$attempt instanceof CircuitBreakerAttempt) {
             return Delivery::skipped('Circuit breaker is open after repeated failures.');
-        }
-
-        $takingTrial = false;
-        if (null !== $state->openUntilNs) {
-            $takingTrial = true;
-            $extendedUntil = $this->openUntilNs($nowNs, $this->config->openDurationMs);
-            $state = $this->store->update(function (CircuitBreakerState $current) use ($nowNs, $extendedUntil): CircuitBreakerState {
-                $current = $this->clampOpenUntil($current, $nowNs);
-                if (null === $current->openUntilNs || $nowNs < $current->openUntilNs) {
-                    return $current;
-                }
-
-                return new CircuitBreakerState($current->consecutiveFailures, $extendedUntil);
-            });
-
-            if (null === $state->openUntilNs) {
-                $takingTrial = false;
-            } elseif ($state->openUntilNs !== $extendedUntil) {
-                return Delivery::skipped('Circuit breaker is open after repeated failures.');
-            }
         }
 
         $delivery = $this->inner->send($payload);
 
         return match ($delivery->status) {
             DeliveryStatus::Skipped, DeliveryStatus::Rejected, DeliveryStatus::Empty => $delivery,
-            DeliveryStatus::Delivered => $this->onSuccess($delivery, $state),
-            DeliveryStatus::Configuration => $this->onConfiguration($delivery, $state),
-            DeliveryStatus::Failed => $this->onTransientFailure($delivery, $state, $takingTrial),
+            DeliveryStatus::Delivered => $this->onSuccess($delivery, $attempt),
+            DeliveryStatus::Configuration => $this->onConfiguration($delivery, $attempt),
+            DeliveryStatus::Failed => $this->onTransientFailure($delivery, $attempt),
         };
     }
 
     public function isOpen(): bool
     {
         $nowNs = $this->clock->nowNs();
-        $openUntilNs = $this->loadClamped($nowNs)->openUntilNs;
-
-        return null !== $openUntilNs && $nowNs < $openUntilNs;
-    }
-
-    /**
-     * Loads the store and persists a clamped open deadline when the file held a value further
-     * ahead than both configured pauses allow.
-     */
-    private function loadClamped(int $nowNs): CircuitBreakerState
-    {
+        $maxPauseMs = max($this->config->openDurationMs, $this->config->configurationOpenDurationMs);
         $state = $this->store->load();
-        $clamped = $this->clampOpenUntil($state, $nowNs);
+        $clamped = $this->clampOpenUntil($state, $nowNs, $maxPauseMs);
         if ($clamped->openUntilNs !== $state->openUntilNs) {
-            $this->store->save($clamped);
+            $this->store->complete($state->generation, $clamped);
+            $state = $this->store->load();
         }
 
-        return $clamped;
+        return null !== $state->openUntilNs && $nowNs < $state->openUntilNs;
     }
 
-    private function onSuccess(Delivery $delivery, CircuitBreakerState $stateBefore): Delivery
+    private function onSuccess(Delivery $delivery, CircuitBreakerAttempt $attempt): Delivery
     {
-        if (!$stateBefore->isClosed()) {
-            $this->store->save(new CircuitBreakerState());
+        if (!$attempt->stateBefore->isClosed()) {
+            $this->store->complete($attempt->generation, new CircuitBreakerState(generation: $attempt->generation));
         }
 
-        if (null !== $stateBefore->openUntilNs) {
+        if (null !== $attempt->stateBefore->openUntilNs) {
             $this->logger->log(LogLevel::INFO, 'Tracewick resumed sending profiles after a successful trial delivery.');
         }
 
         return $delivery;
     }
 
-    private function onConfiguration(Delivery $delivery, CircuitBreakerState $stateBefore): Delivery
+    private function onConfiguration(Delivery $delivery, CircuitBreakerAttempt $attempt): Delivery
     {
         $nowNs = $this->clock->nowNs();
-        $this->store->save(new CircuitBreakerState(
+        $this->store->complete($attempt->generation, new CircuitBreakerState(
             $this->config->failureThreshold,
             $this->openUntilNs($nowNs, $this->config->configurationOpenDurationMs),
+            $attempt->generation,
         ));
 
-        if (null === $stateBefore->openUntilNs || $stateBefore->openUntilNs <= $nowNs) {
+        if (null === $attempt->stateBefore->openUntilNs || $attempt->stateBefore->openUntilNs <= $nowNs) {
             $this->logger->log(
                 LogLevel::WARNING,
                 'Tracewick stopped sending profiles for {pauseMs} ms after a configuration error: {reason}',
@@ -129,15 +103,16 @@ final readonly class CircuitBreakerTransport implements Transport
         return $delivery;
     }
 
-    private function onTransientFailure(Delivery $delivery, CircuitBreakerState $stateBefore, bool $takingTrial): Delivery
+    private function onTransientFailure(Delivery $delivery, CircuitBreakerAttempt $attempt): Delivery
     {
-        $failures = min($stateBefore->consecutiveFailures + 1, $this->config->failureThreshold);
-        $open = $takingTrial || $failures >= $this->config->failureThreshold;
-        $this->store->save(new CircuitBreakerState(
+        $failures = min($attempt->stateBefore->consecutiveFailures + 1, $this->config->failureThreshold);
+        $open = $attempt->takingTrial || $failures >= $this->config->failureThreshold;
+        $this->store->complete($attempt->generation, new CircuitBreakerState(
             $failures,
             $open ? $this->openUntilNs($this->clock->nowNs(), $this->config->openDurationMs) : null,
+            $attempt->generation,
         ));
-        if ($open && !$takingTrial && null === $stateBefore->openUntilNs) {
+        if ($open && !$attempt->takingTrial && null === $attempt->stateBefore->openUntilNs) {
             $this->logger->log(
                 LogLevel::WARNING,
                 'Tracewick stopped sending profiles for {pauseMs} ms after {failures} failed deliveries in a row: {reason}',
@@ -153,20 +128,15 @@ final readonly class CircuitBreakerTransport implements Transport
         return $nowNs + $durationMs * 1_000_000;
     }
 
-    /**
-     * Caps an open deadline that lies further ahead than both configured pauses allow, so a
-     * corrupt or clock-skewed file cannot leave the circuit stuck open forever.
-     */
-    private function clampOpenUntil(CircuitBreakerState $state, int $nowNs): CircuitBreakerState
+    private function clampOpenUntil(CircuitBreakerState $state, int $nowNs, int $maxPauseMs): CircuitBreakerState
     {
         if (null === $state->openUntilNs) {
             return $state;
         }
 
-        $maxPauseMs = max($this->config->openDurationMs, $this->config->configurationOpenDurationMs);
         $latestAllowed = $nowNs + $maxPauseMs * 1_000_000;
         if ($state->openUntilNs > $latestAllowed) {
-            return new CircuitBreakerState($state->consecutiveFailures, $latestAllowed);
+            return new CircuitBreakerState($state->consecutiveFailures, $latestAllowed, $state->generation);
         }
 
         return $state;
