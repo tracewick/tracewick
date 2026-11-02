@@ -51,7 +51,9 @@ final class TracewickSubscriber implements EventSubscriberInterface
     ) {
         $this->profiler = UnitOfWorkProfiler::create(
             $this->sink($sink, $spoolDir, $pyroscopeUrl, $logger),
-            new ProfilerConfig(new Labels(['runtime' => $runtime]), sampleRate: 0.1),
+            // Profile every request here: the demo's job is a deterministic smoke into Pyroscope.
+            // The library default remains 0.1; production apps should set their own rate.
+            new ProfilerConfig(new Labels(['runtime' => $runtime]), sampleRate: 1.0),
             logger: $logger,
         );
         // Delivers what is still running or buffered if PHP exits before kernel.terminate.
