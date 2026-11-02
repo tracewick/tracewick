@@ -57,7 +57,7 @@ final readonly class PyroscopeSink implements Sink, SpoolForwarder
     {
         try {
             if ($profile->isEmpty()) {
-                return Delivery::skipped('The profile has no samples.');
+                return Delivery::empty('The profile has no samples.');
             }
 
             return $this->transport->send($this->payload(

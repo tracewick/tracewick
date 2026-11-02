@@ -8,7 +8,12 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
 use Tracewick\Clock\Clock;
 use Tracewick\Clock\SystemClock;
+use Tracewick\Diagnostics\CounterStore;
 use Tracewick\Diagnostics\DiagnosticLogger;
+use Tracewick\Diagnostics\HostCounterKeys;
+use Tracewick\Diagnostics\NullCounterStore;
+use Tracewick\Profile\LabelPiiHeuristics;
+use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
 use Tracewick\Sampler\ExcimerSampler;
 use Tracewick\Sampler\NullSampler;
@@ -16,6 +21,7 @@ use Tracewick\Sampler\NullSamplerReason;
 use Tracewick\Sampler\Sampler;
 use Tracewick\Sampler\SamplerConfig;
 use Tracewick\Sampler\SamplerFactory;
+use Tracewick\Sink\AggregationCardinalityLimiter;
 use Tracewick\Sink\Sink;
 use Tracewick\Transport\Delivery;
 use Tracewick\Transport\DeliveryStatus;
@@ -51,7 +57,12 @@ final class ContinuousProfiler
 
     private int $skippedProfiles = 0;
 
+    private int $emptyProfiles = 0;
+
     private int $swallowedErrors = 0;
+
+    /** @var array<string, true> */
+    private static array $piiWarnedKeys = [];
 
     private ?\Throwable $lastFailure = null;
 
@@ -71,6 +82,8 @@ final class ContinuousProfiler
         private readonly DiagnosticLogger $logger = new DiagnosticLogger(),
         ?Clock $clock = null,
         private readonly ?\Closure $registerShutdownFunction = null,
+        private readonly CounterStore $counters = new NullCounterStore(),
+        private readonly AggregationCardinalityLimiter $cardinalityLimiter = new AggregationCardinalityLimiter(),
     ) {
         $this->inactiveSampler = $sampler instanceof NullSampler ? $sampler->reason : null;
         $this->clock = $clock ?? new SystemClock();
@@ -83,6 +96,7 @@ final class ContinuousProfiler
             $sampler->setSegmentListener($this->pulse(...));
         }
 
+        $this->warnAboutPii($config->labels);
         $this->warnAboutInactiveSampler();
     }
 
@@ -228,6 +242,7 @@ final class ContinuousProfiler
             $this->rejectedProfiles,
             $this->failedProfiles,
             $this->skippedProfiles,
+            $this->emptyProfiles,
             $this->swallowedErrors,
             $this->inactiveSampler,
             $this->sampler->failureCount(),
@@ -245,16 +260,28 @@ final class ContinuousProfiler
     public static function resetInactiveSamplerWarning(): void
     {
         self::$inactiveSamplerWarned = false;
+        self::$piiWarnedKeys = [];
     }
 
     private function capture(): void
     {
-        $profile = Profile::fromBatch($this->sampler->flush(), $this->config->labels);
+        $batch = $this->sampler->flush();
+        $labels = new Labels($this->cardinalityLimiter->limitLabels(
+            $this->config->applicationName,
+            $this->config->labels->toArray(),
+            $batch->eventType,
+            $batch->periodNs,
+        ));
+        $profile = Profile::fromBatch($batch, $labels);
         if ($profile->isEmpty()) {
+            ++$this->emptyProfiles;
+            $this->counters->increment(HostCounterKeys::PROFILES_EMPTY);
+
             return;
         }
 
         ++$this->collectedProfiles;
+        $this->counters->increment(HostCounterKeys::PROFILES_COLLECTED);
         $this->accumulator->add($profile);
     }
 
@@ -278,33 +305,60 @@ final class ContinuousProfiler
         switch ($delivery->status) {
             case DeliveryStatus::Delivered:
                 ++$this->deliveredProfiles;
+                $this->counters->increment(HostCounterKeys::PROFILES_DELIVERED);
 
                 break;
 
             case DeliveryStatus::Rejected:
             case DeliveryStatus::Configuration:
                 ++$this->rejectedProfiles;
+                $this->counters->increment(HostCounterKeys::PROFILES_REJECTED);
                 $this->logger->log(LogLevel::WARNING, 'The profile backend rejected a profile: {reason}', $context);
 
                 break;
 
             case DeliveryStatus::Failed:
                 ++$this->failedProfiles;
+                $this->counters->increment(HostCounterKeys::PROFILES_FAILED);
                 $this->logger->log(LogLevel::WARNING, 'Tracewick could not deliver a profile: {reason}', $context);
 
                 break;
 
             case DeliveryStatus::Skipped:
                 ++$this->skippedProfiles;
+                $this->counters->increment(HostCounterKeys::PROFILES_SKIPPED);
                 $this->logger->log(LogLevel::NOTICE, 'Tracewick skipped a profile: {reason}', $context);
 
                 break;
+
+            case DeliveryStatus::Empty:
+                ++$this->emptyProfiles;
+                $this->counters->increment(HostCounterKeys::PROFILES_EMPTY);
+
+                break;
+        }
+    }
+
+    private function warnAboutPii(Labels $labels): void
+    {
+        foreach (LabelPiiHeuristics::suspiciousKeys($labels) as $key) {
+            if (isset(self::$piiWarnedKeys[$key])) {
+                continue;
+            }
+
+            self::$piiWarnedKeys[$key] = true;
+            $this->logger->log(
+                LogLevel::WARNING,
+                'Tracewick label "{key}" looks like personal data; prefer coarse labels (route, tenant class).',
+                ['key' => $key],
+            );
         }
     }
 
     private function swallow(\Throwable $error): void
     {
         ++$this->swallowedErrors;
+        $this->counters->increment(HostCounterKeys::PROFILES_SWALLOWED);
         $this->lastFailure = $error;
         $this->logger->log(LogLevel::WARNING, 'Tracewick ignored an error: {error}', ['error' => $error->getMessage(), 'exception' => $error]);
     }

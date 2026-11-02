@@ -197,11 +197,17 @@ $profiler->registerShutdown();
 
 `diagnostics()` counts what the profiler has done: profiles collected, dropped from a full buffer
 (or full accumulator), delivered, rejected by the backend, failed, skipped (an open circuit breaker
-or a full spool), errors swallowed, whether the sampler is a no-op and why (`inactiveSampler`), and
-how many failures the sampler itself swallowed (`samplerFailures`). Under PHP-FPM a unit-of-work
-profiler lives for one request, so the numbers cover that request; in a long-running worker they
-add up, and can be exported to the metrics of the application. Host-wide metrics will come from
-`tracewick-agent`.
+or a full spool), **empty** (no samples — not the same as skipped), errors swallowed, whether the
+sampler is a no-op and why (`inactiveSampler`), and how many failures the sampler itself swallowed
+(`samplerFailures`). Under PHP-FPM a unit-of-work profiler lives for one request, so the numbers
+cover that request; in a long-running worker they add up.
+
+Optional host-wide counters (`Tracewick\Diagnostics\CounterStore`) survive FPM requests when APCu
+is available, otherwise a small file under the system temp dir (`CounterStoreFactory::create()`).
+Pass a store into the profiler constructor to mirror drop/skip/empty/delivery counts across workers.
+`SpoolSink` also caps unique aggregation label sets (default 256) and collapses further combinations
+to `cardinality=other`. Label values that look like email, UUID, or long digit runs log a warning
+once per process per key; they are not stripped.
 
 Give a PSR-3 logger to see problems as they happen:
 

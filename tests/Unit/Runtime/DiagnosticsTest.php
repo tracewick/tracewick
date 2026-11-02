@@ -17,7 +17,7 @@ final class DiagnosticsTest extends TestCase
         $diagnostics = new Diagnostics();
 
         self::assertSame(
-            [0, 0, 0, 0, 0, 0, 0, null, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, null, 0],
             [
                 $diagnostics->collectedProfiles,
                 $diagnostics->droppedProfiles,
@@ -25,6 +25,7 @@ final class DiagnosticsTest extends TestCase
                 $diagnostics->rejectedProfiles,
                 $diagnostics->failedProfiles,
                 $diagnostics->skippedProfiles,
+                $diagnostics->emptyProfiles,
                 $diagnostics->swallowedErrors,
                 $diagnostics->inactiveSampler,
                 $diagnostics->samplerFailures,
@@ -34,10 +35,21 @@ final class DiagnosticsTest extends TestCase
 
     public function testKeepsTheCounts(): void
     {
-        $diagnostics = new Diagnostics(7, 1, 3, 1, 1, 1, 2, NullSamplerReason::ExtensionMissing, 4);
+        $diagnostics = new Diagnostics(
+            collectedProfiles: 7,
+            droppedProfiles: 1,
+            deliveredProfiles: 3,
+            rejectedProfiles: 1,
+            failedProfiles: 1,
+            skippedProfiles: 1,
+            emptyProfiles: 5,
+            swallowedErrors: 2,
+            inactiveSampler: NullSamplerReason::ExtensionMissing,
+            samplerFailures: 4,
+        );
 
         self::assertSame(
-            [7, 1, 3, 1, 1, 1, 2, NullSamplerReason::ExtensionMissing, 4],
+            [7, 1, 3, 1, 1, 1, 5, 2, NullSamplerReason::ExtensionMissing, 4],
             [
                 $diagnostics->collectedProfiles,
                 $diagnostics->droppedProfiles,
@@ -45,6 +57,7 @@ final class DiagnosticsTest extends TestCase
                 $diagnostics->rejectedProfiles,
                 $diagnostics->failedProfiles,
                 $diagnostics->skippedProfiles,
+                $diagnostics->emptyProfiles,
                 $diagnostics->swallowedErrors,
                 $diagnostics->inactiveSampler,
                 $diagnostics->samplerFailures,

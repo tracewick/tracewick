@@ -9,7 +9,10 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Clock\SystemClock;
 use Tracewick\Diagnostics\DiagnosticLogger;
+use Tracewick\Diagnostics\HostCounterKeys;
+use Tracewick\Diagnostics\NullCounterStore;
 use Tracewick\Exception\LogicException;
+use Tracewick\Profile\LabelPiiHeuristics;
 use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
 use Tracewick\Profile\ProfileMerger;
@@ -31,6 +34,7 @@ use Tracewick\Sampler\SampleBatch;
 use Tracewick\Sampler\SamplerConfig;
 use Tracewick\Sampler\SamplerFactory;
 use Tracewick\Sampler\StackAggregator;
+use Tracewick\Sink\AggregationCardinalityLimiter;
 use Tracewick\Sink\ApplicationName;
 use Tracewick\Sink\SpoolAggregationKey;
 use Tracewick\Tests\Support\ManualClock;
@@ -68,6 +72,10 @@ use Tracewick\Transport\Delivery;
 #[UsesClass(Delivery::class)]
 #[UsesClass(LogicException::class)]
 #[UsesClass(AtomicFile::class)]
+#[UsesClass(NullCounterStore::class)]
+#[UsesClass(HostCounterKeys::class)]
+#[UsesClass(LabelPiiHeuristics::class)]
+#[UsesClass(AggregationCardinalityLimiter::class)]
 final class ContinuousProfilerTest extends TestCase
 {
     private const WINDOW_NS = 15_000_000_000;

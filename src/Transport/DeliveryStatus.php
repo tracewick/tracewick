@@ -26,4 +26,7 @@ enum DeliveryStatus: string
 
     /** Nothing was sent, for example because the circuit breaker is open. */
     case Skipped = 'skipped';
+
+    /** The profile had no samples; nothing was sent and nothing was skipped by policy. */
+    case Empty = 'empty';
 }

@@ -28,6 +28,7 @@ final class DeliveryTest extends TestCase
             [Delivery::configuration('auth'), DeliveryStatus::Configuration],
             [Delivery::failed('down'), DeliveryStatus::Failed],
             [Delivery::skipped('open'), DeliveryStatus::Skipped],
+            [Delivery::empty('none'), DeliveryStatus::Empty],
         ] as [$delivery, $status]) {
             self::assertSame($status, $delivery->status);
             self::assertNotSame('', $delivery->reason);
@@ -38,5 +39,6 @@ final class DeliveryTest extends TestCase
         self::assertSame('auth', Delivery::configuration('auth')->reason);
         self::assertSame('down', Delivery::failed('down')->reason);
         self::assertSame('open', Delivery::skipped('open')->reason);
+        self::assertSame('none', Delivery::empty('none')->reason);
     }
 }

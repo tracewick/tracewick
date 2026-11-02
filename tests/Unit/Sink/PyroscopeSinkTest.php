@@ -158,7 +158,7 @@ final class PyroscopeSinkTest extends TestCase
 
         $delivery = $sink->send(new Profile(EventType::Wall, 10_000_000, self::START_NS, self::START_NS + 1_000));
 
-        self::assertSame(DeliveryStatus::Skipped, $delivery->status);
+        self::assertSame(DeliveryStatus::Empty, $delivery->status);
         self::assertSame('The profile has no samples.', $delivery->reason);
         self::assertSame([], $transport->sent);
     }

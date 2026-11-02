@@ -67,7 +67,7 @@ final readonly class CircuitBreakerTransport implements Transport
         $delivery = $this->inner->send($payload);
 
         return match ($delivery->status) {
-            DeliveryStatus::Skipped, DeliveryStatus::Rejected => $delivery,
+            DeliveryStatus::Skipped, DeliveryStatus::Rejected, DeliveryStatus::Empty => $delivery,
             DeliveryStatus::Delivered => $this->onSuccess($delivery, $state),
             DeliveryStatus::Configuration => $this->onConfiguration($delivery, $state),
             DeliveryStatus::Failed => $this->onTransientFailure($delivery, $state, $takingTrial),

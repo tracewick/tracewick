@@ -10,7 +10,10 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Clock\SystemClock;
 use Tracewick\Diagnostics\DiagnosticLogger;
+use Tracewick\Diagnostics\HostCounterKeys;
+use Tracewick\Diagnostics\NullCounterStore;
 use Tracewick\Exception\LogicException;
+use Tracewick\Profile\LabelPiiHeuristics;
 use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
 use Tracewick\Profile\Stack;
@@ -55,6 +58,9 @@ use Tracewick\Transport\Delivery;
 #[UsesClass(Diagnostics::class)]
 #[UsesClass(DiagnosticLogger::class)]
 #[UsesClass(AtomicFile::class)]
+#[UsesClass(NullCounterStore::class)]
+#[UsesClass(HostCounterKeys::class)]
+#[UsesClass(LabelPiiHeuristics::class)]
 final class UnitOfWorkProfilerTest extends TestCase
 {
     private ScriptedSampler $sampler;
@@ -224,7 +230,23 @@ final class UnitOfWorkProfilerTest extends TestCase
         $profiler->stop();
 
         self::assertSame(0, $profiler->bufferedProfiles());
-        self::assertEquals(new Diagnostics(), $profiler->diagnostics());
+        self::assertEquals(new Diagnostics(emptyProfiles: 1), $profiler->diagnostics());
+    }
+
+    public function testWarnsOnceAboutLabelValuesThatLookLikePii(): void
+    {
+        $profiler = $this->profiler();
+        $this->sampler->willSample('x');
+
+        $profiler->start(['email' => 'user@example.com']);
+        $profiler->label('email', 'other@example.com');
+        $profiler->stop();
+
+        self::assertSame(1, $profiler->bufferedProfiles());
+        self::assertCount(1, array_filter(
+            $this->logger->records,
+            static fn(array $r): bool => str_contains($r['message'], 'looks like personal data'),
+        ));
     }
 
     public function testDropsProfilesThatDoNotFitIntoTheBuffer(): void
