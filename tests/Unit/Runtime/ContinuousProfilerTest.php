@@ -194,6 +194,10 @@ final class ContinuousProfilerTest extends TestCase
             self::markTestSkipped('ext-excimer is not loaded.');
         }
 
+        // Wiring only. Do not assert hasPendingSegment while the sampler is running: native flush
+        // can set the flag at any interrupt. Flag-only delivery without sink I/O is covered by
+        // testSegmentListenerOnlyMarksPendingWithoutDelivering; the real Excimer→listener→no-send
+        // path lives in Integration/Runtime/ContinuousProfilerTest.
         $sampler = new ExcimerSampler(new SamplerConfig());
         $profiler = new ContinuousProfiler(
             $sampler,
@@ -207,6 +211,22 @@ final class ContinuousProfilerTest extends TestCase
         $profiler->stop();
 
         self::assertFalse($profiler->isRunning());
+    }
+
+    public function testSegmentListenerOnlyMarksPendingWithoutDelivering(): void
+    {
+        $profiler = $this->profiler();
+        $profiler->start();
+
+        $onSegment = new \ReflectionMethod(ContinuousProfiler::class, 'onSegment');
+        $onSegment->invoke($profiler);
+
+        self::assertTrue($profiler->hasPendingSegment());
+        self::assertSame([], $this->sink->sent);
+        self::assertSame(0, $profiler->diagnostics()->deliveredProfiles);
+
+        $profiler->flush();
+        self::assertFalse($profiler->hasPendingSegment());
     }
 
     public function testRegisterShutdownStopsOnce(): void
@@ -503,4 +523,5 @@ final class ContinuousProfilerTest extends TestCase
             [new Sample([new Frame($function)], $count, $startNs)],
         );
     }
+
 }

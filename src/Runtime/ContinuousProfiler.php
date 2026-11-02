@@ -31,8 +31,10 @@ use Tracewick\Transport\DeliveryStatus;
  *
  * Starts the sampler once with process-level labels from {@see ContinuousProfilerConfig}. It does
  * not accept per-request labels: concurrent requests in one process would otherwise steal each
- * other's samples. Excimer segments (or explicit {@see pulse()} calls) flush into a
- * {@see ProfileAccumulator} keyed like ADR 12; closed windows are sent to the sink.
+ * other's samples. Excimer's native flush already aggregates stacks inside the sampler; the segment
+ * listener only sets a pending flag. Call {@see pulse()} from the application loop to capture into
+ * a {@see ProfileAccumulator} (ADR 12) and send closed windows — never from the Excimer callback
+ * (no nested flush, disk, or HTTP inside a VM interrupt).
  *
  * Every method is fail-open (ADR 5). Prefer {@see UnitOfWorkProfiler} for PHP-FPM, CLI, and
  * sequential workers that own one request at a time.
@@ -46,6 +48,9 @@ final class ContinuousProfiler
     private bool $shutdownRegistered = false;
 
     private bool $pulsing = false;
+
+    /** Set by the Excimer segment listener; cleared when {@see pulse()} or {@see flush()} runs. */
+    private bool $segmentPending = false;
 
     private int $collectedProfiles = 0;
 
@@ -95,7 +100,7 @@ final class ContinuousProfiler
             $config->maxOpenBuckets,
         );
         if ($sampler instanceof ExcimerSampler) {
-            $sampler->setSegmentListener($this->pulse(...));
+            $sampler->setSegmentListener($this->onSegment(...));
         }
 
         $this->filteredLabels = LabelPolicy::filter($config->labels);
@@ -149,7 +154,7 @@ final class ContinuousProfiler
     /**
      * Flushes the running sampler into the accumulator and sends closed aggregation windows.
      *
-     * Safe to call from a worker loop; also wired to the Excimer flush callback.
+     * Call this from the application / worker loop (or a timer), not from Excimer's flush callback.
      */
     public function pulse(): void
     {
@@ -159,6 +164,7 @@ final class ContinuousProfiler
             }
 
             $this->pulsing = true;
+            $this->segmentPending = false;
             $this->capture();
             $this->deliver($this->accumulator->drainClosed($this->clock->nowNs()));
         } catch (\Throwable $e) {
@@ -174,6 +180,7 @@ final class ContinuousProfiler
     public function flush(): void
     {
         try {
+            $this->segmentPending = false;
             if ($this->started) {
                 $this->capture();
             }
@@ -185,23 +192,36 @@ final class ContinuousProfiler
     }
 
     /**
+     * Whether an Excimer segment finished since the last {@see pulse()} / {@see flush()}.
+     *
+     * The application can poll this and call {@see pulse()} between tasks.
+     */
+    public function hasPendingSegment(): bool
+    {
+        return $this->segmentPending;
+    }
+
+    /**
      * Stops sampling, captures the last segment, and sends every remaining bucket.
      */
     public function stop(): void
     {
         try {
             if (!$this->started) {
+                $this->segmentPending = false;
                 $this->deliver($this->accumulator->drainAll());
 
                 return;
             }
 
             $this->started = false;
+            $this->segmentPending = false;
             $this->sampler->stop();
             $this->capture();
             $this->deliver($this->accumulator->drainAll());
         } catch (\Throwable $e) {
             $this->started = false;
+            $this->segmentPending = false;
             $this->swallow($e);
         }
     }
@@ -288,6 +308,15 @@ final class ContinuousProfiler
             'Tracewick dropped label "{key}" because it is denied by the label policy.',
             ['key' => $key],
         );
+    }
+
+    /**
+     * Excimer native flush already ingested stacks into the sampler aggregator. Only mark pending
+     * so the app loop can {@see pulse()} without nested flush or sink I/O here.
+     */
+    private function onSegment(): void
+    {
+        $this->segmentPending = true;
     }
 
     private function capture(): void

@@ -194,8 +194,10 @@ adapter therefore:
 
 - starts the sampler **once** with **process-level** labels from config;
 - never takes per-request labels;
-- flushes Excimer segments into an in-process `ProfileAccumulator` that uses the same aggregation
-  key and 10–15 s window as drain ([ADR 12](adr/0012-aggregate-before-delivery.md));
+- lets Excimer's native flush aggregate stacks in the sampler and only marks `hasPendingSegment()`;
+- on `pulse()` / `flush()` from the app loop, captures into an in-process `ProfileAccumulator`
+  with the same aggregation key and 10–15 s window as drain
+  ([ADR 12](adr/0012-aggregate-before-delivery.md));
 - sends one merged profile per key per closed window to the sink.
 
 ```php
@@ -211,14 +213,16 @@ $profiler = ContinuousProfiler::create(
 );
 $profiler->start();
 $profiler->registerShutdown();
-// Optional: call $profiler->pulse() from a timer if Excimer segment callbacks are not enough.
+// Required for delivery: call pulse() from the worker loop / timer. Excimer's flush callback only
+// marks hasPendingSegment(); it never sends.
 ```
 
 | Call | What it does |
 | --- | --- |
 | `start()` | Starts continuous sampling; a second call is a no-op |
-| `pulse()` | Captures the current segment into the accumulator and sends closed windows |
+| `pulse()` | Captures into the accumulator and sends closed windows (call from the app loop) |
 | `flush()` | Same capture, then sends closed windows only |
+| `hasPendingSegment()` | True after an Excimer segment until the next `pulse()` / `flush()` |
 | `stop()` | Stops sampling and sends every remaining bucket |
 | `registerShutdown()` | Stops and flushes on PHP shutdown |
 
