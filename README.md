@@ -28,13 +28,26 @@ meant to run continuously in production.
 ## Requirements
 
 - PHP 8.2 or newer
-- [ext-excimer](https://pecl.php.net/package/excimer) to collect profiles
+- [ext-excimer](https://pecl.php.net/package/excimer) to collect profiles (optional at install time;
+  without it Tracewick is a no-op — see [ADR 5](docs/adr/0005-fail-open-policy.md))
 
 ## Installation
 
 ```bash
 composer require tracewick/tracewick
 ```
+
+Install the extension separately. On Alpine there is no distro package — build from PECL:
+
+```bash
+apk add --no-cache $PHPIZE_DEPS
+pecl install excimer-1.2.6
+docker-php-ext-enable excimer   # official php:* Docker images
+php -m | grep -i excimer
+```
+
+Full Debian/Ubuntu and Alpine steps, plus a local proof Dockerfile (`docker/php/Dockerfile.alpine`,
+not a Docker Hub image), are in [docs/install-excimer.md](docs/install-excimer.md).
 
 ## Contributing
 
