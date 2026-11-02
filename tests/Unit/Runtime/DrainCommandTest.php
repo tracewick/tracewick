@@ -13,6 +13,7 @@ use Tracewick\Diagnostics\DiagnosticLogger;
 use Tracewick\Encoder\CompactStacksCodec;
 use Tracewick\Encoder\PprofEncoder;
 use Tracewick\Encoder\ProfileParts;
+use Tracewick\Profile\BoundedProfileBuilder;
 use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
 use Tracewick\Profile\ProfileMerger;
@@ -89,6 +90,7 @@ use Tracewick\Transport\SystemDnsResolver;
 #[UsesClass(ProfileParts::class)]
 #[UsesClass(Labels::class)]
 #[UsesClass(Profile::class)]
+#[UsesClass(BoundedProfileBuilder::class)]
 #[UsesClass(ProfileMerger::class)]
 #[UsesClass(Stack::class)]
 #[UsesClass(Frame::class)]

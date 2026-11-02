@@ -12,6 +12,7 @@ use Tracewick\Diagnostics\DiagnosticLogger;
 use Tracewick\Diagnostics\HostCounterKeys;
 use Tracewick\Diagnostics\NullCounterStore;
 use Tracewick\Exception\LogicException;
+use Tracewick\Profile\BoundedProfileBuilder;
 use Tracewick\Profile\LabelPolicy;
 use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
@@ -56,6 +57,7 @@ use Tracewick\Transport\Delivery;
 #[UsesClass(DiagnosticLogger::class)]
 #[UsesClass(SystemClock::class)]
 #[UsesClass(ProfileMerger::class)]
+#[UsesClass(BoundedProfileBuilder::class)]
 #[UsesClass(Profile::class)]
 #[UsesClass(Stack::class)]
 #[UsesClass(Labels::class)]

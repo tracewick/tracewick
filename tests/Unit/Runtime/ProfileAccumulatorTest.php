@@ -7,6 +7,7 @@ namespace Tracewick\Tests\Unit\Runtime;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Tracewick\Profile\BoundedProfileBuilder;
 use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
 use Tracewick\Profile\ProfileMerger;
@@ -21,6 +22,7 @@ use Tracewick\Sink\SpoolAggregationKey;
 #[UsesClass(SpoolAggregationWindow::class)]
 #[UsesClass(SpoolAggregationKey::class)]
 #[UsesClass(ProfileMerger::class)]
+#[UsesClass(BoundedProfileBuilder::class)]
 #[UsesClass(Profile::class)]
 #[UsesClass(Stack::class)]
 #[UsesClass(Labels::class)]

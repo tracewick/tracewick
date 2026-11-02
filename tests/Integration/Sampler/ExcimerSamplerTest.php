@@ -9,6 +9,8 @@ use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Clock\SystemClock;
+use Tracewick\Profile\BoundedProfileBuilder;
+use Tracewick\Profile\Stack;
 use Tracewick\Sampler\EventType;
 use Tracewick\Sampler\ExcimerSampler;
 use Tracewick\Sampler\ExcimerTraceConverter;
@@ -29,6 +31,8 @@ use Tracewick\Tests\Support\SteppingClock;
 #[UsesClass(Frame::class)]
 #[UsesClass(SystemClock::class)]
 #[UsesClass(StackAggregator::class)]
+#[UsesClass(BoundedProfileBuilder::class)]
+#[UsesClass(Stack::class)]
 #[RequiresPhpExtension('excimer')]
 final class ExcimerSamplerTest extends TestCase
 {

@@ -5,16 +5,22 @@ declare(strict_types=1);
 namespace Tracewick\Profile;
 
 use Tracewick\Exception\LogicException;
-use Tracewick\Sampler\Frame;
 
 /**
  * Merges profiles that share an aggregation key ([ADR 12](../../docs/adr/0012-aggregate-before-delivery.md)).
  *
  * Stacks with the same sequence of frames have their weights added. The merged window is the
  * earliest start and the latest end. Every profile must share event type, period and labels.
+ * Structural caps come from {@see BoundedProfileBuilder}; excess weight becomes `[overflow]`.
  */
 final readonly class ProfileMerger
 {
+    public function __construct(
+        private int $maxStacks = BoundedProfileBuilder::DEFAULT_MAX_STACKS,
+        private int $maxFrames = BoundedProfileBuilder::DEFAULT_MAX_FRAMES,
+        private int $maxStrings = BoundedProfileBuilder::DEFAULT_MAX_STRINGS,
+    ) {}
+
     /**
      * @param non-empty-list<Profile> $profiles
      *
@@ -23,12 +29,9 @@ final readonly class ProfileMerger
     public function merge(array $profiles): Profile
     {
         $first = $profiles[0];
-        $frameIds = [];
-        $frames = [];
-        /** @var array<string, array{list<int>, int, bool}> $stacks */
-        $stacks = [];
         $startNs = $first->startNs;
         $endNs = $first->endNs;
+        $builder = new BoundedProfileBuilder($this->maxStacks, $this->maxFrames, $this->maxStrings);
 
         foreach ($profiles as $profile) {
             if ($profile->eventType !== $first->eventType || $profile->periodNs !== $first->periodNs) {
@@ -37,39 +40,22 @@ final readonly class ProfileMerger
 
             $startNs = min($startNs, $profile->startNs);
             $endNs = max($endNs, $profile->endNs);
-            $idMap = [];
-            foreach ($profile->frames as $oldId => $frame) {
-                $key = $this->frameKey($frame);
-                if (!isset($frameIds[$key])) {
-                    $frameIds[$key] = \count($frames);
-                    $frames[] = $frame;
-                }
-
-                $idMap[$oldId] = $frameIds[$key];
-            }
 
             foreach ($profile->stacks as $stack) {
-                $ids = [];
+                $frames = [];
                 foreach ($stack->frameIds as $oldId) {
-                    if (!isset($idMap[$oldId])) {
+                    if (!isset($profile->frames[$oldId])) {
                         throw new LogicException(\sprintf('Stack references missing frame %d.', $oldId));
                     }
 
-                    $ids[] = $idMap[$oldId];
+                    $frames[] = $profile->frames[$oldId];
                 }
 
-                $stackKey = implode(',', $ids);
-                if ($stack->truncated) {
-                    $stackKey .= ',truncated';
-                }
-
-                if (isset($stacks[$stackKey])) {
-                    $stacks[$stackKey][1] += $stack->count;
-                } else {
-                    $stacks[$stackKey] = [$ids, $stack->count, $stack->truncated];
-                }
+                $builder->add($frames, $stack->count, $stack->truncated);
             }
         }
+
+        [$frames, $stacks] = $builder->toProfileParts();
 
         return new Profile(
             $first->eventType,
@@ -77,22 +63,8 @@ final readonly class ProfileMerger
             $startNs,
             $endNs,
             $frames,
-            array_values(array_map(
-                static fn(array $stack): Stack => new Stack($stack[0], $stack[1], $stack[2]),
-                $stacks,
-            )),
+            $stacks,
             $first->labels,
         );
-    }
-
-    private function frameKey(Frame $frame): string
-    {
-        return implode("\0", [
-            $frame->function ?? '',
-            $frame->class ?? '',
-            $frame->file ?? '',
-            $frame->line,
-            $frame->closureLine ?? '',
-        ]);
     }
 }

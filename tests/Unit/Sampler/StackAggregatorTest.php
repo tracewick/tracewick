@@ -7,11 +7,15 @@ namespace Tracewick\Tests\Unit\Sampler;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Tracewick\Profile\BoundedProfileBuilder;
+use Tracewick\Profile\Stack;
 use Tracewick\Sampler\Frame;
 use Tracewick\Sampler\Sample;
 use Tracewick\Sampler\StackAggregator;
 
 #[CoversClass(StackAggregator::class)]
+#[UsesClass(BoundedProfileBuilder::class)]
+#[UsesClass(Stack::class)]
 #[UsesClass(Frame::class)]
 #[UsesClass(Sample::class)]
 final class StackAggregatorTest extends TestCase
@@ -96,5 +100,19 @@ final class StackAggregatorTest extends TestCase
         self::assertFalse($samples[0]->truncated);
         self::assertSame(6, $samples[1]->count);
         self::assertTrue($samples[1]->truncated);
+    }
+
+    public function testOverflowDoesNotGrowTheFrameTable(): void
+    {
+        $aggregator = new StackAggregator(1);
+        $aggregator->add([new Frame('kept')], 1);
+        $frames = $aggregator->frameCount();
+
+        for ($i = 0; $i < 20; ++$i) {
+            $aggregator->add([new Frame('x' . $i)], 1);
+        }
+
+        self::assertSame($frames, $aggregator->frameCount());
+        self::assertTrue($aggregator->wasCapped());
     }
 }

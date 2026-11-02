@@ -8,6 +8,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Encoder\SpeedscopeEncoder;
+use Tracewick\Profile\BoundedProfileBuilder;
 use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
 use Tracewick\Profile\Stack;
@@ -20,6 +21,7 @@ use Tracewick\Tests\Support\ProfileFixtures;
 
 #[CoversClass(SpeedscopeEncoder::class)]
 #[UsesClass(Profile::class)]
+#[UsesClass(BoundedProfileBuilder::class)]
 #[UsesClass(Stack::class)]
 #[UsesClass(Labels::class)]
 #[UsesClass(Frame::class)]
