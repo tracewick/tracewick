@@ -205,6 +205,40 @@ final class DrainCommandTest extends TestCase
         self::assertSame([], $this->sleeps);
     }
 
+    public function testDefaultPathDoesNotClaimWhenDnsPrefetchFails(): void
+    {
+        $this->write(self::FIRST, 'first');
+        $command = new DrainCommand($this->output, $this->errors, $this->clock, $this->recordSleep(...));
+
+        $exitCode = $command->run([
+            '--once',
+            '--spool-dir=' . $this->spool->path,
+            '--pyroscope-url=http://dns-fail.invalid:4040',
+            '--reader-id=drain',
+        ]);
+
+        self::assertSame(DrainCommand::EXIT_FAILURE, $exitCode);
+        self::assertStringContainsString('DNS resolution failed before claim', $this->read($this->errors));
+        self::assertSame([self::FIRST], $this->spool->entries());
+        self::assertSame([], $this->sleeps);
+    }
+
+    public function testDefaultPathPrefetchesAnIpLiteralWhenTheSpoolIsEmpty(): void
+    {
+        $command = new DrainCommand($this->output, $this->errors, $this->clock, $this->recordSleep(...));
+
+        $exitCode = $command->run([
+            '--once',
+            '--spool-dir=' . $this->spool->path,
+            '--pyroscope-url=http://127.0.0.1:9',
+            '--reader-id=drain',
+        ]);
+
+        self::assertSame(0, $exitCode);
+        self::assertSame("Delivered 0, rejected 0, ack-failures 0 spool files.\n", $this->read($this->output));
+        self::assertSame('', $this->read($this->errors));
+    }
+
     public function testSleepsWhileTheSpoolIsEmptyUntilStopped(): void
     {
         $command = $this->command(new ScriptedForwarder(), stopAfterSleeps: 2);
@@ -420,7 +454,13 @@ final class DrainCommandTest extends TestCase
     {
         $command = new DrainCommand($this->output, $this->errors, $this->clock, $this->recordSleep(...));
 
-        $exitCode = $command->run(['--once', ...$this->required()]);
+        // IP literal so default-path DNS prefetch succeeds without a network lookup.
+        $exitCode = $command->run([
+            '--once',
+            '--spool-dir=' . $this->spool->path,
+            '--pyroscope-url=http://127.0.0.1:9',
+            '--reader-id=drain',
+        ]);
 
         self::assertSame(0, $exitCode);
         self::assertSame("Delivered 0, rejected 0, ack-failures 0 spool files.\n", $this->read($this->output));

@@ -51,8 +51,10 @@ is the only part of the response that matters.
   configuration. The behaviour is the same on every installation and is covered by one test
   suite, including chaos tests against Toxiproxy.
 - We maintain an HTTP/1.1 client, deliberately kept minimal. Known limits:
-  - DNS resolution happens before the connect timeout starts and is not bounded by it. Use an
-    IP address or a local resolver cache when this matters.
+  - DNS resolution happens before the connect timeout starts and is not bounded by it.
+    `tracewick-drain` prefetches through {@see CachingDnsResolver} **before claiming** spool
+    files, caches a successful IP (~60 s TTL for VIP churn), and does not cache failed lookups
+    that fall back to the hostname. Request-path senders should prefer an IP or the spool path.
   - No HTTP proxy support and no client certificates (mTLS).
   - No keep-alive and no HTTP/2: every delivery opens a new connection. Delivery is batched
     and happens outside the request (ADR 5), so the cost is small.

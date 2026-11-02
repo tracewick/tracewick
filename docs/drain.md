@@ -15,6 +15,21 @@ window id are merged before upload ([ADR 12](adr/0012-aggregate-before-delivery.
 merge compatibility only: drain does not wait for it to close, and may send more than one POST for
 the same key in the same window. Each pass claims under a file count and a byte budget.
 
+## DNS before claim
+
+PHP cannot bound `gethostbynamel()` with the HTTP socket timeout ([ADR 8](adr/0008-own-http-transport.md)).
+The default `tracewick-drain` path therefore:
+
+1. Resolves the Pyroscope host **once before claiming** any spool files in a pass.
+2. Caches a successful IP for about 60 seconds and reuses it for POSTs in that process (TLS
+   `Host` / SNI still use the original hostname).
+3. Skips the pass without claiming when resolution fails, so files are not held across a DNS hang.
+4. Drops the cached address after a failed delivery pass so the next attempt can pick up a new
+   VIP or pod IP (Kubernetes / Swarm service failover).
+
+Application workers on the spool path never resolve or send HTTP. Keep-alive is not added to the
+PHP client; a future agent may own connection reuse instead.
+
 ## What it does with each file
 
 The drain claims a batch (oldest first), merges compatible compact-stacks files, then sends:
