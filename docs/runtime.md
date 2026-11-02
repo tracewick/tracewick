@@ -111,6 +111,25 @@ until shutdown functions finish. With a `SpoolSink` that wait is negligible. Oth
 flushes. Output that shutdown functions registered after the profiler print is then lost, which is
 why the option is off by default. See [ADR 10](adr/0010-deferred-delivery.md).
 
+### `auto_prepend_file` (before the framework)
+
+To include cold-start and autoloader time in the profile, point PHP at
+[`examples/auto_prepend.php`](../examples/auto_prepend.php) (`auto_prepend_file` in `php.ini` or
+`-d`). That script boots a `SpoolSink` profiler, starts one unit of work, registers shutdown
+delivery, and stores the instance in `ProcessProfiler`.
+
+Required environment: `TRACEWICK_APPLICATION`, `TRACEWICK_SPOOL_DIR`. After the router runs:
+
+```php
+use Tracewick\Runtime\ProcessProfiler;
+
+ProcessProfiler::get()?->label('route', $routeName);
+```
+
+Use either prepend **or** a framework subscriber that creates its own profiler — not both for the
+same request, or you double-sample. Prefer the framework integration when one exists; prepend is
+for bare PHP-FPM and for early-start + late-label hybrids.
+
 ### Sequential long-running workers
 
 In RoadRunner, FrankenPHP worker mode or a queue consumer that handles **one request at a time**,

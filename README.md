@@ -49,6 +49,9 @@ php -m | grep -i excimer
 Full Debian/Ubuntu and Alpine steps, plus a local proof Dockerfile (`docker/php/Dockerfile.alpine`,
 not a Docker Hub image), are in [docs/install-excimer.md](docs/install-excimer.md).
 
+For PHP-FPM without a framework package, [`examples/auto_prepend.php`](examples/auto_prepend.php)
+can start profiling before the app boots (`auto_prepend_file`); see [docs/runtime.md](docs/runtime.md).
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Please report security issues privately as described in

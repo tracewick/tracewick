@@ -35,7 +35,8 @@ use Tracewick\Transport\DeliveryStatus;
  * buffer in memory, so nothing is sent while the work runs; {@see flush()} hands the buffered
  * profiles to the sink. After {@see registerShutdown()} the profiler stops and flushes by itself
  * when PHP shuts down, which is all a PHP-FPM application needs. Long-running workers call
- * {@see flush()} after each unit of work.
+ * {@see flush()} after each unit of work. For `auto_prepend_file` bootstrapping see
+ * {@see AutoPrepend} and {@see ProcessProfiler}.
  *
  * With a sample rate below 1 only that share of units of work is profiled: {@see start()} decides
  * at random, and the profiler stays idle for the others.
