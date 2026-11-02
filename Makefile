@@ -96,5 +96,5 @@ app-up: stand-up app-build ## Start the reference app with PostgreSQL and load i
 app-smoke: ## Check that the reference app answers on PHP-FPM and RoadRunner
 	docker/reference-app/smoke-test.sh
 
-app-profiles: ## Check that the reference app's profiles reach Pyroscope with route labels
+app-profiles: ## Check profiles in Pyroscope: stacks, wall/ns units, routes, no raw URLs
 	docker/reference-app/check-profiles.sh
