@@ -10,6 +10,9 @@ namespace Tracewick\Diagnostics;
  * Callers must pass product-prefixed keys ({@see HostCounterKeys}); this store
  * does not add another prefix, so dumped keys match what profilers wrote.
  *
+ * Fail-open: when APCu is loaded but disabled (common on CLI/CI), every method
+ * is a no-op instead of throwing out of {@see \APCUIterator}.
+ *
  * @internal prefer {@see CounterStoreFactory}
  */
 final readonly class ApcuCounterStore implements CounterStore
@@ -42,19 +45,23 @@ final readonly class ApcuCounterStore implements CounterStore
         ?\Closure $fetch = null,
         ?\Closure $iterate = null,
     ) {
-        $this->add = $add ?? (static fn(string $key, int $value): bool => \function_exists('apcu_add') && apcu_add($key, $value));
+        $this->add = $add ?? (static fn(string $key, int $value): bool => self::apcuReady() && \function_exists('apcu_add') && apcu_add($key, $value));
         $this->inc = $inc ?? static function (string $key, int $by): void {
-            if (\function_exists('apcu_inc')) {
+            if (self::apcuReady() && \function_exists('apcu_inc')) {
                 apcu_inc($key, $by);
             }
         };
-        $this->fetch = $fetch ?? (static fn(string $key): mixed => \function_exists('apcu_fetch') ? apcu_fetch($key) : false);
+        $this->fetch = $fetch ?? (static fn(string $key): mixed => self::apcuReady() && \function_exists('apcu_fetch') ? apcu_fetch($key) : false);
         $this->iterate = $iterate ?? static function (string $prefix): iterable {
-            if (!class_exists(\APCUIterator::class, false)) {
+            if (!self::apcuReady() || !class_exists(\APCUIterator::class, false)) {
                 return [];
             }
 
-            return new \APCUIterator('/^' . preg_quote($prefix, '/') . '/');
+            try {
+                return new \APCUIterator('/^' . preg_quote($prefix, '/') . '/');
+            } catch (\Throwable) {
+                return [];
+            }
         };
     }
 
@@ -78,8 +85,14 @@ final readonly class ApcuCounterStore implements CounterStore
 
     public function all(): array
     {
+        try {
+            $entries = ($this->iterate)(self::KEY_PREFIX);
+        } catch (\Throwable) {
+            return [];
+        }
+
         $out = [];
-        foreach (($this->iterate)(self::KEY_PREFIX) as $entry) {
+        foreach ($entries as $entry) {
             if (
                 !\is_array($entry)
                 || !isset($entry['key'], $entry['value'])
@@ -96,5 +109,10 @@ final readonly class ApcuCounterStore implements CounterStore
         ksort($out, \SORT_STRING);
 
         return $out;
+    }
+
+    private static function apcuReady(): bool
+    {
+        return \function_exists('apcu_enabled') && apcu_enabled();
     }
 }

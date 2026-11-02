@@ -69,12 +69,27 @@ final class ApcuCounterStoreTest extends TestCase
         self::assertSame(['tracewick:ok' => 4], $store->all());
     }
 
-    public function testDefaultBindingsDegradeWithoutApcu(): void
+    public function testAllIsFailOpenWhenTheIteratorThrows(): void
     {
-        if (\extension_loaded('apcu') && \function_exists('apcu_enabled') && apcu_enabled()) {
-            self::markTestSkipped('This case covers the no-APCu fallback bindings.');
+        $store = new ApcuCounterStore(
+            static fn(string $key, int $value): bool => false,
+            static function (string $key, int $by): void {},
+            static fn(string $key): mixed => false,
+            static function (string $prefix): iterable {
+                throw new \Error('APC must be enabled to use APCUIterator');
+            },
+        );
+
+        self::assertSame([], $store->all());
+    }
+
+    public function testDefaultBindingsAreFailOpenWhenApcuIsUnavailable(): void
+    {
+        if (\function_exists('apcu_enabled') && apcu_enabled()) {
+            self::markTestSkipped('APCu is enabled in this process.');
         }
 
+        // CI often loads ext-apcu with apc.enable_cli=0; constructing APCUIterator then throws.
         $store = new ApcuCounterStore();
         $store->increment('tracewick:a');
         self::assertSame(0, $store->get('tracewick:a'));
@@ -83,7 +98,7 @@ final class ApcuCounterStoreTest extends TestCase
 
     public function testWorksAgainstRealApcuWhenEnabled(): void
     {
-        if (!\extension_loaded('apcu') || !\function_exists('apcu_enabled') || !apcu_enabled()) {
+        if (!\function_exists('apcu_enabled') || !apcu_enabled()) {
             self::markTestSkipped('ext-apcu is not enabled.');
         }
 
