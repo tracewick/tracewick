@@ -16,8 +16,9 @@ use Tracewick\Clock\SystemClock;
  * stream_select() with the remaining time, so a destination that accepts the connection and
  * then stalls costs at most the timeout. A `stream_select()` interrupted by a signal (EINTR) is
  * retried against the same deadline; the signal itself is not a delivery failure. Name resolution
- * runs through {@see DnsResolver} before the connect timeout starts and is not bounded by it;
- * {@see CachingDnsResolver} is the default so drain does not look up the host on every POST.
+ * runs through {@see DnsResolver} before the connect timeout starts and is not bounded by it.
+ * {@see CachingDnsResolver} is the default; `tracewick-drain` also prefetches before claim so a
+ * DNS hang does not hold spool files.
  *
  * Payload parameters become the query string. Only the status code of the response is read:
  * 2xx is delivered; 408, 429 and 5xx are transient failures; 401, 403, 404 and 413 are

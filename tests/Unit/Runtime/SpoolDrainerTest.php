@@ -217,6 +217,43 @@ final class SpoolDrainerTest extends TestCase
         self::assertSame([self::FIRST], $this->spool->entries());
     }
 
+    public function testDoesNotClaimWhenBeforeClaimReturnsFalse(): void
+    {
+        $this->write(self::FIRST, 'first');
+        $source = new class implements SpoolSource {
+            public bool $claimed = false;
+
+            public function claim(): ?ClaimedSpoolFile
+            {
+                $this->claimed = true;
+
+                return null;
+            }
+
+            public function acknowledge(ClaimedSpoolFile $file): bool
+            {
+                return true;
+            }
+
+            public function release(ClaimedSpoolFile $file): void {}
+
+            public function reject(ClaimedSpoolFile $file): void {}
+        };
+        $forwarder = new ScriptedForwarder();
+
+        $result = (new SpoolDrainer(
+            $source,
+            $forwarder,
+            beforeClaim: static fn(): bool => false,
+        ))->drain();
+
+        self::assertSame(DrainOutcome::Failed, $result->outcome);
+        self::assertStringContainsString('DNS resolution failed before claim', $result->failure);
+        self::assertFalse($source->claimed);
+        self::assertSame([], $forwarder->forwarded);
+        self::assertSame([self::FIRST], $this->spool->entries());
+    }
+
     public function testReportsASourceThatThrowsAsAFailure(): void
     {
         $source = new class implements SpoolSource {

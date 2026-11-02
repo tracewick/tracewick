@@ -10,17 +10,21 @@ use Tracewick\Exception\LogicException;
 use Tracewick\Sink\PyroscopeConfig;
 use Tracewick\Sink\PyroscopeSink;
 use Tracewick\Sink\SpoolForwarder;
+use Tracewick\Transport\CachingDnsResolver;
 use Tracewick\Transport\DirectorySpoolSource;
 
 /**
  * The `tracewick-drain` command: delivers a spool directory to Pyroscope from a process of its own.
  *
  * By default the command runs until it is stopped, for example under supervisor, systemd or as a
- * sidecar: it delivers files one at a time, sleeps while the spool is empty and backs off while
+ * sidecar: it delivers files in batches, sleeps while the spool is empty and backs off while
  * the backend fails, doubling the pause from one second up to {@see MAX_BACKOFF_SECONDS}. With --once it makes a
  * single pass for cron. The --limit, --memory-limit and --time-limit options make it exit
- * cleanly so that its supervisor starts a fresh process; they are checked between files, so a
+ * cleanly so that its supervisor starts a fresh process; they are checked between passes, so a
  * file is never abandoned halfway. Nothing is lost on exit: undelivered files stay in the spool.
+ *
+ * Before each claim the default path prefetches DNS into a shared {@see CachingDnsResolver} so
+ * resolution does not run mid-batch with files held. A failed pass forgets the cached address.
  *
  * {@see stop()} makes the command exit after the current file; bin/tracewick-drain calls it on
  * SIGTERM and SIGINT when ext-pcntl is available.
@@ -117,14 +121,27 @@ final class DrainCommand
             return self::EXIT_USAGE;
         }
 
-        $forwarder = ($this->forwarder ?? static fn(PyroscopeConfig $config): SpoolForwarder => new PyroscopeSink($config))($settings->pyroscope);
-        $drainer = ($this->createDrainer ?? static fn(DrainSettings $settings, SpoolForwarder $forwarder): SpoolDrainer => new SpoolDrainer(
+        $dns = new CachingDnsResolver(clock: $this->clock);
+        $host = $settings->pyroscope->httpConfig()->host;
+        $ownsDnsWarmup = !$this->forwarder instanceof \Closure && !$this->createDrainer instanceof \Closure;
+        $forwarder = ($this->forwarder ?? (static fn(PyroscopeConfig $config): SpoolForwarder => new PyroscopeSink($config, dns: $dns)))($settings->pyroscope);
+        $beforeClaim = $ownsDnsWarmup
+            ? static fn(): bool => $dns->prefetch($host)
+            : null;
+        $drainer = ($this->createDrainer ?? (static fn(DrainSettings $settings, SpoolForwarder $forwarder): SpoolDrainer => new SpoolDrainer(
             new DirectorySpoolSource($settings->reader),
             $forwarder,
             $settings->aggregationWindow,
-        ))($settings, $forwarder);
+            beforeClaim: $beforeClaim,
+        )))($settings, $forwarder);
 
-        return $this->loop($settings, $drainer);
+        return $this->loop(
+            $settings,
+            $drainer,
+            $ownsDnsWarmup ? static function () use ($dns, $host): void {
+                $dns->forget($host);
+            } : null,
+        );
     }
 
     /**
@@ -135,7 +152,10 @@ final class DrainCommand
         $this->stopping = true;
     }
 
-    private function loop(DrainSettings $settings, SpoolDrainer $drainer): int
+    /**
+     * @param ?\Closure(): void $forgetDns drops a cached VIP after a failed pass so the next prefetch re-resolves
+     */
+    private function loop(DrainSettings $settings, SpoolDrainer $drainer, ?\Closure $forgetDns = null): int
     {
         $startNs = $this->clock->nowNs();
         $delivered = 0;
@@ -173,6 +193,9 @@ final class DrainCommand
             }
 
             if (DrainOutcome::Failed === $result->outcome) {
+                if ($forgetDns instanceof \Closure) {
+                    $forgetDns();
+                }
                 $backoff = 0 === $backoff ? 1 : min(self::MAX_BACKOFF_SECONDS, 2 * $backoff);
                 fwrite($this->errors, \sprintf("Delivery failed: %s\n", $result->failure));
                 if ($settings->once) {

@@ -28,6 +28,9 @@ use Tracewick\Transport\SpoolSource;
  *
  * The drainer runs in a process of its own, never inside a request, and never throws.
  *
+ * Optional {@see $beforeClaim} runs before any file is claimed (DNS prefetch for Pyroscope). When
+ * it returns false the pass ends as {@see DrainOutcome::Failed} with no claims held.
+ *
  * @see https://github.com/tracewick/tracewick/blob/main/docs/spool-format.md
  */
 final readonly class SpoolDrainer
@@ -39,11 +42,15 @@ final readonly class SpoolDrainer
 
     private ProfileMerger $merger;
 
+    /**
+     * @param ?\Closure(): bool $beforeClaim returns false to abort the pass before claiming
+     */
     public function __construct(
         private SpoolSource $source,
         private SpoolForwarder $forwarder,
         private SpoolAggregationWindow $window = new SpoolAggregationWindow(),
         private int $maxBatchInputBytes = self::DEFAULT_MAX_BATCH_INPUT_BYTES,
+        private ?\Closure $beforeClaim = null,
     ) {
         $this->codec = new CompactStacksCodec();
         $this->merger = new ProfileMerger();
@@ -72,6 +79,15 @@ final readonly class SpoolDrainer
         $hitBudget = false;
 
         try {
+            if ($this->beforeClaim instanceof \Closure && !($this->beforeClaim)()) {
+                return new DrainResult(
+                    DrainOutcome::Failed,
+                    0,
+                    0,
+                    failure: 'DNS resolution failed before claim; spool files were left unclaimed.',
+                );
+            }
+
             [$batch, $hitBudget] = $this->claimBatch($maxFiles);
             if ([] === $batch) {
                 return new DrainResult(DrainOutcome::Empty, 0, 0);

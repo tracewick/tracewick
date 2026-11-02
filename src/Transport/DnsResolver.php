@@ -11,7 +11,9 @@ interface DnsResolver
 {
     /**
      * Returns an IP literal (IPv6 in brackets when needed) or the original host when it is already
-     * an address or resolution fails open to the OS resolver at connect time.
+     * an address. When lookup fails the implementation may return the original hostname so the OS
+     * resolver runs at connect time — callers that must not hang mid-batch should treat a non-IP
+     * result as failure (see {@see CachingDnsResolver::prefetch()}).
      */
     public function resolve(string $host): string;
 }

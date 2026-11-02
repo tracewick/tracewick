@@ -35,6 +35,8 @@ These belong to the decision but are **not** fully true of the current code:
 - `ProfilerConfig::finishRequest` defaults to `false`, so shutdown may still send on the request
   path unless the app opts in.
 - DNS resolution for hostnames is outside the HTTP socket timeout ([ADR 8](0008-own-http-transport.md)).
+  The spool + `tracewick-drain` path prefetches DNS before claim so a hang does not hold claimed
+  files; a `PyroscopeSink` used directly from a request worker can still pay unbounded DNS.
 
 ## Consequences
 

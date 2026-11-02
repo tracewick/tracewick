@@ -15,6 +15,7 @@ use Tracewick\Sampler\EventType;
 use Tracewick\Transport\CachingDnsResolver;
 use Tracewick\Transport\CircuitBreakerTransport;
 use Tracewick\Transport\Delivery;
+use Tracewick\Transport\DnsResolver;
 use Tracewick\Transport\HttpTransport;
 use Tracewick\Transport\Payload;
 use Tracewick\Transport\Transport;
@@ -46,9 +47,14 @@ final readonly class PyroscopeSink implements Sink, SpoolForwarder
     /**
      * @param ?Transport       $transport replaces the default HTTP transport and circuit breaker
      * @param ?LoggerInterface $logger    receives the opening and closing of the circuit breaker
+     * @param ?DnsResolver     $dns       shared with drain prefetch when the default transport is used
      */
-    public function __construct(private PyroscopeConfig $config, ?Transport $transport = null, ?LoggerInterface $logger = null)
-    {
+    public function __construct(
+        private PyroscopeConfig $config,
+        ?Transport $transport = null,
+        ?LoggerInterface $logger = null,
+        private ?DnsResolver $dns = null,
+    ) {
         $this->transport = $transport ?? $this->defaultTransport($config, $logger);
         $this->encoder = new PprofEncoder();
         $this->push = new PyroscopePushRequest();
@@ -127,7 +133,7 @@ final readonly class PyroscopeSink implements Sink, SpoolForwarder
         $clock = new SystemClock();
 
         return new CircuitBreakerTransport(
-            new HttpTransport($http, $clock, new CachingDnsResolver(clock: $clock)),
+            new HttpTransport($http, $clock, $this->dns ?? new CachingDnsResolver(clock: $clock)),
             $config->circuitBreaker,
             $clock,
             $config->circuitBreaker->storeFor($http->url . "\n" . $config->tenantId),
