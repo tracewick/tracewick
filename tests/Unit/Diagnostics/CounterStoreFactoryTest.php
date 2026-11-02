@@ -18,36 +18,58 @@ use Tracewick\Transport\AtomicFile;
 #[UsesClass(AtomicFile::class)]
 final class CounterStoreFactoryTest extends TestCase
 {
-    public function testPrefersApcuWhenEnabled(): void
+    public function testPrefersApcuWhenAvailable(): void
     {
-        if (!\extension_loaded('apcu') || !apcu_enabled()) {
-            self::markTestSkipped('APCu is not enabled.');
-        }
-
-        self::assertInstanceOf(ApcuCounterStore::class, CounterStoreFactory::create());
+        self::assertInstanceOf(ApcuCounterStore::class, CounterStoreFactory::create(null, static fn(): bool => true));
     }
 
-    public function testFallsBackToFileStore(): void
+    public function testFallsBackToFileStoreWhenApcuUnavailable(): void
     {
-        if (\extension_loaded('apcu') && apcu_enabled()) {
-            self::markTestSkipped('APCu is enabled; file fallback is not selected.');
-        }
-
         $directory = sys_get_temp_dir() . '/tracewick-counter-factory-' . bin2hex(random_bytes(4));
         try {
-            $store = CounterStoreFactory::create($directory);
+            $store = CounterStoreFactory::create($directory, static fn(): bool => false);
             self::assertInstanceOf(FileCounterStore::class, $store);
             $store->increment('x');
             self::assertSame(1, $store->get('x'));
         } finally {
-            $files = glob($directory . '/*');
-            if (false !== $files) {
-                foreach ($files as $file) {
+            $this->removeDirectory($directory);
+        }
+    }
+
+    public function testUsesTempDirectoryWhenNoneGivenAndApcuIsUnavailable(): void
+    {
+        $store = CounterStoreFactory::create(null, static fn(): bool => false);
+        self::assertInstanceOf(FileCounterStore::class, $store);
+        $key = 'temp-default-' . bin2hex(random_bytes(4));
+        $before = $store->get($key);
+        $store->increment($key);
+        self::assertSame($before + 1, $store->get($key));
+    }
+
+    public function testCreateWithoutOverrideUsesRuntimeApcuDetection(): void
+    {
+        $directory = sys_get_temp_dir() . '/tracewick-counter-factory-' . bin2hex(random_bytes(4));
+        try {
+            $store = CounterStoreFactory::create($directory);
+            self::assertContains($store::class, [ApcuCounterStore::class, FileCounterStore::class]);
+        } finally {
+            $this->removeDirectory($directory);
+        }
+    }
+
+    private function removeDirectory(string $directory): void
+    {
+        $files = glob($directory . '/*');
+        if (false !== $files) {
+            foreach ($files as $file) {
+                if (is_file($file)) {
                     @unlink($file);
+                } elseif (is_dir($file)) {
+                    @rmdir($file);
                 }
             }
-
-            @rmdir($directory);
         }
+
+        @rmdir($directory);
     }
 }

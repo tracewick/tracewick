@@ -64,12 +64,55 @@ final class FileCounterStoreTest extends TestCase
     public function testTreatsCorruptFilesAsEmpty(): void
     {
         @mkdir($this->directory, 0o700, true);
-        file_put_contents($this->directory . '/counters.json', 'not-json');
+        file_put_contents($this->directory . '/tracewick-counters.json', 'not-json');
 
         $store = FileCounterStore::inDirectory($this->directory);
         self::assertSame([], $store->all());
         $store->increment('ok');
         self::assertSame(['ok' => 1], $store->all());
+    }
+
+    public function testTreatsJsonScalarsAsEmpty(): void
+    {
+        @mkdir($this->directory, 0o700, true);
+        file_put_contents($this->directory . '/tracewick-counters.json', 'null');
+
+        $store = FileCounterStore::inDirectory($this->directory);
+        self::assertSame([], $store->all());
+    }
+
+    public function testIncrementsWhenLockCannotBeOpened(): void
+    {
+        @mkdir($this->directory, 0o700, true);
+        $store = new FileCounterStore(
+            $this->directory . '/tracewick-counters.json',
+            static fn(string $path): false => false,
+        );
+        $store->increment('a', 2);
+
+        self::assertSame(2, $store->get('a'));
+    }
+
+    public function testIncrementsWhenExclusiveLockFails(): void
+    {
+        @mkdir($this->directory, 0o700, true);
+        $store = new FileCounterStore(
+            $this->directory . '/tracewick-counters.json',
+            static fn(string $path) => fopen($path, 'c+'),
+            static fn($handle): bool => false,
+        );
+        $store->increment('a', 3);
+
+        self::assertSame(3, $store->get('a'));
+    }
+
+    public function testIgnoresKeysThatCannotBeEncoded(): void
+    {
+        @mkdir($this->directory, 0o700, true);
+        $store = FileCounterStore::inDirectory($this->directory);
+        $store->increment("bad\xB1key");
+
+        self::assertSame([], $store->all());
     }
 
 }

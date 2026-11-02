@@ -205,6 +205,9 @@ cover that request; in a long-running worker they add up.
 Optional host-wide counters (`Tracewick\Diagnostics\CounterStore`) survive FPM requests when APCu
 is available, otherwise a small file under the system temp dir (`CounterStoreFactory::create()`).
 Pass a store into the profiler constructor to mirror drop/skip/empty/delivery counts across workers.
+Every counter name is product-prefixed (`tracewick:profiles_*`, `tracewick:agg:*`) so a shared APCu
+userland or a shared counters directory does not collide with another library. The APCu iterator only
+returns keys under that prefix; the file store writes `tracewick-counters.json`.
 `SpoolSink` also caps unique aggregation label sets (default 256) and collapses further combinations
 to `cardinality=other`. Label values that look like email, UUID, or long digit runs log a warning
 once per process per key; they are not stripped.

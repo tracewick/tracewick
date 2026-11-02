@@ -6,24 +6,27 @@ namespace Tracewick\Diagnostics;
 
 /**
  * Stable counter names written by profilers.
+ *
+ * Keys are product-prefixed so a shared {@see CounterStore} (APCu, a shared
+ * directory) cannot collide with another library's counters.
  */
 final class HostCounterKeys
 {
-    public const PROFILES_COLLECTED = 'profiles_collected';
+    private const PREFIX = 'tracewick:';
 
-    public const PROFILES_DROPPED = 'profiles_dropped';
+    public const PROFILES_COLLECTED = self::PREFIX . 'profiles_collected';
 
-    public const PROFILES_DELIVERED = 'profiles_delivered';
+    public const PROFILES_DROPPED = self::PREFIX . 'profiles_dropped';
 
-    public const PROFILES_REJECTED = 'profiles_rejected';
+    public const PROFILES_DELIVERED = self::PREFIX . 'profiles_delivered';
 
-    public const PROFILES_FAILED = 'profiles_failed';
+    public const PROFILES_REJECTED = self::PREFIX . 'profiles_rejected';
 
-    public const PROFILES_SKIPPED = 'profiles_skipped';
+    public const PROFILES_FAILED = self::PREFIX . 'profiles_failed';
 
-    public const PROFILES_EMPTY = 'profiles_empty';
+    public const PROFILES_SKIPPED = self::PREFIX . 'profiles_skipped';
 
-    public const PROFILES_SWALLOWED = 'profiles_swallowed_errors';
+    public const PROFILES_EMPTY = self::PREFIX . 'profiles_empty';
 
-    private function __construct() {}
+    public const PROFILES_SWALLOWED = self::PREFIX . 'profiles_swallowed_errors';
 }

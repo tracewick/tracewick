@@ -13,13 +13,44 @@ use Tracewick\Transport\AtomicFile;
  */
 final readonly class FileCounterStore implements CounterStore
 {
-    public function __construct(private string $path) {}
+    /** @var \Closure(string): (resource|false) */
+    private \Closure $openLock;
+
+    /** @var \Closure(resource): bool */
+    private \Closure $acquireExclusiveLock;
+
+    /** @var \Closure(resource): void */
+    private \Closure $releaseLock;
+
+    /**
+     * @param ?\Closure(string): (resource|false) $openLock
+     * @param ?\Closure(resource): bool           $acquireExclusiveLock
+     * @param ?\Closure(resource): void           $releaseLock
+     *
+     * @internal callables exist so tests cover lock failure without racing the filesystem
+     */
+    public function __construct(
+        private string $path,
+        ?\Closure $openLock = null,
+        ?\Closure $acquireExclusiveLock = null,
+        ?\Closure $releaseLock = null,
+    ) {
+        $this->openLock = $openLock ?? static fn(string $lockPath) => @fopen($lockPath, 'c+');
+        $this->acquireExclusiveLock = $acquireExclusiveLock ?? static function ($handle): bool {
+            /** @var resource $handle */
+            return @flock($handle, \LOCK_EX);
+        };
+        $this->releaseLock = $releaseLock ?? static function ($handle): void {
+            /** @var resource $handle */
+            @flock($handle, \LOCK_UN);
+        };
+    }
 
     public static function inDirectory(string $directory): self
     {
         self::ensureDirectory($directory);
 
-        return new self($directory . '/counters.json');
+        return new self($directory . '/tracewick-counters.json');
     }
 
     public function increment(string $key, int $by = 1): void
@@ -55,7 +86,7 @@ final readonly class FileCounterStore implements CounterStore
     {
         self::ensureDirectory(\dirname($this->path));
         $lockPath = $this->path . '.lock';
-        $lock = @fopen($lockPath, 'c+');
+        $lock = ($this->openLock)($lockPath);
         if (false === $lock) {
             $this->save($updater($this->load()));
 
@@ -63,7 +94,7 @@ final readonly class FileCounterStore implements CounterStore
         }
 
         try {
-            if (!@flock($lock, \LOCK_EX)) {
+            if (!($this->acquireExclusiveLock)($lock)) {
                 $this->save($updater($this->load()));
 
                 return;
@@ -71,7 +102,7 @@ final readonly class FileCounterStore implements CounterStore
 
             $this->save($updater($this->load()));
         } finally {
-            @flock($lock, \LOCK_UN);
+            ($this->releaseLock)($lock);
             fclose($lock);
         }
     }
@@ -92,6 +123,7 @@ final readonly class FileCounterStore implements CounterStore
             return [];
         }
 
+        // json_decode with assoc=true still returns scalars for JSON null/number/string.
         if (!\is_array($decoded)) {
             return [];
         }

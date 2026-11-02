@@ -20,9 +20,10 @@ final readonly class AggregationCardinalityLimiter
 
     public const COLLAPSED_VALUE = 'other';
 
-    private const META_UNIQUE = 'agg:unique_count';
+    /** Product-prefixed so a shared {@see CounterStore} cannot collide with other libraries. */
+    private const META_UNIQUE = 'tracewick:agg:unique_count';
 
-    private const SEEN_PREFIX = 'agg:seen:';
+    private const SEEN_PREFIX = 'tracewick:agg:seen:';
 
     /**
      * @throws LogicException when $maxUniqueKeys is less than 1

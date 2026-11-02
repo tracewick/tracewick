@@ -9,9 +9,13 @@ namespace Tracewick\Diagnostics;
  */
 final class CounterStoreFactory
 {
-    public static function create(?string $directory = null): CounterStore
+    /**
+     * @param ?callable(): bool $apcuAvailable override for tests; defaults to ext-apcu enabled
+     */
+    public static function create(?string $directory = null, ?callable $apcuAvailable = null): CounterStore
     {
-        if (\extension_loaded('apcu') && apcu_enabled()) {
+        $apcuAvailable ??= static fn(): bool => \extension_loaded('apcu') && apcu_enabled();
+        if ($apcuAvailable()) {
             return new ApcuCounterStore();
         }
 

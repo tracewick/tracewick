@@ -348,17 +348,19 @@ final class ContinuousProfilerTest extends TestCase
             Delivery::configuration('auth'),
             Delivery::failed('down'),
             Delivery::skipped('breaker'),
+            Delivery::empty('No samples.'),
         ];
         $this->sampler
             ->willReturn($this->batch(1_000_000_000, 2_000_000_000, 'a', 1))
             ->willReturn($this->batch(1_000_000_000, 2_000_000_000, 'b', 1))
             ->willReturn($this->batch(1_000_000_000, 2_000_000_000, 'c', 1))
-            ->willReturn($this->batch(1_000_000_000, 2_000_000_000, 'd', 1));
+            ->willReturn($this->batch(1_000_000_000, 2_000_000_000, 'd', 1))
+            ->willReturn($this->batch(1_000_000_000, 2_000_000_000, 'e', 1));
         $profiler = $this->profiler();
         $profiler->start();
         $this->clock->advanceNs(self::WINDOW_NS);
 
-        for ($i = 0; $i < 4; ++$i) {
+        for ($i = 0; $i < 5; ++$i) {
             $profiler->flush();
             $this->clock->advanceNs(self::WINDOW_NS);
         }
@@ -367,7 +369,57 @@ final class ContinuousProfilerTest extends TestCase
         self::assertSame(2, $diagnostics->rejectedProfiles);
         self::assertSame(1, $diagnostics->failedProfiles);
         self::assertSame(1, $diagnostics->skippedProfiles);
-        self::assertCount(4, $this->sink->sent);
+        self::assertSame(1, $diagnostics->emptyProfiles);
+        self::assertCount(5, $this->sink->sent);
+    }
+
+    public function testCountsEmptyCapturesWithoutSending(): void
+    {
+        $this->sampler->willReturn(new SampleBatch(
+            EventType::Wall,
+            10_000_000,
+            1_000_000_000,
+            2_000_000_000,
+            [],
+        ));
+        $profiler = $this->profiler();
+        $profiler->start();
+        $profiler->pulse();
+
+        self::assertSame(1, $profiler->diagnostics()->emptyProfiles);
+        self::assertSame([], $this->sink->sent);
+    }
+
+    public function testWarnsOnceAboutSuspiciousProcessLabels(): void
+    {
+        $logger = new RecordingLogger();
+        $directory = new TemporaryDirectory();
+        try {
+            ContinuousProfiler::resetInactiveSamplerWarning();
+            $profiler = new ContinuousProfiler(
+                $this->sampler,
+                $this->sink,
+                new ContinuousProfilerConfig('blog', new Labels(['email' => 'user@example.com'])),
+                new DiagnosticLogger($logger, $directory->path, clock: $this->clock),
+                $this->clock,
+            );
+            // Constructing again with the same key must not warn twice.
+            new ContinuousProfiler(
+                $this->sampler,
+                $this->sink,
+                new ContinuousProfilerConfig('blog', new Labels(['email' => 'other@example.com'])),
+                new DiagnosticLogger($logger, $directory->path, clock: $this->clock),
+                $this->clock,
+            );
+
+            self::assertCount(1, array_filter(
+                $logger->records,
+                static fn(array $r): bool => str_contains($r['message'], 'looks like personal data'),
+            ));
+            self::assertNull($profiler->diagnostics()->inactiveSampler);
+        } finally {
+            $directory->remove();
+        }
     }
 
     public function testSwallowsSinkExceptionsDuringDelivery(): void
@@ -419,7 +471,11 @@ final class ContinuousProfilerTest extends TestCase
                 'warning: Tracewick profiling is inactive: ExcimerProfiler failed to initialize.',
                 $logger->lines(),
             );
-            self::assertSame('Cannot create timer.', $logger->records[array_key_last($logger->records)]['context']['error'] ?? null);
+            $errors = array_map(
+                static fn(array $record): mixed => $record['context']['error'] ?? null,
+                $logger->records,
+            );
+            self::assertContains('Cannot create timer.', $errors);
         } finally {
             $directory->remove();
         }

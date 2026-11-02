@@ -34,6 +34,10 @@ final class AggregationCardinalityLimiterTest extends TestCase
 
         // Known keys stay themselves.
         self::assertSame(['route' => 'a'], $limiter->limitLabels('blog', ['route' => 'a'], EventType::Wall, 10));
+
+        foreach (array_keys($store->all()) as $key) {
+            self::assertStringStartsWith('tracewick:agg:', $key);
+        }
     }
 
     public function testRejectsInvalidMax(): void
