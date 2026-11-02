@@ -35,6 +35,10 @@ dependency because recent versions need PHP 8.3 or newer; install its
 [PHAR](https://infection.github.io/guide/installation.html) (CI uses the version in
 `.github/workflows/ci.yml`).
 
+Every entry under `mutators` in `infection.json5` must say why the mutant is equivalent (or only
+observable across processes / extension versions). Prefer a real test—often with `pcntl_fork`—over
+a new ignore. Never lower `minMsi` / `minCoveredMsi` to silence escapes.
+
 ## Development stand
 
 The stand in [`compose.yaml`](compose.yaml) gives you PHP with ext-excimer and the backends Tracewick

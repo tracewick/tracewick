@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tracewick\Tests\Unit\Transport;
 
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Clock\SystemClock;
@@ -106,6 +107,58 @@ final class DirectorySpoolSourceTest extends TestCase
         self::assertSame(self::SECOND, $second?->name);
         self::assertNull($a->claim());
         self::assertNull($b->claim());
+    }
+
+    #[RequiresPhpExtension('pcntl')]
+    public function testConcurrentProcessesClaimEachFileOnce(): void
+    {
+        $count = 20;
+        for ($i = 1; $i <= $count; ++$i) {
+            $this->write(\sprintf('01798000000000000%03d-0000000000000000.spool', $i), 'body-' . $i);
+        }
+
+        $results = $this->spool->path . '/.claim-results';
+        mkdir($results, 0o700);
+
+        $children = [];
+        foreach (['reader-a', 'reader-b'] as $readerId) {
+            $pid = pcntl_fork();
+            if (-1 === $pid) {
+                self::fail('pcntl_fork failed.');
+            }
+            if (0 === $pid) {
+                $source = new DirectorySpoolSource(new SpoolReaderConfig($this->spool->path, $readerId));
+                $names = [];
+                while (($file = $source->claim()) instanceof ClaimedSpoolFile) {
+                    $names[] = $file->name;
+                    $source->acknowledge($file);
+                }
+                file_put_contents($results . '/' . $readerId, implode("\n", $names));
+                exit(0);
+            }
+            $children[] = $pid;
+        }
+
+        foreach ($children as $pid) {
+            pcntl_waitpid($pid, $status);
+            self::assertIsInt($status);
+            self::assertTrue(pcntl_wifexited($status));
+            self::assertSame(0, pcntl_wexitstatus($status));
+        }
+
+        $claimed = [];
+        foreach (['reader-a', 'reader-b'] as $readerId) {
+            $raw = trim((string) file_get_contents($results . '/' . $readerId));
+            if ('' === $raw) {
+                continue;
+            }
+            foreach (explode("\n", $raw) as $name) {
+                $claimed[] = $name;
+            }
+        }
+
+        self::assertCount($count, $claimed);
+        self::assertCount($count, array_unique($claimed));
     }
 
     public function testSkipsAFileAnotherReaderClaimedAfterTheScan(): void

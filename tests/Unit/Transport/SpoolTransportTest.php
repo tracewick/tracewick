@@ -6,6 +6,7 @@ namespace Tracewick\Tests\Unit\Transport;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Clock\SystemClock;
@@ -220,6 +221,43 @@ final class SpoolTransportTest extends TestCase
 
         self::assertSame(DeliveryStatus::Failed, $delivery->status);
         self::assertSame(\sprintf('Cannot create the spool directory "%s/file/spool".', $this->spool->path), $delivery->reason);
+    }
+
+    #[RequiresPhpExtension('pcntl')]
+    public function testConcurrentWritersDoNotLoseFiles(): void
+    {
+        $perChild = 10;
+        $children = [];
+        for ($i = 0; $i < 2; ++$i) {
+            $pid = pcntl_fork();
+            if (-1 === $pid) {
+                self::fail('pcntl_fork failed.');
+            }
+            if (0 === $pid) {
+                $transport = new SpoolTransport($this->config(100));
+                for ($n = 0; $n < $perChild; ++$n) {
+                    $delivery = $transport->send(new Payload('profile-' . $n, 'text/plain'));
+                    if (!$delivery->isDelivered()) {
+                        exit(1);
+                    }
+                }
+                exit(0);
+            }
+            $children[] = $pid;
+        }
+
+        foreach ($children as $pid) {
+            pcntl_waitpid($pid, $status);
+            self::assertIsInt($status);
+            self::assertTrue(pcntl_wifexited($status));
+            self::assertSame(0, pcntl_wexitstatus($status));
+        }
+
+        $files = array_values(array_filter(
+            $this->spool->entries(),
+            SpoolTransport::isSpoolFile(...),
+        ));
+        self::assertCount(2 * $perChild, $files);
     }
 
     /**
