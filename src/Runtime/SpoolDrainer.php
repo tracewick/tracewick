@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Tracewick\Runtime;
 
+use Tracewick\Diagnostics\ArrayCounterStore;
 use Tracewick\Encoder\CompactStacksCodec;
 use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
 use Tracewick\Profile\ProfileMerger;
+use Tracewick\Sink\CardinalityGate;
 use Tracewick\Sink\SpoolAggregationKey;
 use Tracewick\Sink\SpoolFile;
 use Tracewick\Sink\SpoolFileName;
@@ -26,6 +28,9 @@ use Tracewick\Transport\SpoolSource;
  * Invalid files are rejected; a failed send releases every claimed file still held and ends the
  * pass.
  *
+ * Before each forward, a process-scoped {@see CardinalityGate} (default max 256 unique keys)
+ * may rewrite labels: base `service`/`env` are kept; excess keys collapse to `cardinality=other`.
+ *
  * The drainer runs in a process of its own, never inside a request, and never throws.
  *
  * Optional {@see $beforeClaim} runs before any file is claimed (DNS prefetch for Pyroscope). When
@@ -42,6 +47,8 @@ final readonly class SpoolDrainer
 
     private ProfileMerger $merger;
 
+    private CardinalityGate $cardinalityGate;
+
     /**
      * @param ?\Closure(): bool $beforeClaim returns false to abort the pass before claiming
      */
@@ -51,9 +58,11 @@ final readonly class SpoolDrainer
         private SpoolAggregationWindow $window = new SpoolAggregationWindow(),
         private int $maxBatchInputBytes = self::DEFAULT_MAX_BATCH_INPUT_BYTES,
         private ?\Closure $beforeClaim = null,
+        ?CardinalityGate $cardinalityGate = null,
     ) {
         $this->codec = new CompactStacksCodec();
         $this->merger = new ProfileMerger();
+        $this->cardinalityGate = $cardinalityGate ?? new CardinalityGate(new ArrayCounterStore());
     }
 
     /**
@@ -126,13 +135,19 @@ final readonly class SpoolDrainer
 
                 try {
                     $merged = $this->merger->merge($profiles);
+                    $labels = $this->cardinalityGate->limitLabels(
+                        $first->application,
+                        $first->labels,
+                        $first->eventType,
+                        $first->periodNs,
+                    );
                     $spool = new SpoolFile(
                         $first->application,
                         $first->eventType,
                         $first->periodNs,
                         $merged->startNs,
                         $merged->endNs,
-                        $first->labels,
+                        $labels,
                         SpoolFile::FORMAT_COMPACT_STACKS,
                         $this->codec->encode($merged),
                         SpoolFile::VERSION_2,

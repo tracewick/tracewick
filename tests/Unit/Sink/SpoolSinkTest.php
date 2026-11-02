@@ -22,8 +22,8 @@ use Tracewick\Sampler\EventType;
 use Tracewick\Sampler\Frame;
 use Tracewick\Sampler\Sample;
 use Tracewick\Sampler\SampleBatch;
-use Tracewick\Sink\AggregationCardinalityLimiter;
 use Tracewick\Sink\ApplicationName;
+use Tracewick\Sink\CardinalityGate;
 use Tracewick\Sink\SpoolAggregationKey;
 use Tracewick\Sink\SpoolFile;
 use Tracewick\Sink\SpoolSink;
@@ -50,7 +50,7 @@ use Tracewick\Transport\SpoolTransport;
 #[UsesClass(CompactStacksCodec::class)]
 #[UsesClass(ProfileParts::class)]
 #[UsesClass(SpoolAggregationKey::class)]
-#[UsesClass(AggregationCardinalityLimiter::class)]
+#[UsesClass(CardinalityGate::class)]
 #[UsesClass(NullCounterStore::class)]
 #[UsesClass(ArrayCounterStore::class)]
 #[UsesClass(Profile::class)]
@@ -133,7 +133,7 @@ final class SpoolSinkTest extends TestCase
     public function testCollapsesLabelsWhenCardinalityLimitIsExceeded(): void
     {
         $transport = new ScriptedTransport(Delivery::delivered(), Delivery::delivered());
-        $limiter = new AggregationCardinalityLimiter(new ArrayCounterStore(), 1);
+        $limiter = new CardinalityGate(new ArrayCounterStore(), 1);
         $sink = new SpoolSink('blog', new SpoolConfig('/unused'), $transport, $limiter);
         $profile = ProfileFixtures::webRequest()->withLabels(new Labels(['route' => 'first']));
 

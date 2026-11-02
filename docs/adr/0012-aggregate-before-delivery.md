@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-01
-- Amended: 2026-11-02 (alpha: window = merge compatibility; multi-POST OK)
+- Amended: 2026-11-02 (alpha: window = merge compatibility; multi-POST OK; cardinality = drain-scoped)
 
 ## Context
 
@@ -37,10 +37,12 @@ agent; the PHP drain path needs the same rule, or high-load FPM never reaches a 
 - **Filename hint:** writers put a stable hash of the aggregation key in the spool file name so
   drain can group files without reading headers first. Exact name layout lands with the spool
   writer change; readers that do not understand the hash still work by parsing headers.
-- **Cardinality:** a host-wide cap on distinct keys via `CounterStore` collapses excess keys into
-  `cardinality=other` (`AggregationCardinalityLimiter`, default max 256). Counter names are
-  product-prefixed (`tracewick:agg:*`) so a shared APCu or counters directory cannot collide with
-  another library.
+- **Cardinality:** `CardinalityGate` (default max 256 unique aggregation keys) collapses excess
+  keys: base labels `service` / `env` are kept; the rest become `cardinality=other`. **Alpha
+  default scope is the drain process** (`SpoolDrainer` + in-memory `ArrayCounterStore`). Writer
+  `SpoolSink` / `ContinuousProfiler` default to a no-op store (no collapse) unless a store is
+  injected. Host-wide APCu is not the alpha default. Counter names are product-prefixed
+  (`tracewick:agg:*`) so a shared store cannot collide with another library.
 - **Drain budgets:** each drain pass claims under a byte budget (and a file count), then merges
   and sends; hitting a budget is a normal `LimitReached`, not an error.
 

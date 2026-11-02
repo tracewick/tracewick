@@ -35,8 +35,8 @@ use Tracewick\Sampler\SampleBatch;
 use Tracewick\Sampler\SamplerConfig;
 use Tracewick\Sampler\SamplerFactory;
 use Tracewick\Sampler\StackAggregator;
-use Tracewick\Sink\AggregationCardinalityLimiter;
 use Tracewick\Sink\ApplicationName;
+use Tracewick\Sink\CardinalityGate;
 use Tracewick\Sink\SpoolAggregationKey;
 use Tracewick\Tests\Support\ManualClock;
 use Tracewick\Tests\Support\RecordingLogger;
@@ -77,7 +77,7 @@ use Tracewick\Transport\Delivery;
 #[UsesClass(NullCounterStore::class)]
 #[UsesClass(HostCounterKeys::class)]
 #[UsesClass(LabelPolicy::class)]
-#[UsesClass(AggregationCardinalityLimiter::class)]
+#[UsesClass(CardinalityGate::class)]
 final class ContinuousProfilerTest extends TestCase
 {
     private const WINDOW_NS = 15_000_000_000;

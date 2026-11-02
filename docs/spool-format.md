@@ -50,10 +50,12 @@ A writer is configured with three limits and checks them before every write:
 | `min_free_bytes`  | Free space that must remain on the file system after the write | 64 MiB      |
 
 The file-count check MAY use a short-lived cache (about 1 s or every few dozen writes) and MAY
-briefly overshoot `max_files` under concurrent writers (soft admission). A writer that would
-exceed a limit drops the profile and counts the drop. It never blocks, never waits for a reader
-and never deletes spool files. Readers MUST reject files larger than their configured size ceiling
-without forwarding them.
+briefly overshoot `max_files` under concurrent writers (**soft admission**). `max_files ×
+max_file_bytes` is a planning guide, not a hard host-wide byte ceiling. Operators SHOULD put the
+spool on a dedicated local volume or tmpfs with an OS quota; Tracewick does not run a global
+file counter on every writer. A writer that would exceed a checked limit drops the profile and
+counts the drop. It never blocks, never waits for a reader and never deletes spool files.
+Readers MUST reject files larger than their configured size ceiling without forwarding them.
 
 ## File layout
 
