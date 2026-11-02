@@ -194,9 +194,10 @@ final class ContinuousProfilerTest extends TestCase
             self::markTestSkipped('ext-excimer is not loaded.');
         }
 
-        // Do not busy-wait for native flush here: under pcov that path has segfaulted in CI.
-        // Flag-only delivery is covered by testSegmentListenerOnlyMarksPendingWithoutDelivering;
-        // real Excimer segment behaviour lives in Integration/Sampler/ExcimerSamplerTest.
+        // Wiring only. Do not assert hasPendingSegment while the sampler is running: native flush
+        // can set the flag at any interrupt. Flag-only delivery without sink I/O is covered by
+        // testSegmentListenerOnlyMarksPendingWithoutDelivering; the real Excimer→listener→no-send
+        // path lives in Integration/Runtime/ContinuousProfilerTest.
         $sampler = new ExcimerSampler(new SamplerConfig());
         $profiler = new ContinuousProfiler(
             $sampler,
@@ -206,12 +207,10 @@ final class ContinuousProfilerTest extends TestCase
         );
 
         $profiler->start();
-        self::assertFalse($profiler->hasPendingSegment());
         $profiler->pulse();
         $profiler->stop();
 
         self::assertFalse($profiler->isRunning());
-        self::assertFalse($profiler->hasPendingSegment());
     }
 
     public function testSegmentListenerOnlyMarksPendingWithoutDelivering(): void
