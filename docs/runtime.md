@@ -225,6 +225,7 @@ $profiler = UnitOfWorkProfiler::create($sink, $config, logger: $logger);
 | warning | A profile could not be delivered, or the backend rejected it                |
 | warning | The circuit breaker opened; logged once per host, by the process that opened it |
 | warning | An error was swallowed; the exception is in the context                     |
+| warning | A label key looks like personal data (email / UUID / long digits); once per process per key |
 | notice  | A profile was dropped from a full buffer, or the sink skipped it             |
 | info    | The circuit breaker closed again                                            |
 

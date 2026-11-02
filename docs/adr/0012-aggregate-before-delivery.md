@@ -33,8 +33,10 @@ agent; the PHP drain path needs the same rule, or high-load FPM never reaches a 
 - **Filename hint:** writers put a stable hash of the aggregation key in the spool file name so
   drain can group files without reading headers first. Exact name layout lands with the spool
   writer change; readers that do not understand the hash still work by parsing headers.
-- **Cardinality:** a host-wide cap on distinct keys (via the planned `CounterStore`) may collapse
-  excess keys into an `other` bucket; that limit is separate work.
+- **Cardinality:** a host-wide cap on distinct keys via `CounterStore` collapses excess keys into
+  `cardinality=other` (`AggregationCardinalityLimiter`, default max 256). Counter names are
+  product-prefixed (`tracewick:agg:*`) so a shared APCu or counters directory cannot collide with
+  another library.
 
 Hash-in-name landed with the spool v2 writer; the aggregating drain pipeline and
 `ContinuousProfiler`'s accumulator follow this contract.
