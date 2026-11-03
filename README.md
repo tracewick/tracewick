@@ -102,6 +102,23 @@ make app-up     # Symfony Demo on FPM (:8081) and RoadRunner (:8082) + drain
 Hit the demo, then open Grafana at http://127.0.0.1:3000 (Explore / Drilldown → Profiles;
 service `symfony-demo`). Details: [CONTRIBUTING.md](CONTRIBUTING.md).
 
+### Capacity evidence
+
+Load / soak / capacity harness lives in the sibling repo
+[tracewick/benchmarks](https://github.com/tracewick/benchmarks) — not in this library. Clone →
+`make up` → `make bench-smoke` (or `bench-overhead` / `bench-spool-pressure` / `bench-chaos`).
+
+Sample cloud run (Timeweb VPS, Packagist `0.1.0`, 20 RPS, `sampleRate` 0.1 vs off): about
+**+0.5–1.4 ms** latency and **~+2 pp** PHP-FPM CPU. Spool soft admission held the app at **0%**
+HTTP failures under pressure and Pyroscope latency chaos. Full tables and pins:
+[overhead](https://github.com/tracewick/benchmarks/blob/main/reports/2026-11-03-overhead-cloud.md),
+[spool pressure](https://github.com/tracewick/benchmarks/blob/main/reports/2026-11-03-spool-pressure-cloud.md),
+[chaos](https://github.com/tracewick/benchmarks/blob/main/reports/2026-11-03-chaos-pyroscope-cloud.md).
+
+Wall profile from that stand (`service_name=benchmarks-workload`, `route=work`):
+
+![benchmarks-workload wall flamegraph](docs/images/capacity/pyroscope-benchmarks-workload-wall.png)
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Please report security issues privately as described in
