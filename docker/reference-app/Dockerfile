@@ -26,8 +26,13 @@ COPY --from=ghcr.io/php/pie:bin /pie /usr/local/bin/pie
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends $PHPIZE_DEPS git unzip libicu-dev libpq-dev libtool \
-    # Serial install: parallel -jN races on php:8.5-fpm (`cp: cannot stat 'modules/*'`).
-    && docker-php-ext-install intl opcache pcntl pdo_pgsql sockets \
+    # One extension per invocation: a multi-ext docker-php-ext-install on php:8.5-fpm
+    # clears modules/* between builds and fails with `cp: cannot stat 'modules/*'`.
+    && docker-php-ext-install intl \
+    && docker-php-ext-install opcache \
+    && docker-php-ext-install pcntl \
+    && docker-php-ext-install pdo_pgsql \
+    && docker-php-ext-install sockets \
     && pie install "wikimedia/excimer:${EXCIMER_PIE_CONSTRAINT}" --auto-install-build-tools \
     && apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false $PHPIZE_DEPS \
     && apt-get install -y --no-install-recommends git unzip \
