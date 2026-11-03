@@ -106,7 +106,7 @@ services:
         tracewick: .
       target: fpm
       args:
-        EXCIMER_PIE_CONSTRAINT: ${EXCIMER_PIE_CONSTRAINT:-1.2.7}
+        EXCIMER_VERSION: ${EXCIMER_VERSION:-1.2.6}
     image: tracewick-reference-fpm
     # Run once with `docker compose run`, before the app services start.
     profiles: [setup]
@@ -172,7 +172,7 @@ services:
       additional_contexts:
         tracewick: .
       args:
-        EXCIMER_PIE_CONSTRAINT: ${EXCIMER_PIE_CONSTRAINT:-1.2.7}
+        EXCIMER_VERSION: ${EXCIMER_VERSION:-1.2.6}
     image: tracewick-reference-roadrunner
     profiles: [app]
     environment:
