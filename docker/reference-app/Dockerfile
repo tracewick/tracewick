@@ -18,17 +18,20 @@ FROM ghcr.io/roadrunner-server/roadrunner:${ROADRUNNER_VERSION} AS roadrunner-bi
 
 FROM php:${PHP_VERSION}-fpm-bookworm AS app
 
-ARG EXCIMER_VERSION=1.2.6
+ARG EXCIMER_PIE_CONSTRAINT=1.2.7
 ARG SYMFONY_DEMO_VERSION=3.1.0
 ARG RUNTIME_ROADRUNNER_VERSION=1.0.0
 
+COPY --from=ghcr.io/php/pie:bin /pie /usr/local/bin/pie
+
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git unzip libicu-dev libpq-dev \
-    && rm -rf /var/lib/apt/lists/* \
+    && apt-get install -y --no-install-recommends $PHPIZE_DEPS git unzip libicu-dev libpq-dev libtool \
     && docker-php-ext-install -j"$(nproc)" intl opcache pcntl pdo_pgsql sockets \
-    && pecl install "excimer-${EXCIMER_VERSION}" \
-    && docker-php-ext-enable excimer \
-    && rm -rf /tmp/pear
+    && pie install "wikimedia/excimer:${EXCIMER_PIE_CONSTRAINT}" --auto-install-build-tools \
+    && apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false $PHPIZE_DEPS \
+    && apt-get install -y --no-install-recommends git unzip \
+    && rm -rf /var/lib/apt/lists/* /tmp/pie_* \
+    && php -r 'exit(extension_loaded("excimer") ? 0 : 1);'
 
 COPY --from=composer /usr/bin/composer /usr/local/bin/composer
 
