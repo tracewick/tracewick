@@ -1,0 +1,98 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tracewick\Tests\Unit\Transport;
+
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\TestCase;
+use Tracewick\Exception\LogicException;
+use Tracewick\Transport\SpoolReaderConfig;
+
+#[CoversClass(SpoolReaderConfig::class)]
+final class SpoolReaderConfigTest extends TestCase
+{
+    public function testDefaults(): void
+    {
+        $config = new SpoolReaderConfig('/var/spool/tracewick');
+
+        self::assertSame('/var/spool/tracewick', $config->directory);
+        self::assertSame(600_000, $config->staleClaimMs);
+        self::assertSame(3_600_000, $config->staleTemporaryMs);
+        self::assertSame(100, $config->maxRejectedFiles);
+        self::assertSame(4_194_304, $config->maxFileBytes);
+    }
+
+    public function testDerivesTheReaderIdFromTheHostAndTheProcess(): void
+    {
+        $readerId = (new SpoolReaderConfig('spool'))->readerId;
+
+        self::assertMatchesRegularExpression('/^[A-Za-z0-9._-]{1,64}$/D', $readerId);
+        self::assertStringEndsWith('-' . getmypid(), $readerId);
+    }
+
+    /**
+     * @return iterable<string, array{string, int, string}>
+     */
+    public static function readerIds(): iterable
+    {
+        yield 'plain host' => ['web-1', 42, 'web-1-42'];
+        yield 'characters a file name should not carry' => ['web 1/eu:west', 7, 'web-1-eu-west-7'];
+        yield 'empty host' => ['', 7, '-7'];
+        yield 'long host keeps the process id' => [str_repeat('h', 70), 12345, str_repeat('h', 58) . '-12345'];
+        yield 'exactly fits' => [str_repeat('h', 61), 12, str_repeat('h', 61) . '-12'];
+    }
+
+    #[DataProvider('readerIds')]
+    public function testBuildsReaderIds(string $host, int $pid, string $expected): void
+    {
+        $readerId = SpoolReaderConfig::readerIdFor($host, $pid);
+
+        self::assertSame($expected, $readerId);
+        self::assertSame($readerId, (new SpoolReaderConfig('spool', $readerId))->readerId);
+    }
+
+    public function testKeepsAGivenReaderId(): void
+    {
+        self::assertSame('agent-1.eu_west', (new SpoolReaderConfig('spool', 'agent-1.eu_west'))->readerId);
+    }
+
+    public function testAcceptsTheBounds(): void
+    {
+        $lower = new SpoolReaderConfig('spool', 'a', 1_000, 1_000, 0, 1_024);
+        $upper = new SpoolReaderConfig('spool', str_repeat('a', 64), 604_800_000, 604_800_000, 100_000, 256 * 1024 * 1024);
+
+        self::assertSame([1_000, 1_000, 0, 1_024], [$lower->staleClaimMs, $lower->staleTemporaryMs, $lower->maxRejectedFiles, $lower->maxFileBytes]);
+        self::assertSame([604_800_000, 604_800_000, 100_000, 256 * 1024 * 1024], [$upper->staleClaimMs, $upper->staleTemporaryMs, $upper->maxRejectedFiles, $upper->maxFileBytes]);
+    }
+
+    /**
+     * @return iterable<string, array{string, ?string, int, int, int, int, string}>
+     */
+    public static function invalid(): iterable
+    {
+        yield 'empty directory' => ['', 'a', 600_000, 3_600_000, 100, 4_194_304, 'The spool directory must be a non-empty path.'];
+        yield 'directory with a NUL byte' => ["spool\0", 'a', 600_000, 3_600_000, 100, 4_194_304, 'The spool directory must be a non-empty path.'];
+        yield 'empty reader id' => ['spool', '', 600_000, 3_600_000, 100, 4_194_304, 'The reader id must be'];
+        yield 'reader id with a slash' => ['spool', 'a/b', 600_000, 3_600_000, 100, 4_194_304, 'The reader id must be'];
+        yield 'reader id too long' => ['spool', str_repeat('a', 65), 600_000, 3_600_000, 100, 4_194_304, 'The reader id must be'];
+        yield 'stale claim too short' => ['spool', 'a', 999, 3_600_000, 100, 4_194_304, 'The stale claim age'];
+        yield 'stale claim too long' => ['spool', 'a', 604_800_001, 3_600_000, 100, 4_194_304, 'The stale claim age'];
+        yield 'stale temporary too short' => ['spool', 'a', 600_000, 999, 100, 4_194_304, 'The stale temporary file age'];
+        yield 'stale temporary too long' => ['spool', 'a', 600_000, 604_800_001, 100, 4_194_304, 'The stale temporary file age'];
+        yield 'negative rejected files' => ['spool', 'a', 600_000, 3_600_000, -1, 4_194_304, 'The number of rejected files'];
+        yield 'too many rejected files' => ['spool', 'a', 600_000, 3_600_000, 100_001, 4_194_304, 'The number of rejected files'];
+        yield 'file too small' => ['spool', 'a', 600_000, 3_600_000, 100, 1_023, 'The maximum spool file size'];
+        yield 'file too large' => ['spool', 'a', 600_000, 3_600_000, 100, 256 * 1024 * 1024 + 1, 'The maximum spool file size'];
+    }
+
+    #[DataProvider('invalid')]
+    public function testRejectsInvalidValues(string $directory, ?string $readerId, int $staleClaimMs, int $staleTemporaryMs, int $maxRejectedFiles, int $maxFileBytes, string $message): void
+    {
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage($message);
+
+        new SpoolReaderConfig($directory, $readerId, $staleClaimMs, $staleTemporaryMs, $maxRejectedFiles, $maxFileBytes);
+    }
+}

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 $finder = (new PhpCsFixer\Finder())
     ->in([__DIR__ . '/src', __DIR__ . '/tests'])
-    ->append([__FILE__, __DIR__ . '/rector.php', __DIR__ . '/composer-dependency-analyser.php']);
+    ->append([__FILE__, __DIR__ . '/rector.php', __DIR__ . '/composer-dependency-analyser.php', __DIR__ . '/bin/tracewick-drain']);
 
 return (new PhpCsFixer\Config())
     ->setRiskyAllowed(true)

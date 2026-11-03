@@ -1,0 +1,191 @@
+# Development and test stand for Tracewick.
+#
+#   make stand-up     start Pyroscope, Grafana, the OTel Collector and Toxiproxy
+#   make stand-ci     run `make ci` in the PHP container with a real ext-excimer
+#   make app-up       also start the reference app (Symfony Demo on PHP-FPM and RoadRunner)
+#   make stand-down   stop everything and remove volumes
+#
+# Ports bind to 127.0.0.1 only. See CONTRIBUTING.md for details.
+
+name: tracewick
+
+services:
+  php:
+    build:
+      context: docker/php
+      args:
+        PHP_VERSION: ${PHP_VERSION:-8.4}
+        EXCIMER_VERSION: ${EXCIMER_VERSION:-1.2.6}
+    image: tracewick-php:${PHP_VERSION:-8.4}
+    # Started on demand with `docker compose run`, not by `docker compose up`.
+    profiles: [php]
+    user: ${STAND_UID:-1000}:${STAND_GID:-1000}
+    environment:
+      PYROSCOPE_URL: http://pyroscope:4040
+      PYROSCOPE_TOXIC_URL: http://toxiproxy:14040
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      TOXIPROXY_URL: http://toxiproxy:8474
+    volumes:
+      - .:/app
+      - composer-cache:/composer-cache
+
+  pyroscope:
+    image: grafana/pyroscope:2.4.2
+    # The image is distroless and has no tool for a healthcheck; poll /ready from the host instead.
+    ports:
+      - 127.0.0.1:4040:4040
+
+  grafana:
+    image: grafana/grafana:13.3.0
+    depends_on: [pyroscope]
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: 'true'
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: 'true'
+      GF_ANALYTICS_REPORTING_ENABLED: 'false'
+      GF_ANALYTICS_CHECK_FOR_UPDATES: 'false'
+    volumes:
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - 127.0.0.1:3000:3000
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://localhost:3000/api/health]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.164.0
+    command: [--config=/etc/otelcol/config.yaml, --feature-gates=service.profilesSupport]
+    depends_on: [pyroscope]
+    volumes:
+      - ./docker/otel-collector/config.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - 127.0.0.1:4317:4317
+      - 127.0.0.1:4318:4318
+      - 127.0.0.1:13133:13133
+
+  # Injects latency and failures between PHP and the backends for chaos tests.
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.13.0
+    command: [-host=0.0.0.0, -config=/etc/toxiproxy/toxiproxy.json]
+    volumes:
+      - ./docker/toxiproxy/toxiproxy.json:/etc/toxiproxy/toxiproxy.json:ro
+    ports:
+      - 127.0.0.1:8474:8474
+
+  # Reference application (profile "app"): the Symfony Demo with PostgreSQL and an external HTTP
+  # service, served by PHP-FPM behind nginx and by RoadRunner. Start it with `make app-up`.
+
+  postgres:
+    image: postgres:18.6
+    profiles: [app]
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    healthcheck:
+      test: [CMD, pg_isready, -U, app, -d, app]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # The "external API" the reference app calls, reached through Toxiproxy (toxiproxy:18080).
+  httpbin:
+    image: mccutchen/go-httpbin:2.26.0
+    profiles: [app]
+
+  app-setup:
+    build: &app-build
+      context: docker/reference-app
+      # The Tracewick sources the app is profiled with.
+      additional_contexts:
+        tracewick: .
+      target: fpm
+      args:
+        EXCIMER_VERSION: ${EXCIMER_VERSION:-1.2.6}
+    image: tracewick-reference-fpm
+    # Run once with `docker compose run`, before the app services start.
+    profiles: [setup]
+    command: [reference-app-setup]
+    environment: &app-env
+      DATABASE_URL: postgresql://app:app@postgres:5432/app?serverVersion=18&charset=utf8
+      APP_SECRET: reference-app-not-a-secret
+      EXTERNAL_HTTP_URL: http://toxiproxy:18080
+      PYROSCOPE_URL: http://pyroscope:4040
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      TRACEWICK_SPOOL_DIR: /var/spool/tracewick
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # PHP-FPM writes profiles to a spool directory, and app-drain sends them on to Pyroscope: the
+  # setup recommended for production.
+  app-fpm:
+    build: *app-build
+    image: tracewick-reference-fpm
+    profiles: [app]
+    environment:
+      <<: *app-env
+      TRACEWICK_RUNTIME: fpm
+      TRACEWICK_SINK: spool
+    volumes:
+      - app-spool:/var/spool/tracewick
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  app-drain:
+    build: *app-build
+    image: tracewick-reference-fpm
+    profiles: [app]
+    user: www-data
+    command: [vendor/bin/tracewick-drain, --memory-limit=128M]
+    environment:
+      TRACEWICK_SPOOL_DIR: /var/spool/tracewick
+      TRACEWICK_PYROSCOPE_URL: http://pyroscope:4040
+    volumes:
+      - app-spool:/var/spool/tracewick
+    depends_on: [pyroscope]
+    restart: unless-stopped
+
+  app-nginx:
+    build:
+      context: docker/reference-app
+      # The nginx image copies the public files of the app stage, which installs Tracewick.
+      additional_contexts:
+        tracewick: .
+      target: nginx
+    image: tracewick-reference-nginx
+    profiles: [app]
+    depends_on: [app-fpm]
+    ports:
+      - 127.0.0.1:8081:80
+
+  app-roadrunner:
+    build:
+      context: docker/reference-app
+      target: roadrunner
+      additional_contexts:
+        tracewick: .
+      args:
+        EXCIMER_VERSION: ${EXCIMER_VERSION:-1.2.6}
+    image: tracewick-reference-roadrunner
+    profiles: [app]
+    environment:
+      <<: *app-env
+      APP_RUNTIME: 'Runtime\RoadRunnerSymfonyNyholm\Runtime'
+      # Same as FPM: write spool files; app-drain delivers to Pyroscope (not from the worker).
+      TRACEWICK_RUNTIME: roadrunner
+      TRACEWICK_SINK: spool
+    volumes:
+      - app-spool:/var/spool/tracewick
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - 127.0.0.1:8082:8080
+
+volumes:
+  composer-cache:
+  app-spool:

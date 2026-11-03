@@ -1,0 +1,65 @@
+name: Reference app
+
+# Builds the reference application (Symfony Demo on PHP-FPM and RoadRunner) with Tracewick from
+# this commit, checks that it serves requests through PostgreSQL and Toxiproxy, and that its
+# profiles reach Pyroscope with route labels. On pull requests it runs only when the app or the
+# stand changes, to save CI minutes; on develop and main also when the library changes.
+
+on:
+  pull_request:
+    paths:
+      # Library changes must re-run profile smoke (stacks / units / labels), not only app Docker files.
+      - bin/**
+      - composer.json
+      - src/**
+      - .dockerignore
+      - compose.yaml
+      - docker/reference-app/**
+      - docker/toxiproxy/**
+      - Makefile
+      - .github/workflows/reference-app.yml
+  push:
+    branches: [main, develop]
+    paths:
+      - bin/**
+      - composer.json
+      - src/**
+      - .dockerignore
+      - compose.yaml
+      - docker/reference-app/**
+      - docker/toxiproxy/**
+      - Makefile
+      - .github/workflows/reference-app.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reference-app:
+    name: Reference app
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Start the stand and the reference app
+        run: make app-up
+
+      - name: Smoke test
+        run: make app-smoke
+
+      - name: Profiles reach Pyroscope
+        run: make app-profiles
+
+      - name: Show service logs
+        if: ${{ failure() }}
+        run: docker compose --profile app logs --no-color
+
+      - name: Stop everything
+        if: ${{ always() }}
+        run: make stand-down

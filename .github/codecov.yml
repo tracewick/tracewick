@@ -1,0 +1,16 @@
+# Codecov settings. The 1.0 target is >= 90% line coverage (see the plan and CONTRIBUTING.md).
+coverage:
+  precision: 2
+  round: down
+  status:
+    project:
+      default:
+        target: 90%
+        threshold: 1%
+    patch:
+      default:
+        target: 90%
+
+comment:
+  layout: condensed_header, diff, files
+  require_changes: true

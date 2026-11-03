@@ -1,0 +1,20 @@
+[
+  {
+    "name": "pyroscope",
+    "listen": "0.0.0.0:14040",
+    "upstream": "pyroscope:4040",
+    "enabled": true
+  },
+  {
+    "name": "otel-collector-http",
+    "listen": "0.0.0.0:14318",
+    "upstream": "otel-collector:4318",
+    "enabled": true
+  },
+  {
+    "name": "http-mock",
+    "listen": "0.0.0.0:18080",
+    "upstream": "httpbin:8080",
+    "enabled": true
+  }
+]

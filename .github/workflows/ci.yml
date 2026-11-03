@@ -19,6 +19,7 @@ concurrency:
 env:
   # Pull requests run on this single PHP version to save Actions minutes.
   PR_PHP_VERSION: '8.4'
+  INFECTION_VERSION: '0.35.8'
 
 jobs:
   checks:
@@ -26,19 +27,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ env.PR_PHP_VERSION }}
           extensions: excimer
-          coverage: none
-          tools: composer:v2
+          coverage: pcov
+          # Infection is a PHAR, not a dev dependency: recent versions need PHP 8.3+ and would
+          # block installing dependencies on PHP 8.2 in the matrix.
+          tools: composer:v2, infection:${{ env.INFECTION_VERSION }}
 
       - name: Validate composer.json
         run: composer validate --strict
 
-      - uses: ramsey/composer-install@v3
+      - uses: ramsey/composer-install@v4
         id: install
 
       - name: Normalize composer.json
@@ -62,9 +65,45 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: composer deps
 
-      - name: Tests
+      - name: Tests with coverage
+        id: tests
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        run: composer test
+        run: composer test:coverage
+
+      - uses: actions/setup-go@v7
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        with:
+          go-version: stable
+          cache: false
+
+      - name: Validate pprof golden files with go tool pprof
+        # The golden tests pin the encoder output; this checks that the reference parser reads it.
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: |
+          for file in tests/Unit/Encoder/golden/*.pb; do
+            echo "::group::$file"
+            go tool pprof -raw "$file"
+            echo '::endgroup::'
+          done
+
+      - name: Upload coverage to Codecov
+        if: ${{ !cancelled() && steps.tests.outcome == 'success' }}
+        uses: codecov/codecov-action@v7
+        with:
+          files: build/coverage/clover.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          # Coverage gates are enforced by Codecov's status checks, not by this upload.
+          fail_ci_if_error: false
+
+      - name: Mutation testing
+        if: ${{ !cancelled() && steps.tests.outcome == 'success' }}
+        run: |
+          # Safety net if coverage is empty (misconfigured run). Normal builds have executable src/.
+          if tail -n 3 build/coverage/clover.xml | grep -q ' statements="0"'; then
+            echo '::notice::Coverage reports zero statements; skipping mutation testing.'
+            exit 0
+          fi
+          composer infection:ci
 
       - name: Security audit
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
@@ -82,7 +121,7 @@ jobs:
         php: ['8.2', '8.3', '8.4', '8.5']
         dependencies: [lowest, highest]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: shivammathur/setup-php@v2
         with:
@@ -91,7 +130,7 @@ jobs:
           coverage: none
           tools: composer:v2
 
-      - uses: ramsey/composer-install@v3
+      - uses: ramsey/composer-install@v4
         with:
           dependency-versions: ${{ matrix.dependencies }}
 

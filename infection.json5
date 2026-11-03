@@ -1,0 +1,78 @@
+{
+    "$schema": "https://raw.githubusercontent.com/infection/infection/0.35.8/resources/schema.json",
+    "source": {
+        "directories": ["src"]
+    },
+    "timeout": 30,
+    "logs": {
+        "text": "build/infection/infection.log",
+        "summary": "build/infection/summary.log",
+        "github": true
+    },
+    // Each ignore must name the equivalent-mutant reason. Prefer a multi-process or
+    // extension-backed test over a new ignore. Never lower minMsi to silence escapes.
+    "mutators": {
+        "@default": true,
+        "MethodCallRemoval": {
+            "ignoreSourceCodeByRegex": [
+                // Equivalent: ExcimerTraceConverter already cuts every trace at the same depth;
+                // setMaxDepth only saves memory inside the extension and is not observable in PHP.
+                "\\$this->profiler->setMaxDepth\\(.*",
+            ],
+        },
+        "ReturnRemoval": {
+            // Equivalent with Excimer 1.2+: restarting a running profiler keeps sampling, so the
+            // early-return guard cannot be observed. Kept as protection for older extension behaviour.
+            "ignore": ["Tracewick\\Sampler\\ExcimerSampler::start"],
+        },
+        "LogicalAnd": {
+            "ignoreSourceCodeByRegex": [
+                // Equivalent in single-process tests: the second is_dir() in SpoolTransport only
+                // matters when another process creates the directory between the first check and mkdir().
+                "if \\(!is_dir\\(\\$directory\\) && !@mkdir.*",
+            ],
+        },
+        "CastInt": {
+            "ignoreSourceCodeByRegex": [
+                // Equivalent: PHP coerces the numeric capture group the same way when subtracting.
+                ".*\\$nowNs - \\(int\\) \\$matches\\['writtenNs'\\].*",
+            ],
+        },
+        "TrueValue": {
+            "ignoreSourceCodeByRegex": [
+                // Equivalent in the memory-cap test fixture: usage always exceeds the one-byte budget
+                // whether or not real_usage is requested.
+                "static fn\\(\\): int => memory_get_usage\\(true\\)",
+            ],
+        },
+        "FunctionCallRemoval": {
+            "ignoreSourceCodeByRegex": [
+                // Equivalent in single-process tests: this process's own rename/touch updates the
+                // cache; clearstatcache only matters when another process changes the path between scans.
+                "clearstatcache\\(.*",
+            ],
+        },
+        "LessThan": {
+            "ignoreSourceCodeByRegex": [
+                // Equivalent unless free space equals the limit to the byte (not reproducible in CI).
+                "if \\(false !== \\$free && .*",
+            ],
+        },
+        "Concat": {
+            "ignoreSourceCodeByRegex": [
+                // Equivalent in single-process tests: the `.name.tmp` path is only visible to a
+                // concurrent reader while the writer still holds the temporary name.
+                "\\$temporary = \\$directory \\. .*",
+            ],
+        },
+        "ConcatOperandRemoval": {
+            "ignoreSourceCodeByRegex": [
+                // See Concat (temporary spool name under concurrent readers).
+                "\\$temporary = \\$directory \\. .*",
+            ],
+        },
+    },
+    // Plan target for 1.0: MSI >= 80%. Raise these as the test suite matures, never lower them.
+    "minMsi": 80,
+    "minCoveredMsi": 80
+}

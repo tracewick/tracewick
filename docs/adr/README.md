@@ -1,0 +1,20 @@
+# Architecture decision records
+
+See [ADR 1](0001-record-architecture-decisions.md) for how and why we record decisions, and
+[`template.md`](template.md) for new records.
+
+| ADR                                             | Title                                    | Status   |
+|-------------------------------------------------|------------------------------------------|----------|
+| [1](0001-record-architecture-decisions.md)      | Record architecture decisions            | Accepted |
+| [2](0002-supported-php-versions.md)             | Supported PHP versions                   | Accepted |
+| [3](0003-layered-core-architecture.md)          | Layered core architecture                | Accepted |
+| [4](0004-pprof-as-primary-format.md)            | pprof as the primary interchange format  | Accepted |
+| [5](0005-fail-open-policy.md)                   | Fail-open policy and optional ext-excimer | Accepted |
+| [6](0006-otlp-profiles-experimental.md)         | OTLP profiles export is experimental     | Accepted |
+| [7](0007-language-neutral-spool-format.md)      | Language-neutral spool format for the agent | Accepted |
+| [8](0008-own-http-transport.md)                 | Own HTTP transport instead of PSR-18     | Accepted |
+| [9](0009-agent-hand-off.md)                     | Handing profiles to a local agent        | Accepted (spool); Proposed (unix socket) |
+| [10](0010-deferred-delivery.md)                 | Deferred delivery in the Runtime         | Accepted |
+| [11](0011-excimer-vm-interrupt-limits.md)       | Excimer VM-interrupt sampling limits     | Accepted |
+| [12](0012-aggregate-before-delivery.md)         | Aggregate profiles before delivery       | Accepted |
+| [13](0013-spool-v2-compact-payload.md)          | Spool v2: compact stacks on the hot path | Accepted |
