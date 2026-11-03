@@ -9,15 +9,15 @@ warning.
 ([RFC](https://wiki.php.net/rfc/adopt_pie_deprecate_pecl)). Excimer on Packagist:
 [`wikimedia/excimer`](https://packagist.org/packages/wikimedia/excimer).
 
-Both install paths are documented below. Prefer PIE on hosts and in new Dockerfiles. The Bookworm
-development stand still installs via PECL (`EXCIMER_VERSION` in `compose.yaml` /
-`docker/php/Dockerfile`) until a separate change migrates it; that pin is **not** the same string as
-the Packagist version used with PIE.
+Both install paths are documented below. Prefer PIE on hosts and in Dockerfiles. The Bookworm
+development stand installs via PIE (`EXCIMER_PIE_CONSTRAINT` in `compose.yaml` /
+`docker/php/Dockerfile`). Official PHP **8.6 RC** images no longer ship `pecl`.
 
 | Path | How to pin today |
 | --- | --- |
 | PIE (recommended) | `pie install wikimedia/excimer:1.2.7` (Packagist tag) |
-| PECL (deprecated) | `pecl install excimer-1.2.6` (`EXCIMER_VERSION` in the stand) |
+| PIE on PHP 8.6 RC | `pie install wikimedia/excimer:dev-master` until a release builds on 8.6 (`XtOffsetOf` removed) |
+| PECL (deprecated) | `pecl install excimer-1.2.6` (not available in `php:8.6-rc-*` images) |
 
 ## PIE (recommended)
 
@@ -49,9 +49,9 @@ You still need unzip or git, and a C toolchain, in the image.
 
 ## PECL (deprecated)
 
-PECL still works for now, including the Bookworm stand. Prefer PIE for new installs.
+PECL still works for now on hosts that ship it. Prefer PIE for new installs.
 
-### Debian / Ubuntu (and the Bookworm stand)
+### Debian / Ubuntu
 
 ```bash
 sudo apt-get install -y php-dev php-pear build-essential
@@ -61,7 +61,8 @@ sudo phpenmod excimer   # or enable the ini for FPM/CLI by hand
 php -m | grep -i excimer
 ```
 
-The stand image uses the same PECL pin — see `docker/php/Dockerfile` (`EXCIMER_VERSION`).
+Prefer PIE on Debian as well. The Bookworm stand uses PIE — see `docker/php/Dockerfile`
+(`EXCIMER_PIE_CONSTRAINT`).
 
 ### Alpine Linux (PECL fallback)
 
@@ -96,7 +97,7 @@ docker run --rm tracewick-php-alpine:local php -m | grep -i excimer
 
 This image is **not** published to Docker Hub. Copy the `RUN` / `COPY --from=…pie` block into your
 application image, or use it only to verify that Excimer still builds on Alpine when you bump the
-PIE constraint (or, for the Bookworm stand, `EXCIMER_VERSION` for PECL).
+PIE constraint (the Bookworm stand uses the same Packagist pin via `EXCIMER_PIE_CONSTRAINT`).
 
 ## After install
 

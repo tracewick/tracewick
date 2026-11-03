@@ -3,8 +3,19 @@
 COMPOSER ?= composer
 PHP_VERSION ?= 8.4
 
+# PHP 8.6 RC (and later RCs): Docker Hub tag `8.6-rc`; Excimer 1.2.7 does not build there yet
+# (XtOffsetOf removed in PHP 8.6) — use PIE `dev-master`. Composer platform php is 8.6.0RCx,
+# which does not satisfy `~8.6.0` until GA, so ignore the php platform req for RC stands only.
+ifneq (,$(findstring -rc,$(PHP_VERSION)))
+EXCIMER_PIE_CONSTRAINT ?= dev-master
+COMPOSER_IGNORE_PLATFORM_REQ ?= php
+else
+EXCIMER_PIE_CONSTRAINT ?= 1.2.7
+COMPOSER_IGNORE_PLATFORM_REQ ?=
+endif
+
 # The stand's PHP container runs as the host user so that files it writes stay yours.
-STAND_ENV = PHP_VERSION=$(PHP_VERSION) STAND_UID=$$(id -u) STAND_GID=$$(id -g)
+STAND_ENV = PHP_VERSION=$(PHP_VERSION) EXCIMER_PIE_CONSTRAINT=$(EXCIMER_PIE_CONSTRAINT) COMPOSER_IGNORE_PLATFORM_REQ=$(COMPOSER_IGNORE_PLATFORM_REQ) STAND_UID=$$(id -u) STAND_GID=$$(id -g)
 STAND_RUN = $(STAND_ENV) docker compose run --rm php
 
 .PHONY: help install lint cs-fix stan rector rector-fix deps test test-unit test-integration coverage infection audit ci \
@@ -60,7 +71,7 @@ ci: ## Run every check CI runs on a pull request
 	$(COMPOSER) ci
 	$(COMPOSER) audit
 
-stand-build: ## Build the stand's PHP image (PHP_VERSION=8.4 by default)
+stand-build: ## Build the stand's PHP image (PHP_VERSION=8.4; try 8.6-rc for the next PHP RC)
 	$(STAND_ENV) docker compose build php
 
 stand-up: ## Start Pyroscope, Grafana, the OTel Collector and Toxiproxy

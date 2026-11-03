@@ -61,6 +61,18 @@ built on first use; after changing anything under `docker/php/`, rebuild it with
 `make stand-build`. The PHP container runs as your user, so files it creates in the working copy
 stay yours.
 
+To exercise the next PHP release candidate (Docker Hub `php:8.6-rc-cli-bookworm`):
+
+```bash
+make stand-build PHP_VERSION=8.6-rc
+make stand-test PHP_VERSION=8.6-rc
+```
+
+The Makefile then installs Excimer via PIE from `wikimedia/excimer:dev-master` (1.2.7 does not
+build on 8.6 yet) and sets `COMPOSER_IGNORE_PLATFORM_REQ=php` because `composer.json` does not
+list `~8.6.0` until support is promoted. The Stand workflow runs this as an experimental,
+non-blocking job.
+
 The stand is for developing and testing Tracewick only. Neither `compose.yaml` nor `docker/` ships
 in the Composer package. Its PHP image deliberately runs with strict development settings
 (`docker/php/conf.d/zz-tracewick.ini`: all errors displayed, assertions on), so that tests fail on
@@ -147,13 +159,12 @@ Proxies are defined in [`docker/toxiproxy/toxiproxy.json`](docker/toxiproxy/toxi
 The backend images and the ext-excimer version are pinned, so the stand does not change under
 you; Dependabot proposes backend image updates in `compose.yaml` into `develop`. The PHP base image
 follows its minor version tag (`php:8.4-cli-bookworm`), so a rebuild picks up PHP patch releases.
-ext-excimer on the Bookworm stand is still installed with PECL (`EXCIMER_VERSION` in
-`compose.yaml` and `docker/php/Dockerfile`) and is bumped by hand when that PECL release is
-acceptable for the stand. Host docs and `docker/php/Dockerfile.alpine` prefer
-[PIE](https://php.github.io/pie/) and pin the Packagist constraint (`EXCIMER_PIE_CONSTRAINT`,
-currently `wikimedia/excimer:1.2.7`) separately — the two version strings are not kept in lockstep
-on purpose until the stand migrates off PECL. The `Stand` workflow builds and tests the stand on
-every pull request that touches it, on PHP 8.4, and on all supported PHP versions after the merge.
+ext-excimer on the Bookworm stand is installed with [PIE](https://php.github.io/pie/)
+(`EXCIMER_PIE_CONSTRAINT` in `compose.yaml` / `docker/php/Dockerfile`; default
+`wikimedia/excimer:1.2.7`, or `dev-master` when `PHP_VERSION` contains `-rc`). The Alpine proof
+image uses the same Packagist pin. The `Stand` workflow builds and tests the stand on every pull
+request that touches it, on PHP 8.4, on all supported PHP versions after the merge, and on an
+experimental PHP 8.6 RC job that does not block merges.
 
 ## Rules
 

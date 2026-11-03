@@ -2,7 +2,7 @@
 
 # Proof recipe: PHP CLI on Alpine with ext-excimer via PIE (recommended).
 # Not a published Tracewick runtime image — copy into your own Dockerfile or follow
-# docs/install-excimer.md. The Bookworm stand (`Dockerfile`) still uses PECL on purpose.
+# docs/install-excimer.md. The Bookworm stand (`Dockerfile`) also uses PIE.
 #
 # PECL fallback (deprecated), if you cannot use PIE yet:
 #   RUN apk add --no-cache --virtual .build-deps $PHPIZE_DEPS \
