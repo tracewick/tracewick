@@ -80,6 +80,7 @@ final class ProtobufWriter
             $value = $value >> 7 & 0x01FF_FFFF_FFFF_FFFF;
         }
 
-        return $bytes . \chr($value);
+        // Mask keeps the final byte in 0..127 for chr()'s int<0, 255> (PHPStan on PHP 8.5+).
+        return $bytes . \chr($value & 0x7F);
     }
 }
