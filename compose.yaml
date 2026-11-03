@@ -14,9 +14,10 @@ services:
     build:
       context: docker/php
       args:
-        PHP_VERSION: ${PHP_VERSION:-8.4}
-        EXCIMER_VERSION: ${EXCIMER_VERSION:-1.2.6}
-    image: tracewick-php:${PHP_VERSION:-8.4}
+        PHP_VERSION: ${PHP_VERSION:-8.5}
+        # PIE Packagist pin (not PECL). Override with EXCIMER_PIE_CONSTRAINT=dev-master for PHP 8.6 RC.
+        EXCIMER_PIE_CONSTRAINT: ${EXCIMER_PIE_CONSTRAINT:-1.2.7}
+    image: tracewick-php:${PHP_VERSION:-8.5}
     # Started on demand with `docker compose run`, not by `docker compose up`.
     profiles: [php]
     user: ${STAND_UID:-1000}:${STAND_GID:-1000}
@@ -25,6 +26,8 @@ services:
       PYROSCOPE_TOXIC_URL: http://toxiproxy:14040
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       TOXIPROXY_URL: http://toxiproxy:8474
+      # Set to `php` for PHP_VERSION=*-rc stands (Makefile); empty on stable versions.
+      COMPOSER_IGNORE_PLATFORM_REQ: ${COMPOSER_IGNORE_PLATFORM_REQ:-}
     volumes:
       - .:/app
       - composer-cache:/composer-cache

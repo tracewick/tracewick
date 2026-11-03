@@ -18,7 +18,7 @@ concurrency:
 
 env:
   # Heavy Checks job (coverage, Infection, stan) stays on one PHP version.
-  PR_PHP_VERSION: '8.4'
+  PR_PHP_VERSION: '8.5'
   INFECTION_VERSION: '0.35.8'
 
 jobs:
