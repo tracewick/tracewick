@@ -11,9 +11,9 @@
 #       && apk del .build-deps
 #
 # Build:
-#   docker build -f docker/php/Dockerfile.alpine --build-arg PHP_VERSION=8.4 -t tracewick-php-alpine:local docker/php
+#   docker build -f docker/php/Dockerfile.alpine --build-arg PHP_VERSION=8.5 -t tracewick-php-alpine:local docker/php
 
-ARG PHP_VERSION=8.4
+ARG PHP_VERSION=8.5
 
 FROM composer:2 AS composer
 

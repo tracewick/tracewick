@@ -55,7 +55,7 @@ make stand-shell   # open a shell in the PHP container
 make stand-down    # stop everything and remove volumes
 ```
 
-Set `PHP_VERSION` (8.2, 8.3, 8.4 or 8.5; 8.4 by default) to use another PHP version, for example
+Set `PHP_VERSION` (8.2, 8.3, 8.4 or 8.5; 8.5 by default) to use another PHP version, for example
 `make stand-test PHP_VERSION=8.2`. Each PHP version gets its own image (`tracewick-php:<version>`),
 built on first use; after changing anything under `docker/php/`, rebuild it with
 `make stand-build`. The PHP container runs as your user, so files it creates in the working copy
@@ -158,12 +158,12 @@ Proxies are defined in [`docker/toxiproxy/toxiproxy.json`](docker/toxiproxy/toxi
 
 The backend images and the ext-excimer version are pinned, so the stand does not change under
 you; Dependabot proposes backend image updates in `compose.yaml` into `develop`. The PHP base image
-follows its minor version tag (`php:8.4-cli-bookworm`), so a rebuild picks up PHP patch releases.
+follows its minor version tag (`php:8.5-cli-bookworm`), so a rebuild picks up PHP patch releases.
 ext-excimer on the Bookworm stand is installed with [PIE](https://php.github.io/pie/)
 (`EXCIMER_PIE_CONSTRAINT` in `compose.yaml` / `docker/php/Dockerfile`; default
 `wikimedia/excimer:1.2.7`, or `dev-master` when `PHP_VERSION` contains `-rc`). The Alpine proof
 image uses the same Packagist pin. The `Stand` workflow builds and tests the stand on every pull
-request that touches it, on PHP 8.4, on all supported PHP versions after the merge, and on an
+request that touches it, on PHP 8.5, on all supported PHP versions after the merge, and on an
 experimental PHP 8.6 RC job that does not block merges.
 
 ## Rules

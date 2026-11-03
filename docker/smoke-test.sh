@@ -18,7 +18,7 @@ echo '--> Toxiproxy exposes the configured proxies'
 curl -fsS http://127.0.0.1:8474/proxies | grep -q '"pyroscope"'
 
 echo '--> The PHP container has ext-excimer and reaches Pyroscope through Toxiproxy'
-PHP_VERSION=${PHP_VERSION:-8.4} STAND_UID=$(id -u) STAND_GID=$(id -g) \
+PHP_VERSION=${PHP_VERSION:-8.5} STAND_UID=$(id -u) STAND_GID=$(id -g) \
     docker compose run --rm --no-deps php sh -c \
     'php --ri excimer && curl -fsS -o /dev/null "$PYROSCOPE_TOXIC_URL/ready"'
 

@@ -9,7 +9,7 @@
 #
 # Targets: fpm (PHP-FPM), nginx (static files and FastCGI proxy), roadrunner (long-running workers).
 
-ARG PHP_VERSION=8.4
+ARG PHP_VERSION=8.5
 ARG ROADRUNNER_VERSION=2025.1.15
 ARG NGINX_VERSION=1.30.6
 

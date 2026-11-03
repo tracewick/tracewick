@@ -6,10 +6,10 @@
 # Prefer PIE (`pie install wikimedia/excimer`) — see docs/install-excimer.md.
 # Official PHP 8.6 RC images no longer ship `pecl`; PIE is required there.
 #
-# PHP_VERSION may be a stable tag (8.4) or an RC tag (8.6-rc) matching
+# PHP_VERSION may be a stable tag (8.5) or an RC tag (8.6-rc) matching
 # `php:${PHP_VERSION}-cli-bookworm` on Docker Hub.
 
-ARG PHP_VERSION=8.4
+ARG PHP_VERSION=8.5
 
 FROM composer:2 AS composer
 

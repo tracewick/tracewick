@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 
 COMPOSER ?= composer
-PHP_VERSION ?= 8.4
+PHP_VERSION ?= 8.5
 
 # PHP 8.6 RC (and later RCs): Docker Hub tag `8.6-rc`; Excimer 1.2.7 does not build there yet
 # (XtOffsetOf removed in PHP 8.6) — use PIE `dev-master`. Composer platform php is 8.6.0RCx,
@@ -71,7 +71,7 @@ ci: ## Run every check CI runs on a pull request
 	$(COMPOSER) ci
 	$(COMPOSER) audit
 
-stand-build: ## Build the stand's PHP image (PHP_VERSION=8.4; try 8.6-rc for the next PHP RC)
+stand-build: ## Build the stand's PHP image (PHP_VERSION=8.5; try 8.6-rc for the next PHP RC)
 	$(STAND_ENV) docker compose build php
 
 stand-up: ## Start Pyroscope, Grafana, the OTel Collector and Toxiproxy
