@@ -24,16 +24,12 @@ ARG RUNTIME_ROADRUNNER_VERSION=1.0.0
 
 COPY --from=ghcr.io/php/pie:bin /pie /usr/local/bin/pie
 
+# BuildKit injects parallel MAKEFLAGS; on php:8.5-fpm that races docker-php-ext-install
+# (`cp: cannot stat 'modules/*'`). Clear it for this layer only.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends $PHPIZE_DEPS git unzip libicu-dev libpq-dev libtool \
-    # One extension per invocation: a multi-ext docker-php-ext-install on php:8.5-fpm
-    # clears modules/* between builds and fails with `cp: cannot stat 'modules/*'`.
-    && docker-php-ext-install intl \
-    && docker-php-ext-install opcache \
-    && docker-php-ext-install pcntl \
-    && docker-php-ext-install pdo_pgsql \
-    && docker-php-ext-install sockets \
-    && pie install "wikimedia/excimer:${EXCIMER_PIE_CONSTRAINT}" --auto-install-build-tools \
+    && MAKEFLAGS= docker-php-ext-install -j1 intl opcache pcntl pdo_pgsql sockets \
+    && MAKEFLAGS= pie install "wikimedia/excimer:${EXCIMER_PIE_CONSTRAINT}" --auto-install-build-tools \
     && apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false $PHPIZE_DEPS \
     && apt-get install -y --no-install-recommends git unzip \
     && rm -rf /var/lib/apt/lists/* /tmp/pie_* \
