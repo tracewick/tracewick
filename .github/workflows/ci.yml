@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Pull requests run on this single PHP version to save Actions minutes.
+  # Heavy Checks job (coverage, Infection, stan) stays on one PHP version.
   PR_PHP_VERSION: '8.4'
   INFECTION_VERSION: '0.35.8'
 
@@ -111,8 +111,7 @@ jobs:
 
   matrix:
     name: Tests (PHP ${{ matrix.php }}, ${{ matrix.dependencies }})
-    # The full matrix only runs on main, develop, nightly and on demand.
-    if: github.event_name != 'pull_request'
+    # Full PHP × dependency matrix on every PR and on main/develop pushes (public repo).
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
