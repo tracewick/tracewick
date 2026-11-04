@@ -8,7 +8,8 @@
 
 [ADR 5](0005-fail-open-policy.md) keeps network delivery out of the hot path when possible.
 [ADR 7](0007-language-neutral-spool-format.md) defines the spool directory for a separate delivery
-process (`tracewick-drain`, a future `tracewick-agent`, Alloy, or a custom sidecar). Open questions:
+process (`tracewick-drain`, [`tracewick-agent`](https://github.com/tracewick/agent), Alloy, or a
+custom sidecar). Open questions:
 
 - Several readers on one directory (restarts, cron overlap, optional parallelism).
 - Whether users can plug other stores without forking the library.

@@ -5,9 +5,10 @@
 application only ever writes local files, and never waits for the network
 ([ADR 5](adr/0005-fail-open-policy.md), [ADR 7](adr/0007-language-neutral-spool-format.md)).
 
-It is written in PHP and ships with the library, so it works without `tracewick-agent`. Several
-drains, or a drain and an agent, can read the same directory at the same time; each file goes to
-exactly one of them ([ADR 9](adr/0009-agent-hand-off.md)).
+It is written in PHP and ships with this library. For a long-running sidecar with HTTP keep-alive,
+prefer the Go binary [`tracewick-agent`](https://github.com/tracewick/agent). Several drains, or a
+drain and an agent, can read the same directory at the same time; each file goes to exactly one of
+them ([ADR 9](adr/0009-agent-hand-off.md)).
 
 `PyroscopeSink::forward()` encodes pprof from compact spool payloads
 ([ADR 13](adr/0013-spool-v2-compact-payload.md)). Files that share an aggregation key and the same
@@ -33,7 +34,8 @@ The default `tracewick-drain` path therefore:
    VIP or pod IP (Kubernetes / Swarm service failover).
 
 Application workers on the spool path never resolve or send HTTP. Keep-alive is not added to the
-PHP client; a future agent may own connection reuse instead.
+PHP client; [`tracewick-agent`](https://github.com/tracewick/agent) owns connection reuse for the
+long-running sidecar path.
 
 ## What it does with each file
 

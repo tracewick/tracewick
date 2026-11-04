@@ -76,9 +76,18 @@ $profiler->start(['route' => $route]);
 $profiler->registerShutdown(); // stop + flush to the spool when the request ends
 ```
 
-In another process (cron, supervisor, or sidecar):
+In another process (cron, supervisor, or long-running sidecar), deliver the spool to Pyroscope:
+
+- **Recommended for a long-running sidecar:** [`tracewick/agent`](https://github.com/tracewick/agent)
+  (`tracewick-agent`) — Go process with HTTP connection reuse.
+- **Ships with this library:** `vendor/bin/tracewick-drain` — PHP drain, fine for cron / `--once`
+  and as a reference implementation.
 
 ```bash
+# Go agent (separate repo)
+tracewick-agent run --spool-dir=/var/spool/tracewick --pyroscope-url=http://127.0.0.1:4040
+
+# or PHP drain
 vendor/bin/tracewick-drain \
   --spool-dir=/var/spool/tracewick \
   --pyroscope-url=http://127.0.0.1:4040
@@ -86,11 +95,12 @@ vendor/bin/tracewick-drain \
 
 Put the spool on a **local** volume or tmpfs with an OS quota if you need a hard ceiling: file
 admission is **soft** and may briefly overshoot under concurrent writers (Tracewick does not run a
-host-wide file counter on every FPM write). `tracewick-drain` applies a **process-local**
+host-wide file counter on every FPM write). Both drain and agent apply a **process-local**
 cardinality gate (default 256 keys; keeps `service`/`env` on overflow). Writer-side cardinality is
 off unless you inject a store. Details: [spool format](docs/spool-format.md),
-[ADR 12](docs/adr/0012-aggregate-before-delivery.md). Do not call `PyroscopeSink` from PHP-FPM
-request handlers. Full options: [docs/runtime.md](docs/runtime.md), [docs/drain.md](docs/drain.md).
+[ADR 12](docs/adr/0012-aggregate-before-delivery.md), [docs/drain.md](docs/drain.md),
+[agent README](https://github.com/tracewick/agent#readme). Do not call `PyroscopeSink` from PHP-FPM
+request handlers. Full PHP options: [docs/runtime.md](docs/runtime.md).
 
 ### See it on the stand
 
