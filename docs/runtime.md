@@ -80,9 +80,9 @@ by the rate. Shares within a flame graph, which is what profiling is read for, s
 
 Delivery happens in `flush()`, after the work, but in the same process. With a `SpoolSink` it is a
 local file write (cheap next to encoding and HTTP; not a measured microsecond budget), and a
-separate process sends the files ([`tracewick-drain`](drain.md); a Go agent is planned). This is
-the recommended setup in production. Put the spool on a **local** filesystem
-([spool format](spool-format.md)).
+separate process sends the files ([`tracewick-drain`](drain.md) or
+[`tracewick-agent`](https://github.com/tracewick/agent)). This is the recommended setup in
+production. Put the spool on a **local** filesystem ([spool format](spool-format.md)).
 
 A `PyroscopeSink` sends over the network from the PHP process itself. Use it from `tracewick-drain`,
 CLI, staging, or long-running workers — **not** from PHP-FPM request handlers. Timeouts default to
