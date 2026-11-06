@@ -116,18 +116,23 @@ service `symfony-demo`). Details: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Load / soak / capacity harness lives in the sibling repo
 [tracewick/benchmarks](https://github.com/tracewick/benchmarks) — not in this library. Clone →
-`make up` → `make bench-smoke` (or `bench-overhead` / `bench-spool-pressure` / `bench-chaos`).
+`make up` → `make bench-smoke` (or `bench-overhead` / `bench-spool-pressure` / `bench-chaos` /
+`bench-rps`).
 
-Sample cloud run (Timeweb VPS, Packagist `0.1.0`, 20 RPS, `sampleRate` 0.1 vs off): about
-**+0.5–1.4 ms** latency and **~+2 pp** PHP-FPM CPU. Spool soft admission held the app at **0%**
-HTTP failures under pressure and Pyroscope latency chaos. Full tables and pins:
-[overhead](https://github.com/tracewick/benchmarks/blob/main/reports/2026-11-03-overhead-cloud.md),
-[spool pressure](https://github.com/tracewick/benchmarks/blob/main/reports/2026-11-03-spool-pressure-cloud.md),
-[chaos](https://github.com/tracewick/benchmarks/blob/main/reports/2026-11-03-chaos-pyroscope-cloud.md).
+Canonical cloud goldens use depth-48 synthetic stacks on an 8 vCPU Timeweb VPS (Packagist
+`0.1.0`). At 20 RPS / `sampleRate` 0.1 vs off: about **+0.5–1.7 ms** latency and **~+1 pp**
+PHP-FPM CPU. Spool soft admission and Pyroscope latency chaos held the app at **0%** HTTP
+failures (profiles ~5× larger in bytes than shallow stacks). A single-instance high-RPS hold
+with the same work shape sustained **~700 RPS** cleanly. Full tables and pins:
+[overhead](https://github.com/tracewick/benchmarks/blob/main/reports/2026-11-06-overhead-depth48-cloud.md),
+[spool pressure](https://github.com/tracewick/benchmarks/blob/main/reports/2026-11-06-spool-pressure-depth48-cloud.md),
+[chaos](https://github.com/tracewick/benchmarks/blob/main/reports/2026-11-06-chaos-pyroscope-depth48-cloud.md),
+[high-RPS pipeline](https://github.com/tracewick/benchmarks/blob/main/reports/2026-11-06-rps-pipeline-cloud.md).
 
-Wall profile from that stand (`service_name=benchmarks-workload`, `route=work`):
+Wall profile from that stand (`service_name=benchmarks-workload`, `route=work`,
+`WORK_STACK_DEPTH=48` — deep `stackLayer*` frames into `busyWork`):
 
-![benchmarks-workload wall flamegraph](docs/images/capacity/pyroscope-benchmarks-workload-wall.png)
+![benchmarks-workload wall flamegraph (depth-48)](docs/images/capacity/pyroscope-benchmarks-workload-wall.png)
 
 ## Contributing
 
