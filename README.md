@@ -129,10 +129,11 @@ with the same work shape sustained **~700 RPS** cleanly. Full tables and pins:
 [chaos](https://github.com/tracewick/benchmarks/blob/main/reports/2026-11-06-chaos-pyroscope-depth48-cloud.md),
 [high-RPS pipeline](https://github.com/tracewick/benchmarks/blob/main/reports/2026-11-06-rps-pipeline-cloud.md).
 
-Wall profile from that stand (`service_name=benchmarks-workload`, `route=work`,
-`WORK_STACK_DEPTH=48` — deep `stackLayer*` frames into `busyWork`):
+Wall profile from that stand (`service_name=benchmarks-workload`, `route=work`) —
+app-shaped synthetic stacks (middleware / controller / Doctrine / Redis branches),
+not the linear depth-48 capacity tower:
 
-![benchmarks-workload wall flamegraph (depth-48)](docs/images/capacity/pyroscope-benchmarks-workload-wall.png)
+![benchmarks-workload wall flamegraph (app-shaped)](docs/images/capacity/pyroscope-benchmarks-workload-wall.png)
 
 ## Contributing
 
