@@ -1,112 +1,77 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1014" font-family="ui-monospace, Menlo, monospace" font-size="11">
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="262" font-family="ui-monospace, Menlo, monospace" font-size="11">
 <rect width="100%" height="100%" fill="#111217"/>
-<text x="16" y="26" fill="#e8e8ed" font-size="16" font-weight="600">benchmarks-workload · wall · route=work · depth-48</text>
-<text x="16" y="46" fill="#9aa0a6" font-size="12">Tracewick capacity stand · Timeweb 8 vCPU · WORK_STACK_DEPTH=48 · focused deep stacks</text>
-<text x="16" y="64" fill="#7dd3fc" font-size="11">deepStackWork → stackLayerA–H (×6) → busyWork · UnitOfWorkProfiler present</text>
-<rect x="0.0" y="70" width="1400.0" height="17" rx="1" fill="rgb(191,198,204)" stroke="#111217" stroke-width="0.5"><title>total (9140000000)</title></rect>
+<text x="16" y="26" fill="#e8e8ed" font-size="16" font-weight="600">benchmarks-workload · wall · app-shaped synthetic</text>
+<text x="16" y="46" fill="#9aa0a6" font-size="12">Tracewick capacity stand · Timeweb 8 vCPU · branched demo (not the linear depth-48 capacity stack)</text>
+<text x="16" y="64" fill="#7dd3fc" font-size="11">handleHttpRequest → middleware / OrderService / Doctrine / Redis · UnitOfWorkProfiler + SpoolSink</text>
+<rect x="0.0" y="70" width="1400.0" height="17" rx="1" fill="rgb(48,166,69)" stroke="#111217" stroke-width="0.5"><title>total (52680000000)</title></rect>
 <text x="3.0" y="83" fill="#fff">total</text>
-<rect x="0.0" y="88" width="1393.9" height="17" rx="1" fill="rgb(70,170,110)" stroke="#111217" stroke-width="0.5"><title>{main} (9100000000)</title></rect>
+<rect x="0.0" y="88" width="1400.0" height="17" rx="1" fill="rgb(128,48,166)" stroke="#111217" stroke-width="0.5"><title>{main} (52680000000)</title></rect>
 <text x="3.0" y="101" fill="#fff">{main}</text>
-<rect x="0.0" y="106" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>deepStackWork (9100000000)</title></rect>
+<rect x="0.0" y="106" width="1400.0" height="17" rx="1" fill="rgb(166,54,48)" stroke="#111217" stroke-width="0.5"><title>deepStackWork (52680000000)</title></rect>
 <text x="3.0" y="119" fill="#fff">deepStackWork</text>
-<rect x="0.0" y="124" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerA (9100000000)</title></rect>
-<text x="3.0" y="137" fill="#fff">stackLayerA</text>
-<rect x="0.0" y="142" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerB (9100000000)</title></rect>
-<text x="3.0" y="155" fill="#fff">stackLayerB</text>
-<rect x="0.0" y="160" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerC (9100000000)</title></rect>
-<text x="3.0" y="173" fill="#fff">stackLayerC</text>
-<rect x="0.0" y="178" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerD (9100000000)</title></rect>
-<text x="3.0" y="191" fill="#fff">stackLayerD</text>
-<rect x="0.0" y="196" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerE (9080000000)</title></rect>
-<text x="3.0" y="209" fill="#fff">stackLayerE</text>
-<rect x="0.0" y="214" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerF (9080000000)</title></rect>
-<text x="3.0" y="227" fill="#fff">stackLayerF</text>
-<rect x="0.0" y="232" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerG (9080000000)</title></rect>
-<text x="3.0" y="245" fill="#fff">stackLayerG</text>
-<rect x="0.0" y="250" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerH (9080000000)</title></rect>
-<text x="3.0" y="263" fill="#fff">stackLayerH</text>
-<rect x="0.0" y="268" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerA (9080000000)</title></rect>
-<text x="3.0" y="281" fill="#fff">stackLayerA</text>
-<rect x="0.0" y="286" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerB (9080000000)</title></rect>
-<text x="3.0" y="299" fill="#fff">stackLayerB</text>
-<rect x="0.0" y="304" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerC (9080000000)</title></rect>
-<text x="3.0" y="317" fill="#fff">stackLayerC</text>
-<rect x="0.0" y="322" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerD (9080000000)</title></rect>
-<text x="3.0" y="335" fill="#fff">stackLayerD</text>
-<rect x="0.0" y="340" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerE (9080000000)</title></rect>
-<text x="3.0" y="353" fill="#fff">stackLayerE</text>
-<rect x="0.0" y="358" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerF (9080000000)</title></rect>
-<text x="3.0" y="371" fill="#fff">stackLayerF</text>
-<rect x="0.0" y="376" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerG (9080000000)</title></rect>
-<text x="3.0" y="389" fill="#fff">stackLayerG</text>
-<rect x="0.0" y="394" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerH (9080000000)</title></rect>
-<text x="3.0" y="407" fill="#fff">stackLayerH</text>
-<rect x="0.0" y="412" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerA (9080000000)</title></rect>
-<text x="3.0" y="425" fill="#fff">stackLayerA</text>
-<rect x="0.0" y="430" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerB (9080000000)</title></rect>
-<text x="3.0" y="443" fill="#fff">stackLayerB</text>
-<rect x="0.0" y="448" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerC (9080000000)</title></rect>
-<text x="3.0" y="461" fill="#fff">stackLayerC</text>
-<rect x="0.0" y="466" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerD (9080000000)</title></rect>
-<text x="3.0" y="479" fill="#fff">stackLayerD</text>
-<rect x="0.0" y="484" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerE (9080000000)</title></rect>
-<text x="3.0" y="497" fill="#fff">stackLayerE</text>
-<rect x="0.0" y="502" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerF (9080000000)</title></rect>
-<text x="3.0" y="515" fill="#fff">stackLayerF</text>
-<rect x="0.0" y="520" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerG (9080000000)</title></rect>
-<text x="3.0" y="533" fill="#fff">stackLayerG</text>
-<rect x="0.0" y="538" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerH (9080000000)</title></rect>
-<text x="3.0" y="551" fill="#fff">stackLayerH</text>
-<rect x="0.0" y="556" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerA (9080000000)</title></rect>
-<text x="3.0" y="569" fill="#fff">stackLayerA</text>
-<rect x="0.0" y="574" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerB (9080000000)</title></rect>
-<text x="3.0" y="587" fill="#fff">stackLayerB</text>
-<rect x="0.0" y="592" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerC (9080000000)</title></rect>
-<text x="3.0" y="605" fill="#fff">stackLayerC</text>
-<rect x="0.0" y="610" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerD (9080000000)</title></rect>
-<text x="3.0" y="623" fill="#fff">stackLayerD</text>
-<rect x="0.0" y="628" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerE (9080000000)</title></rect>
-<text x="3.0" y="641" fill="#fff">stackLayerE</text>
-<rect x="0.0" y="646" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerF (9080000000)</title></rect>
-<text x="3.0" y="659" fill="#fff">stackLayerF</text>
-<rect x="0.0" y="664" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerG (9080000000)</title></rect>
-<text x="3.0" y="677" fill="#fff">stackLayerG</text>
-<rect x="0.0" y="682" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerH (9080000000)</title></rect>
-<text x="3.0" y="695" fill="#fff">stackLayerH</text>
-<rect x="0.0" y="700" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerA (9080000000)</title></rect>
-<text x="3.0" y="713" fill="#fff">stackLayerA</text>
-<rect x="0.0" y="718" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerB (9080000000)</title></rect>
-<text x="3.0" y="731" fill="#fff">stackLayerB</text>
-<rect x="0.0" y="736" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerC (9080000000)</title></rect>
-<text x="3.0" y="749" fill="#fff">stackLayerC</text>
-<rect x="0.0" y="754" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerD (9080000000)</title></rect>
-<text x="3.0" y="767" fill="#fff">stackLayerD</text>
-<rect x="0.0" y="772" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerE (9080000000)</title></rect>
-<text x="3.0" y="785" fill="#fff">stackLayerE</text>
-<rect x="0.0" y="790" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerF (9080000000)</title></rect>
-<text x="3.0" y="803" fill="#fff">stackLayerF</text>
-<rect x="0.0" y="808" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerG (9080000000)</title></rect>
-<text x="3.0" y="821" fill="#fff">stackLayerG</text>
-<rect x="0.0" y="826" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerH (9080000000)</title></rect>
-<text x="3.0" y="839" fill="#fff">stackLayerH</text>
-<rect x="0.0" y="844" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerA (9080000000)</title></rect>
-<text x="3.0" y="857" fill="#fff">stackLayerA</text>
-<rect x="0.0" y="862" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerB (9080000000)</title></rect>
-<text x="3.0" y="875" fill="#fff">stackLayerB</text>
-<rect x="0.0" y="880" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerC (9080000000)</title></rect>
-<text x="3.0" y="893" fill="#fff">stackLayerC</text>
-<rect x="0.0" y="898" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerD (9080000000)</title></rect>
-<text x="3.0" y="911" fill="#fff">stackLayerD</text>
-<rect x="0.0" y="916" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerE (9080000000)</title></rect>
-<text x="3.0" y="929" fill="#fff">stackLayerE</text>
-<rect x="0.0" y="934" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerF (9080000000)</title></rect>
-<text x="3.0" y="947" fill="#fff">stackLayerF</text>
-<rect x="0.0" y="952" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerG (9080000000)</title></rect>
-<text x="3.0" y="965" fill="#fff">stackLayerG</text>
-<rect x="0.0" y="970" width="1393.9" height="17" rx="1" fill="rgb(180,100,200)" stroke="#111217" stroke-width="0.5"><title>stackLayerH (9080000000)</title></rect>
-<text x="3.0" y="983" fill="#fff">stackLayerH</text>
-<rect x="0.0" y="988" width="1393.9" height="17" rx="1" fill="rgb(220,120,40)" stroke="#111217" stroke-width="0.5"><title>busyWork (9080000000)</title></rect>
-<text x="3.0" y="1001" fill="#fff">busyWork</text>
-<rect x="1393.9" y="88" width="6.1" height="17" rx="1" fill="rgb(40,140,200)" stroke="#111217" stroke-width="0.5"><title>Tracewick\Runtime\UnitOfWorkProfiler::shutdown (40000000)</title></rect>
+<rect x="0.0" y="124" width="1400.0" height="17" rx="1" fill="rgb(150,48,166)" stroke="#111217" stroke-width="0.5"><title>handleHttpRequest (52680000000)</title></rect>
+<text x="3.0" y="137" fill="#fff">handleHttpRequest</text>
+<rect x="0.0" y="142" width="934.4" height="17" rx="1" fill="rgb(146,48,166)" stroke="#111217" stroke-width="0.5"><title>dispatchController (35160000000)</title></rect>
+<text x="3.0" y="155" fill="#fff">dispatchController</text>
+<rect x="0.0" y="160" width="934.4" height="17" rx="1" fill="rgb(48,52,166)" stroke="#111217" stroke-width="0.5"><title>OrderController_show (35160000000)</title></rect>
+<text x="3.0" y="173" fill="#fff">OrderController_show</text>
+<rect x="0.0" y="178" width="539.0" height="17" rx="1" fill="rgb(73,166,48)" stroke="#111217" stroke-width="0.5"><title>OrderService_load (20280000000)</title></rect>
+<text x="3.0" y="191" fill="#fff">OrderService_load</text>
+<rect x="0.0" y="196" width="288.6" height="17" rx="1" fill="rgb(120,48,166)" stroke="#111217" stroke-width="0.5"><title>OrderRepository_findById (10860000000)</title></rect>
+<text x="3.0" y="209" fill="#fff">OrderRepository_findById</text>
+<rect x="0.0" y="214" width="214.2" height="17" rx="1" fill="rgb(166,48,69)" stroke="#111217" stroke-width="0.5"><title>Doctrine_QueryBuilder_execute (8060000000)</title></rect>
+<text x="3.0" y="227" fill="#fff">Doctrine_QueryBuilder_execute</text>
+<rect x="0.0" y="232" width="214.2" height="17" rx="1" fill="rgb(48,120,166)" stroke="#111217" stroke-width="0.5"><title>busyWork (8060000000)</title></rect>
+<text x="3.0" y="245" fill="#fff">busyWork</text>
+<rect x="214.2" y="214" width="74.4" height="17" rx="1" fill="rgb(166,54,48)" stroke="#111217" stroke-width="0.5"><title>hydrateOrderEntity (2800000000)</title></rect>
+<text x="217.2" y="227" fill="#fff">hydrateOrd</text>
+<rect x="214.2" y="232" width="74.4" height="17" rx="1" fill="rgb(48,120,166)" stroke="#111217" stroke-width="0.5"><title>busyWork (2800000000)</title></rect>
+<text x="217.2" y="245" fill="#fff">busyWork</text>
+<rect x="288.6" y="196" width="145.6" height="17" rx="1" fill="rgb(134,48,166)" stroke="#111217" stroke-width="0.5"><title>CustomerRepository_find (5480000000)</title></rect>
+<text x="291.6" y="209" fill="#fff">CustomerRepository_fi</text>
+<rect x="288.6" y="214" width="145.6" height="17" rx="1" fill="rgb(48,120,166)" stroke="#111217" stroke-width="0.5"><title>busyWork (5480000000)</title></rect>
+<text x="291.6" y="227" fill="#fff">busyWork</text>
+<rect x="434.2" y="196" width="104.7" height="17" rx="1" fill="rgb(48,166,89)" stroke="#111217" stroke-width="0.5"><title>InventoryService_checkStock (3940000000)</title></rect>
+<text x="437.2" y="209" fill="#fff">InventoryServic</text>
+<rect x="434.2" y="214" width="68.0" height="17" rx="1" fill="rgb(134,48,166)" stroke="#111217" stroke-width="0.5"><title>StockLedger_sum (2560000000)</title></rect>
+<text x="437.2" y="227" fill="#fff">StockLedg</text>
+<rect x="434.2" y="232" width="68.0" height="17" rx="1" fill="rgb(48,120,166)" stroke="#111217" stroke-width="0.5"><title>busyWork (2560000000)</title></rect>
+<text x="437.2" y="245" fill="#fff">busyWork</text>
+<rect x="502.3" y="214" width="36.7" height="17" rx="1" fill="rgb(130,48,166)" stroke="#111217" stroke-width="0.5"><title>RedisCache_get (1380000000)</title></rect>
+<rect x="502.3" y="232" width="36.7" height="17" rx="1" fill="rgb(48,120,166)" stroke="#111217" stroke-width="0.5"><title>busyWork (1380000000)</title></rect>
+<rect x="539.0" y="178" width="215.8" height="17" rx="1" fill="rgb(71,166,48)" stroke="#111217" stroke-width="0.5"><title>OrderPresenter_toArray (8120000000)</title></rect>
+<text x="542.0" y="191" fill="#fff">OrderPresenter_toArray</text>
+<rect x="539.0" y="196" width="215.8" height="17" rx="1" fill="rgb(48,120,166)" stroke="#111217" stroke-width="0.5"><title>busyWork (8120000000)</title></rect>
+<text x="542.0" y="209" fill="#fff">busyWork</text>
+<rect x="754.7" y="178" width="179.7" height="17" rx="1" fill="rgb(48,81,166)" stroke="#111217" stroke-width="0.5"><title>JsonResponse_encode (6760000000)</title></rect>
+<text x="757.7" y="191" fill="#fff">JsonResponse_encode</text>
+<rect x="754.7" y="196" width="179.7" height="17" rx="1" fill="rgb(48,120,166)" stroke="#111217" stroke-width="0.5"><title>busyWork (6760000000)</title></rect>
+<text x="757.7" y="209" fill="#fff">busyWork</text>
+<rect x="934.4" y="142" width="212.6" height="17" rx="1" fill="rgb(166,140,48)" stroke="#111217" stroke-width="0.5"><title>runMiddlewareStack (8000000000)</title></rect>
+<text x="937.4" y="155" fill="#fff">runMiddlewareStack</text>
+<rect x="934.4" y="160" width="109.5" height="17" rx="1" fill="rgb(166,142,48)" stroke="#111217" stroke-width="0.5"><title>AuthMiddleware_handle (4120000000)</title></rect>
+<text x="937.4" y="173" fill="#fff">AuthMiddleware_</text>
+<rect x="934.4" y="178" width="78.1" height="17" rx="1" fill="rgb(99,48,166)" stroke="#111217" stroke-width="0.5"><title>UserRepository_findByToken (2940000000)</title></rect>
+<text x="937.4" y="191" fill="#fff">UserReposit</text>
+<rect x="934.4" y="196" width="78.1" height="17" rx="1" fill="rgb(48,120,166)" stroke="#111217" stroke-width="0.5"><title>busyWork (2940000000)</title></rect>
+<text x="937.4" y="209" fill="#fff">busyWork</text>
+<rect x="1012.5" y="178" width="31.4" height="17" rx="1" fill="rgb(67,166,48)" stroke="#111217" stroke-width="0.5"><title>SessionStore_read (1180000000)</title></rect>
+<rect x="1012.5" y="196" width="31.4" height="17" rx="1" fill="rgb(48,120,166)" stroke="#111217" stroke-width="0.5"><title>busyWork (1180000000)</title></rect>
+<rect x="1043.9" y="160" width="65.9" height="17" rx="1" fill="rgb(166,50,48)" stroke="#111217" stroke-width="0.5"><title>CsrfMiddleware_handle (2480000000)</title></rect>
+<text x="1046.9" y="173" fill="#fff">CsrfMiddl</text>
+<rect x="1043.9" y="178" width="65.9" height="17" rx="1" fill="rgb(48,120,166)" stroke="#111217" stroke-width="0.5"><title>busyWork (2480000000)</title></rect>
+<text x="1046.9" y="191" fill="#fff">busyWork</text>
+<rect x="1109.8" y="160" width="37.2" height="17" rx="1" fill="rgb(56,48,166)" stroke="#111217" stroke-width="0.5"><title>RequestIdMiddleware_handle (1400000000)</title></rect>
+<rect x="1109.8" y="178" width="37.2" height="17" rx="1" fill="rgb(48,120,166)" stroke="#111217" stroke-width="0.5"><title>busyWork (1400000000)</title></rect>
+<rect x="1147.0" y="142" width="180.2" height="17" rx="1" fill="rgb(103,166,48)" stroke="#111217" stroke-width="0.5"><title>emitHttpResponse (6780000000)</title></rect>
+<text x="1150.0" y="155" fill="#fff">emitHttpResponse</text>
+<rect x="1147.0" y="160" width="180.2" height="17" rx="1" fill="rgb(48,120,166)" stroke="#111217" stroke-width="0.5"><title>busyWork (6780000000)</title></rect>
+<text x="1150.0" y="173" fill="#fff">busyWork</text>
+<rect x="1327.2" y="142" width="72.8" height="17" rx="1" fill="rgb(107,166,48)" stroke="#111217" stroke-width="0.5"><title>bootstrapKernel (2740000000)</title></rect>
+<text x="1330.2" y="155" fill="#fff">bootstrapK</text>
+<rect x="1327.2" y="160" width="37.2" height="17" rx="1" fill="rgb(48,166,152)" stroke="#111217" stroke-width="0.5"><title>compileRoutes (1400000000)</title></rect>
+<rect x="1327.2" y="178" width="37.2" height="17" rx="1" fill="rgb(48,120,166)" stroke="#111217" stroke-width="0.5"><title>busyWork (1400000000)</title></rect>
+<rect x="1364.4" y="160" width="35.6" height="17" rx="1" fill="rgb(85,48,166)" stroke="#111217" stroke-width="0.5"><title>loadServiceContainer (1340000000)</title></rect>
+<rect x="1364.4" y="178" width="35.6" height="17" rx="1" fill="rgb(48,120,166)" stroke="#111217" stroke-width="0.5"><title>busyWork (1340000000)</title></rect>
 </svg>
