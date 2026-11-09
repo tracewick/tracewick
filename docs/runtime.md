@@ -80,9 +80,9 @@ by the rate. Shares within a flame graph, which is what profiling is read for, s
 
 Delivery happens in `flush()`, after the work, but in the same process. With a `SpoolSink` it is a
 local file write (cheap next to encoding and HTTP; not a measured microsecond budget), and a
-separate process sends the files ([`tracewick-drain`](drain.md); a Go agent is planned). This is
-the recommended setup in production. Put the spool on a **local** filesystem
-([spool format](spool-format.md)).
+separate process sends the files ([`tracewick-drain`](drain.md) or
+[`tracewick-agent`](https://github.com/tracewick/agent)). This is the recommended setup in
+production. Put the spool on a **local** filesystem ([spool format](spool-format.md)).
 
 A `PyroscopeSink` sends over the network from the PHP process itself. Use it from `tracewick-drain`,
 CLI, staging, or long-running workers — **not** from PHP-FPM request handlers. Timeouts default to
@@ -145,10 +145,18 @@ for bare PHP-FPM and for early-start + late-label hybrids.
 ### Sequential long-running workers
 
 In RoadRunner, FrankenPHP worker mode or a queue consumer that handles **one request at a time**,
-start and stop a profile around each unit of work and flush after it. Always stop in a `finally`
-block so an exception from the handler cannot leave a profile running:
+construct **`UnitOfWorkProfiler` (and its sink) once per worker process**, then `start` / `stop` /
+`flush` around each unit of work. Do **not** call `UnitOfWorkProfiler::create()` on every request:
+tearing down and recreating Excimer-backed profilers in a permanent worker can grow RSS without
+bound (seen on the RoadRunner benchmarks stand). PHP-FPM may create per request because the
+process is recycled.
+
+Always stop in a `finally` block so an exception from the handler cannot leave a profile running:
 
 ```php
+$profiler = UnitOfWorkProfiler::create($sink, $config);
+$profiler->registerShutdown();
+
 while ($request = $worker->waitRequest()) {
     $profiler->start(['route' => routeOf($request)]);
     try {
@@ -160,9 +168,9 @@ while ($request = $worker->waitRequest()) {
 }
 ```
 
-Call `registerShutdown()` once as well, so that profiles still buffered when the worker exits are
-not lost. A forgotten `stop()` is also healed by the next `start()`, which rotates the running
-profile into the buffer first.
+`registerShutdown()` once flushes anything still buffered when the worker exits. A forgotten
+`stop()` is also healed by the next `start()`, which rotates the running profile into the buffer
+first.
 
 For **concurrent** request handling in one process (Swoole, Fibers), use
 [`ContinuousProfiler`](#continuous-profiler) instead: per-request `start`/`stop` would mix stacks

@@ -8,8 +8,12 @@
 # (compose.yaml points it at the repository root), so the app always runs the code under review.
 #
 # Targets: fpm (PHP-FPM), nginx (static files and FastCGI proxy), roadrunner (long-running workers).
+#
+# PHP 8.5: do not pass `opcache` to docker-php-ext-install. OPcache is built into PHP and produces
+# no modules/*.so; installing it fails with `cp: cannot stat 'modules/*'`
+# (https://github.com/docker-library/php/issues/1631, RFC make_opcache_required).
 
-ARG PHP_VERSION=8.4
+ARG PHP_VERSION=8.5
 ARG ROADRUNNER_VERSION=2025.1.15
 ARG NGINX_VERSION=1.30.6
 
@@ -25,7 +29,7 @@ ARG RUNTIME_ROADRUNNER_VERSION=1.0.0
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git unzip libicu-dev libpq-dev \
     && rm -rf /var/lib/apt/lists/* \
-    && docker-php-ext-install -j"$(nproc)" intl opcache pcntl pdo_pgsql sockets \
+    && docker-php-ext-install -j"$(nproc)" intl pcntl pdo_pgsql sockets \
     && pecl install "excimer-${EXCIMER_VERSION}" \
     && docker-php-ext-enable excimer \
     && rm -rf /tmp/pear

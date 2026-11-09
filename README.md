@@ -1,6 +1,6 @@
 # Tracewick
 
-[![CI](https://github.com/tracewick/tracewick/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/tracewick/tracewick/actions/workflows/ci.yml)
+[![CI](https://github.com/tracewick/tracewick/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/tracewick/tracewick/actions/workflows/ci.yml?query=branch%3Amain+event%3Apush)
 [![Coverage](https://codecov.io/gh/tracewick/tracewick/branch/main/graph/badge.svg)](https://codecov.io/gh/tracewick/tracewick)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
@@ -76,9 +76,18 @@ $profiler->start(['route' => $route]);
 $profiler->registerShutdown(); // stop + flush to the spool when the request ends
 ```
 
-In another process (cron, supervisor, or sidecar):
+In another process (cron, supervisor, or long-running sidecar), deliver the spool to Pyroscope:
+
+- **Recommended for a long-running sidecar:** [`tracewick/agent`](https://github.com/tracewick/agent)
+  (`tracewick-agent`) — Go process with HTTP connection reuse.
+- **Ships with this library:** `vendor/bin/tracewick-drain` — PHP drain, fine for cron / `--once`
+  and as a reference implementation.
 
 ```bash
+# Go agent (separate repo)
+tracewick-agent run --spool-dir=/var/spool/tracewick --pyroscope-url=http://127.0.0.1:4040
+
+# or PHP drain
 vendor/bin/tracewick-drain \
   --spool-dir=/var/spool/tracewick \
   --pyroscope-url=http://127.0.0.1:4040
@@ -86,11 +95,12 @@ vendor/bin/tracewick-drain \
 
 Put the spool on a **local** volume or tmpfs with an OS quota if you need a hard ceiling: file
 admission is **soft** and may briefly overshoot under concurrent writers (Tracewick does not run a
-host-wide file counter on every FPM write). `tracewick-drain` applies a **process-local**
+host-wide file counter on every FPM write). Both drain and agent apply a **process-local**
 cardinality gate (default 256 keys; keeps `service`/`env` on overflow). Writer-side cardinality is
 off unless you inject a store. Details: [spool format](docs/spool-format.md),
-[ADR 12](docs/adr/0012-aggregate-before-delivery.md). Do not call `PyroscopeSink` from PHP-FPM
-request handlers. Full options: [docs/runtime.md](docs/runtime.md), [docs/drain.md](docs/drain.md).
+[ADR 12](docs/adr/0012-aggregate-before-delivery.md), [docs/drain.md](docs/drain.md),
+[agent README](https://github.com/tracewick/agent#readme). Do not call `PyroscopeSink` from PHP-FPM
+request handlers. Full PHP options: [docs/runtime.md](docs/runtime.md).
 
 ### See it on the stand
 
@@ -101,6 +111,29 @@ make app-up     # Symfony Demo on FPM (:8081) and RoadRunner (:8082) + drain
 
 Hit the demo, then open Grafana at http://127.0.0.1:3000 (Explore / Drilldown → Profiles;
 service `symfony-demo`). Details: [CONTRIBUTING.md](CONTRIBUTING.md).
+
+### Capacity evidence
+
+Load / soak / capacity harness lives in the sibling repo
+[tracewick/benchmarks](https://github.com/tracewick/benchmarks) — not in this library. Clone →
+`make up` → `make bench-smoke` (or `bench-overhead` / `bench-spool-pressure` / `bench-chaos` /
+`bench-rps`).
+
+Canonical cloud goldens use depth-48 synthetic stacks on an 8 vCPU Timeweb VPS (Packagist
+`0.1.0`). At 20 RPS / `sampleRate` 0.1 vs off: about **+0.5–1.7 ms** latency and **~+1 pp**
+PHP-FPM CPU. Spool soft admission and Pyroscope latency chaos held the app at **0%** HTTP
+failures (profiles ~5× larger in bytes than shallow stacks). A single-instance high-RPS hold
+with the same work shape sustained **~700 RPS** cleanly. Full tables and pins:
+[overhead](https://github.com/tracewick/benchmarks/blob/main/reports/2026-11-06-overhead-depth48-cloud.md),
+[spool pressure](https://github.com/tracewick/benchmarks/blob/main/reports/2026-11-06-spool-pressure-depth48-cloud.md),
+[chaos](https://github.com/tracewick/benchmarks/blob/main/reports/2026-11-06-chaos-pyroscope-depth48-cloud.md),
+[high-RPS pipeline](https://github.com/tracewick/benchmarks/blob/main/reports/2026-11-06-rps-pipeline-cloud.md).
+
+Wall profile from that stand (`service_name=benchmarks-workload`, `route=work`) —
+app-shaped synthetic stacks (middleware / controller / Doctrine / Redis branches),
+not the linear depth-48 capacity tower:
+
+![benchmarks-workload wall flamegraph (app-shaped)](docs/images/capacity/pyroscope-benchmarks-workload-wall.png)
 
 ## Contributing
 
