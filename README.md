@@ -1,6 +1,6 @@
 # Tracewick
 
-[![CI](https://github.com/tracewick/tracewick/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/tracewick/tracewick/actions/workflows/ci.yml)
+[![CI](https://github.com/tracewick/tracewick/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/tracewick/tracewick/actions/workflows/ci.yml?query=branch%3Amain+event%3Apush)
 [![Coverage](https://codecov.io/gh/tracewick/tracewick/branch/main/graph/badge.svg)](https://codecov.io/gh/tracewick/tracewick)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
