@@ -8,8 +8,9 @@ Tracewick is a sampling profiler for PHP, built on [ext-excimer](https://www.med
 meant to run continuously in production.
 
 > [!WARNING]
-> Tracewick **0.1.x is alpha**. The public API is not stable until 1.0.0 — expect breaking
-> changes in minor releases. Pin a version and read the changelog before upgrading.
+> Tracewick **0.2.x is beta**. Capacity evidence for the default spool path is published; the
+> public API is still not frozen until 1.0.0 — expect breaking changes in minor releases. Pin a
+> version and read the changelog before upgrading.
 
 ## Goals
 
