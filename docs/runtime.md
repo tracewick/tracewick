@@ -252,7 +252,7 @@ Every counter name is product-prefixed (`tracewick:profiles_*`, `tracewick:agg:*
 userland or a shared counters directory does not collide with another library. The APCu iterator only
 returns keys under that prefix; the file store writes `tracewick-counters.json`.
 
-**Cardinality:** alpha default is on **`tracewick-drain`** (`CardinalityGate` + in-process store,
+**Cardinality:** beta default is on **`tracewick-drain`** (`CardinalityGate` + in-process store,
 max 256). `SpoolSink` / `ContinuousProfiler` do **not** collapse label sets unless you inject a
 gate with a real `CounterStore`. On overflow, `service` / `env` are kept and excess keys become
 `cardinality=other`. Label values that look like email, UUID, or long digit runs log a warning

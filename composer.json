@@ -1,6 +1,6 @@
 {
     "name": "tracewick/tracewick",
-    "description": "Sampling profiler for PHP built on ext-excimer: flame graphs, pprof and continuous profiling exports (alpha).",
+    "description": "Sampling profiler for PHP built on ext-excimer: flame graphs, pprof and continuous profiling exports (beta).",
     "license": "Apache-2.0",
     "type": "library",
     "keywords": [
