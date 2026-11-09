@@ -145,10 +145,18 @@ for bare PHP-FPM and for early-start + late-label hybrids.
 ### Sequential long-running workers
 
 In RoadRunner, FrankenPHP worker mode or a queue consumer that handles **one request at a time**,
-start and stop a profile around each unit of work and flush after it. Always stop in a `finally`
-block so an exception from the handler cannot leave a profile running:
+construct **`UnitOfWorkProfiler` (and its sink) once per worker process**, then `start` / `stop` /
+`flush` around each unit of work. Do **not** call `UnitOfWorkProfiler::create()` on every request:
+tearing down and recreating Excimer-backed profilers in a permanent worker can grow RSS without
+bound (seen on the RoadRunner benchmarks stand). PHP-FPM may create per request because the
+process is recycled.
+
+Always stop in a `finally` block so an exception from the handler cannot leave a profile running:
 
 ```php
+$profiler = UnitOfWorkProfiler::create($sink, $config);
+$profiler->registerShutdown();
+
 while ($request = $worker->waitRequest()) {
     $profiler->start(['route' => routeOf($request)]);
     try {
@@ -160,9 +168,9 @@ while ($request = $worker->waitRequest()) {
 }
 ```
 
-Call `registerShutdown()` once as well, so that profiles still buffered when the worker exits are
-not lost. A forgotten `stop()` is also healed by the next `start()`, which rotates the running
-profile into the buffer first.
+`registerShutdown()` once flushes anything still buffered when the worker exits. A forgotten
+`stop()` is also healed by the next `start()`, which rotates the running profile into the buffer
+first.
 
 For **concurrent** request handling in one process (Swoole, Fibers), use
 [`ContinuousProfiler`](#continuous-profiler) instead: per-request `start`/`stop` would mix stacks
