@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/tracewick/tracewick/compare/v0.1.0...v0.2.0) (2026-11-09)
+
+
+### Documentation
+
+* mark Tracewick 0.2.x as beta ([ddf2c35](https://github.com/tracewick/tracewick/commit/ddf2c350f3e23e55bd9c483b1287d2d99c1c31c0))
+
 ## 0.1.0 (2026-11-03)
 
 

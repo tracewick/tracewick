@@ -91,13 +91,15 @@ Full procedure: [CONTRIBUTING.md](CONTRIBUTING.md) § Releasing. Agents also fol
 Short path: `release/<version>` from `develop` → merge commit into `main` (not squash) →
 release-please opens `chore: release <version>` → merge tags `v<version>` → back-merge `main` into
 `develop`. Force a version with a `Release-As: x.y.z` footer on a commit that lands on `main`
-(needed for the first public alpha `0.1.0` if the auto-bump is unclear). Do not hand-edit
-`CHANGELOG.md`, do not invent tags outside release-please, and do not push/merge to `main` unless
-the maintainer asks.
+(needed when forcing a cut such as `0.1.0` / `0.2.0` if the auto-bump is unclear). Prefer a
+parseable Conventional Commit subject (`chore: …` / `feat: …`); GitHub's default
+`Merge pull request #N` subject is **not** parsed, so a `Release-As` footer on that merge is
+ignored. Do not hand-edit `CHANGELOG.md`, do not invent tags outside release-please, and do not
+push/merge to `main` unless the maintainer asks.
 
-## Docs honesty (alpha)
+## Docs honesty (beta)
 
 Do not claim a hard spool byte ceiling or host-wide cardinality by default. Spool admission is
 **soft**; operators use volume/tmpfs/quota. `CardinalityGate` is **drain-scoped** (process-local)
-in alpha; `SpoolSink` / `ContinuousProfiler` do not collapse keys unless a real `CounterStore` is
+in beta; `SpoolSink` / `ContinuousProfiler` do not collapse keys unless a real `CounterStore` is
 injected. See [ADR 12](docs/adr/0012-aggregate-before-delivery.md) and the README Quick start.
