@@ -11,7 +11,7 @@ use Tracewick\Transport\SpoolReaderConfig;
 /**
  * Settings of the `tracewick-drain` command, read from its options and environment variables.
  *
- * An option wins over the environment variable of the same setting. The Pyroscope password is
+ * An explicitly supplied option (including an empty string) wins over its environment variable. The Pyroscope password is
  * read from the environment only, so that it does not show up in the process list.
  *
  * @internal
@@ -53,27 +53,26 @@ final readonly class DrainSettings
      */
     public static function fromOptions(array $options, array $environment): self
     {
-        $value = static fn(string $option, string $variable): ?string => self::nonEmpty($options[$option] ?? null) ?? self::nonEmpty($environment[$variable] ?? null);
+        $value = static fn(string $option, string $variable): ?string => $options[$option] ?? self::nonEmpty($environment[$variable] ?? null);
 
-        $directory = $value('spool-dir', 'TRACEWICK_SPOOL_DIR') ?? throw new LogicException('The spool directory is required.');
-        $url = $value('pyroscope-url', 'TRACEWICK_PYROSCOPE_URL') ?? throw new LogicException('The Pyroscope URL is required.');
-        $readerId = self::nonEmpty($options['reader-id'] ?? null);
+        $directory = self::nonEmpty($value('spool-dir', 'TRACEWICK_SPOOL_DIR')) ?? throw new LogicException('The spool directory is required.');
+        $url = self::nonEmpty($value('pyroscope-url', 'TRACEWICK_PYROSCOPE_URL')) ?? throw new LogicException('The Pyroscope URL is required.');
+        $readerId = self::nonEmpty($value('reader-id', 'TRACEWICK_READER_ID'));
 
-        $memoryLimit = self::nonEmpty($options['memory-limit'] ?? null);
-        $limit = self::nonEmpty($options['limit'] ?? null);
-        $timeLimit = self::nonEmpty($options['time-limit'] ?? null);
-        $sleep = self::nonEmpty($options['sleep'] ?? null);
-        $window = self::nonEmpty($options['aggregation-window'] ?? null)
-            ?? self::nonEmpty($environment['TRACEWICK_AGGREGATION_WINDOW'] ?? null);
+        $memoryLimit = $value('memory-limit', 'TRACEWICK_MEMORY_LIMIT');
+        $limit = $value('limit', 'TRACEWICK_LIMIT');
+        $timeLimit = $value('time-limit', 'TRACEWICK_TIME_LIMIT_SECONDS');
+        $sleep = $value('sleep', 'TRACEWICK_SLEEP_SECONDS');
+        $window = $value('aggregation-window', 'TRACEWICK_AGGREGATION_WINDOW');
 
         return new self(
             null === $readerId ? new SpoolReaderConfig($directory) : new SpoolReaderConfig($directory, $readerId),
             new PyroscopeConfig(
                 $url,
                 self::PYROSCOPE_APPLICATION,
-                $value('pyroscope-user', 'TRACEWICK_PYROSCOPE_USER'),
+                self::nonEmpty($value('pyroscope-user', 'TRACEWICK_PYROSCOPE_USER')),
                 self::nonEmpty($environment['TRACEWICK_PYROSCOPE_PASSWORD'] ?? null),
-                $value('pyroscope-tenant', 'TRACEWICK_PYROSCOPE_TENANT'),
+                self::nonEmpty($value('pyroscope-tenant', 'TRACEWICK_PYROSCOPE_TENANT')),
             ),
             isset($options['once']),
             null === $limit ? null : self::integer('limit', $limit, 1, \PHP_INT_MAX),

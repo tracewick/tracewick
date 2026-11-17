@@ -53,15 +53,20 @@ final class DrainCommand
           --pyroscope-user=USER    basic authentication user (env TRACEWICK_PYROSCOPE_USER);
                                    the password is read from TRACEWICK_PYROSCOPE_PASSWORD only
           --pyroscope-tenant=ID    tenant sent as X-Scope-OrgID (env TRACEWICK_PYROSCOPE_TENANT)
-          --reader-id=ID           name of this reader in claimed file names (default: host-pid)
+          --reader-id=ID           name of this reader (default: host-pid; env TRACEWICK_READER_ID)
           --once                   deliver what is in the spool, then exit
-          --limit=COUNT            exit after handling COUNT files
-          --memory-limit=SIZE      exit when the process uses more memory, such as 128M
-          --time-limit=SECONDS     exit after running for SECONDS
-          --sleep=SECONDS          pause while the spool is empty (default: 1)
+          --limit=COUNT            exit after handling COUNT files (env TRACEWICK_LIMIT)
+          --memory-limit=SIZE      exit above SIZE, such as 128M (env TRACEWICK_MEMORY_LIMIT)
+          --time-limit=SECONDS     exit after SECONDS (env TRACEWICK_TIME_LIMIT_SECONDS)
+          --sleep=SECONDS          idle pause (default: 1; env TRACEWICK_SLEEP_SECONDS)
           --aggregation-window=S   merge window for compact-stacks files, 10–15 (default: 15;
                                    env TRACEWICK_AGGREGATION_WINDOW)
           --help                   show this help
+
+        Explicit CLI values override environment values, including empty strings.
+        Empty optional strings clear the setting; empty required/numeric values are errors.
+        Empty environment variables use defaults. No .env file is loaded.
+        --reader-id= resets to host-pid; --once and --help are CLI-only.
 
         TEXT;
 

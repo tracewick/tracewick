@@ -78,16 +78,34 @@ vendor/bin/tracewick-drain --spool-dir=/var/spool/tracewick --pyroscope-url=http
 | `--pyroscope-user=USER` | `TRACEWICK_PYROSCOPE_USER`     | Basic authentication user                                      |
 |                         | `TRACEWICK_PYROSCOPE_PASSWORD` | Basic authentication password, from the environment only       |
 | `--pyroscope-tenant=ID` | `TRACEWICK_PYROSCOPE_TENANT`   | Tenant, sent as `X-Scope-OrgID`                                |
-| `--reader-id=ID`        |                                | Name of this reader in claimed file names; default `host-pid`  |
+| `--reader-id=ID`        | `TRACEWICK_READER_ID` | Name of this reader in claimed file names; default `host-pid`  |
 | `--once`                |                                | Deliver what is in the spool, then exit                        |
-| `--limit=COUNT`         |                                | Exit after handling COUNT files                                |
-| `--memory-limit=SIZE`   |                                | Exit when the process uses more memory, such as `128M`         |
-| `--time-limit=SECONDS`  |                                | Exit after running for SECONDS                                 |
-| `--sleep=SECONDS`       |                                | Pause while the spool is empty; default 1                      |
+| `--limit=COUNT`         | `TRACEWICK_LIMIT` | Exit after handling COUNT files                                |
+| `--memory-limit=SIZE`   | `TRACEWICK_MEMORY_LIMIT` | Exit when the process uses more memory, such as `128M`         |
+| `--time-limit=SECONDS`  | `TRACEWICK_TIME_LIMIT_SECONDS` | Exit after running for SECONDS                                 |
+| `--sleep=SECONDS`       | `TRACEWICK_SLEEP_SECONDS` | Pause while the spool is empty; default 1                      |
 | `--aggregation-window=S`| `TRACEWICK_AGGREGATION_WINDOW` | Merge window for compact-stacks files, 10–15; default 15       |
 
-An option wins over its environment variable. The password has no option, so that it does not
-show up in the process list.
+An explicitly supplied option wins over its environment variable **even when empty**.
+Empty required strings and numeric values are errors; empty optional user/tenant strings clear
+the setting. Clearing the user while a password is set is still an authentication error.
+`--reader-id=` resets to the automatic host/pid identifier. Empty environment variables mean
+unset and use defaults. `--once` and `--help` are CLI-only; the password is environment-only.
+
+**Pre-1.0 behavior change:** empty CLI options previously fell back to env/defaults. They now
+express an explicit value: for example, `--spool-dir=` fails even if `TRACEWICK_SPOOL_DIR` is set,
+and `--limit=` fails instead of removing the limit. Omit an option to inherit env/defaults.
+A valid CLI override also ignores an invalid value in the corresponding environment variable.
+
+The executable reads the process environment with `getenv()`. It does not load `.env` files or
+read another PHP application's `$_ENV`. Supply variables through the shell, systemd, or container
+configuration. File loading, when desired, belongs to that launcher.
+
+New variable formats match their CLI options: counts and time/sleep values are decimal integers;
+`TRACEWICK_MEMORY_LIMIT` accepts bytes or sizes such as `128M`. Zero sleep is valid; count/time
+limits must be positive. Existing defaults and validation bounds are unchanged. Go-agent uses
+`TRACEWICK_SLEEP` with Go duration syntax (`250ms`, `5s`); PHP drain uses
+`TRACEWICK_SLEEP_SECONDS` with integer seconds.
 
 `--limit`, `--memory-limit` and `--time-limit` are checked between files, so a file is never left
 halfway. They let the process exit cleanly and be started afresh by its supervisor, which bounds
