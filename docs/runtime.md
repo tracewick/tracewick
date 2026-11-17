@@ -185,11 +185,23 @@ $profiler = UnitOfWorkProfiler::create(
 );
 $profiler->start(['command' => 'app:import']);
 $profiler->registerShutdown();
+
+foreach ($items as $item) {
+    importItem($item);
+    $profiler->pulse(); // Rotate at a safe point when the duration has elapsed.
+    $profiler->flush(); // Deliver completed windows; the current profile keeps running.
+}
 ```
 
-With `maxProfileDurationSeconds` greater than 0, a long command is split into successive profile
-windows. The Excimer flush callback calls `pulse()` as samples arrive; a worker loop can also call
-`pulse()` itself. Without a duration limit the profile covers the whole command until shutdown.
+With `maxProfileDurationSeconds` greater than 0, `pulse()` rotates the profile once the duration
+has elapsed. Call it explicitly at safe points in the application loop. Rotation never runs from
+an Excimer callback: no nested sampler flush, profile construction, or diagnostic I/O happens
+there on behalf of the runtime. This is a cooperative threshold, not a hard duration limit; a
+blocking task can exceed it. Without `pulse()`, the profile continues until `stop()` or shutdown,
+even with a duration configured. `flush()` alone does not rotate a running UoW profile.
+
+Each rotation buffers a completed profile. Flush between iterations to avoid filling the bounded
+profile buffer; when full, new completed profiles are dropped and counted.
 
 Sampling itself is capped in the sampler: Excimer drains its log every `maxSamples` hits into an
 in-memory stack→count map, and stacks beyond `maxUniqueStacks` go into an `[overflow]` frame so the

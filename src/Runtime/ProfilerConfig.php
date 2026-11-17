@@ -38,7 +38,8 @@ final readonly class ProfilerConfig
      *                                           shutdown, so that the client does not wait for it; output
      *                                           of shutdown functions that run later is then lost
      * @param int    $maxProfileDurationSeconds  when greater than 0, a running profile is rotated after
-     *                                           this many seconds (CLI / workers); 0 leaves rotation off
+     *                                           this many seconds at the next explicit pulse() (CLI / workers);
+     *                                           0 leaves rotation off; this is not a hard time limit
      *
      * @throws LogicException when a value is invalid
      */
