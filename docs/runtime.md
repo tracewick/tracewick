@@ -191,6 +191,14 @@ With `maxProfileDurationSeconds` greater than 0, a long command is split into su
 windows. The Excimer flush callback calls `pulse()` as samples arrive; a worker loop can also call
 `pulse()` itself. Without a duration limit the profile covers the whole command until shutdown.
 
+Automatic rotation only buffers profiles. External counters and logging for those rotations are
+published by an explicit `stop()`, `pulse()` or `flush()` outside the callback, including shutdown.
+`diagnostics()` reflects local counts immediately. Repeated overflow/errors are summarized using
+bounded state (fixed counter keys and the latest error); no message queue grows with runtime.
+Call `flush()` at safe points during long jobs to deliver completed profiles and diagnostics.
+Otherwise the bounded profile buffer can fill and subsequent completed profiles are dropped.
+A failed external counter update is not retried and is recorded in local diagnostics.
+
 Sampling itself is capped in the sampler: Excimer drains its log every `maxSamples` hits into an
 in-memory stack→count map, and stacks beyond `maxUniqueStacks` go into an `[overflow]` frame so the
 profile stays bounded.
