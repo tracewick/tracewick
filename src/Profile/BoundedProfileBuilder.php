@@ -85,6 +85,9 @@ final class BoundedProfileBuilder
                 $maxStrings,
             ));
         }
+
+        // This builder also materializes stacks from the native sampler callback.
+        class_exists(Stack::class);
     }
 
     /**

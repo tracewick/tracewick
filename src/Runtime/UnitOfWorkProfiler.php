@@ -129,6 +129,9 @@ final class UnitOfWorkProfiler
         ?Clock $clock = null,
         private readonly CounterStore $counters = new NullCounterStore(),
     ) {
+        // Prepare the in-memory rotation path before Excimer can interrupt application work.
+        class_exists(Profile::class);
+        class_exists(HostCounterKeys::class);
         $this->labels = LabelPolicy::filter($config->labels);
         $this->inactiveSampler = $sampler instanceof NullSampler ? $sampler->reason : null;
         $this->clock = $clock ?? new SystemClock();
