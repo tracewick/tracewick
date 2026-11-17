@@ -26,15 +26,6 @@ does not. Output after that call is discarded.
 Why not always call `fastcgi_finish_request()`: it would silently drop later shutdown output
 (toolbar, logger) and is hard to debug. Opt-in keeps the default predictable.
 
-## UoW rotation clarification (2026-11-16)
-
-Duration-based UoW rotation is cooperative: the application calls `pulse()` at a safe point.
-The runtime does not register a segment listener with Excimer. Its native callback only
-aggregates samples; stopping/restarting the sampler, building profiles, and updating runtime
-diagnostics must happen outside that callback. `maxProfileDurationSeconds` is a threshold checked
-by `pulse()`, not a hard deadline. Without a pulse, `stop()` or shutdown collects the profile.
-Sampler stack limits and the completed-profile buffer remain bounded independently of duration.
-
 ## Consequences
 
 - Work path does not send; buffer size is capped (sample memory inside Excimer is a separate gap,

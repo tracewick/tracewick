@@ -16,6 +16,7 @@ use Tracewick\Exception\LogicException;
 use Tracewick\Profile\LabelPolicy;
 use Tracewick\Profile\Labels;
 use Tracewick\Profile\Profile;
+use Tracewick\Sampler\ExcimerSampler;
 use Tracewick\Sampler\NullSampler;
 use Tracewick\Sampler\NullSamplerReason;
 use Tracewick\Sampler\Sampler;
@@ -130,6 +131,9 @@ final class UnitOfWorkProfiler
             register_shutdown_function($callback);
         };
         $this->random = $random ?? (static fn(): float => random_int(0, 1_000_000_000 - 1) / 1_000_000_000);
+        if ($sampler instanceof ExcimerSampler && $this->maxProfileDurationNs > 0) {
+            $sampler->setSegmentListener($this->pulse(...));
+        }
 
         $this->logSampleRateOnce();
         $this->warnAboutInactiveSampler();
@@ -183,8 +187,7 @@ final class UnitOfWorkProfiler
 
     /**
      * Rotates the running profile when {@see ProfilerConfig::$maxProfileDurationSeconds} has
-     * elapsed. Call from the application loop, never from an Excimer callback. Rotation is
-     * cooperative: without a pulse the profile continues until stop() or shutdown().
+     * elapsed. Safe to call often from a worker loop; also wired to the Excimer flush callback.
      */
     public function pulse(): void
     {

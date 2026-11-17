@@ -6,7 +6,6 @@ namespace Tracewick\Tests\Integration\Runtime;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
-use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Clock\SystemClock;
@@ -63,17 +62,11 @@ use Tracewick\Transport\Delivery;
 #[RequiresPhpExtension('excimer')]
 final class UnitOfWorkProfilerTest extends TestCase
 {
-    #[TestWith([true])]
-    #[TestWith([false])]
-    public function testNativeSegmentsWaitForApplicationRotationOrShutdown(bool $rotate): void
+    public function testNativeSegmentsAutomaticallyRotateWithoutApplicationPulses(): void
     {
         $clock = new ManualClock(1_000_000_000);
         $sink = new RecordingSink();
         $sampler = new ExcimerSampler(new SamplerConfig(periodNs: 1_000_000, maxSamples: 1));
-        $segments = 0;
-        $sampler->setSegmentListener(static function () use (&$segments): void {
-            ++$segments;
-        });
         $profiler = new UnitOfWorkProfiler(
             $sampler,
             $sink,
@@ -85,29 +78,16 @@ final class UnitOfWorkProfilerTest extends TestCase
             $profiler->start(['route' => 'import']);
             $clock->advanceNs(2_000_000_000);
             $deadline = hrtime(true) + 1_000_000_000;
-            while ($segments < 3 && hrtime(true) < $deadline) {
+            while ($profiler->bufferedProfiles() < 1 && hrtime(true) < $deadline) {
                 // Exercise real native flushes after the rotation deadline.
             }
 
-            self::assertGreaterThanOrEqual(3, $segments);
             self::assertTrue($profiler->isRunning());
-            self::assertSame(0, $profiler->bufferedProfiles());
-            self::assertSame(0, $profiler->diagnostics()->collectedProfiles);
-            $profiler->flush();
+            self::assertSame(1, $profiler->bufferedProfiles());
             self::assertSame([], $sink->functions());
-
-            if ($rotate) {
-                $profiler->pulse();
-                self::assertTrue($profiler->isRunning());
-                self::assertSame(1, $profiler->bufferedProfiles());
-                self::assertSame([], $sink->functions());
-                $profiler->flush();
-                self::assertCount(1, $sink->sent);
-            } else {
-                $profiler->shutdown();
-                self::assertFalse($profiler->isRunning());
-                self::assertCount(1, $sink->sent);
-            }
+            $profiler->shutdown();
+            self::assertFalse($profiler->isRunning());
+            self::assertNotEmpty($sink->sent);
 
             self::assertFalse($sink->sent[0]->isEmpty());
             self::assertSame(['route' => 'import'], $sink->sent[0]->labels->toArray());

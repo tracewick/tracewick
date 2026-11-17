@@ -104,7 +104,8 @@ final class ExcimerSampler implements Sampler
     {
         try {
             $this->recreateAfterFork();
-            $this->converter->ingestLog($this->profiler->flush(), $this->aggregator);
+            // flush() invokes onNativeFlush(), which ingests the returned log exactly once.
+            $this->profiler->flush();
         } catch (\Throwable $e) {
             $this->recordFailure($e);
         }
