@@ -45,6 +45,21 @@ final class ExcimerSamplerTest extends TestCase
      */
     private const DELIVERY_SLACK_NS = 10 * self::PERIOD_NS;
 
+    public function testExplicitFlushCountsNativeEventsExactlyOnce(): void
+    {
+        $sampler = new ExcimerSampler(new SamplerConfig(periodNs: self::PERIOD_NS, maxSamples: 100_000));
+        $sampler->start();
+        self::busyWait(20_000_000);
+        $sampler->stop();
+
+        $native = (new \ReflectionProperty($sampler, 'profiler'))->getValue($sampler);
+        self::assertInstanceOf(\ExcimerProfiler::class, $native);
+        $expected = $native->getLog()->getEventCount();
+        self::assertGreaterThan(0, $expected);
+        self::assertSame($expected, $sampler->flush()->eventCount());
+        self::assertSame(0, $sampler->flush()->eventCount());
+    }
+
     public function testFactoryCreatesExcimerSamplerWhenExtensionIsLoaded(): void
     {
         self::assertInstanceOf(ExcimerSampler::class, (new SamplerFactory([]))->create());
