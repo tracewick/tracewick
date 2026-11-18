@@ -49,6 +49,9 @@ final class ExcimerSampler implements Sampler
         private readonly SamplerConfig $config,
         ?Clock $clock = null,
     ) {
+        // Native ingestion and automatic UoW rotation must not invoke an autoloader.
+        class_exists(Frame::class);
+        class_exists(Sample::class);
         $this->clock = $clock ?? new SystemClock();
         $this->aggregator = new StackAggregator($config->maxUniqueStacks);
         $pid = getmypid();
