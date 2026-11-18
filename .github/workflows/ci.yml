@@ -36,9 +36,8 @@ jobs:
           python-version: '3.12'
       - name: Build and verify the actual exported package
         run: |
-          python3 scripts/release-package.py build --output build/release --version 0.0.0-snapshot
-          python3 scripts/release-package.py verify --artifacts build/release --version 0.0.0-snapshot \
-            --reference "$(git rev-parse HEAD)" --unsigned
+          python3 scripts/release-package.py --output build/release --version 0.0.0-snapshot
+          (cd build/release && sha256sum --check checksums.txt)
           python3 -m unittest discover -s scripts -p 'test_*.py' -v
       - name: Validate the package SBOM against CycloneDX 1.6
         run: |

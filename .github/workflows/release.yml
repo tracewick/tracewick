@@ -86,14 +86,12 @@ jobs:
       - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
         with:
           cosign-release: v3.1.4
-      - name: Build and sign package inventory
+      - name: Build and sign release assets
         run: |
-          python3 scripts/release-package.py build --output build/release \
+          python3 scripts/release-package.py --output build/release \
             --version "${RELEASE_TAG#v}" --ref "$RELEASE_TAG"
           cosign sign-blob --yes --bundle build/release/checksums.txt.sigstore.json \
             build/release/checksums.txt
-          python3 scripts/release-package.py verify --artifacts build/release \
-            --version "${RELEASE_TAG#v}" --reference "$(git rev-parse HEAD)"
       - name: Get a release-asset upload token
         id: app-token
         if: ${{ vars.RELEASE_APP_ID != '' }}
@@ -106,13 +104,21 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
         run: |
-          gh release upload "$RELEASE_TAG" build/release/* --repo "$GITHUB_REPOSITORY" --clobber
+          ASSETS=build/release
+          PREFIX="tracewick-${RELEASE_TAG#v}"
+          gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --clobber \
+            "$ASSETS/$PREFIX.zip" "$ASSETS/$PREFIX.sbom.json" \
+            "$ASSETS/checksums.txt" "$ASSETS/checksums.txt.sigstore.json"
           gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
-            --dir "$RUNNER_TEMP/release-verification"
-          gh api "repos/$GITHUB_REPOSITORY/zipball/$(git rev-parse HEAD)" > "$RUNNER_TEMP/composer-dist.zip"
-          python3 scripts/release-package.py verify --artifacts "$RUNNER_TEMP/release-verification" \
-            --version "${RELEASE_TAG#v}" --reference "$(git rev-parse HEAD)" \
-            --package "$RUNNER_TEMP/composer-dist.zip"
+            --dir "$RUNNER_TEMP/release-verification" \
+            --pattern "$PREFIX.zip" --pattern "$PREFIX.sbom.json" \
+            --pattern checksums.txt --pattern checksums.txt.sigstore.json
+          cd "$RUNNER_TEMP/release-verification"
+          cosign verify-blob \
+            --certificate-identity 'https://github.com/tracewick/tracewick/.github/workflows/release.yml@refs/heads/main' \
+            --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+            --bundle checksums.txt.sigstore.json checksums.txt
+          sha256sum --check checksums.txt
 
   back-merge:
     name: Merge main back into develop
