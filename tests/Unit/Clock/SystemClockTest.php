@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tracewick\Tests\Unit\Clock;
 
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Clock\SystemClock;
 
@@ -35,6 +36,47 @@ final class SystemClockTest extends TestCase
             self::assertGreaterThanOrEqual($previous, $current);
             $previous = $current;
         }
+    }
+
+    #[DataProvider('wallDrifts')]
+    public function testOnlyReanchorsBeyondOneSecond(int $driftNs, bool $shouldReanchor): void
+    {
+        $base = 1_700_000_000_000_000_000;
+        $wall = $base;
+        $mono = 100;
+        $clock = new SystemClock(
+            static function () use (&$wall): int {
+                return $wall;
+            },
+            static function () use (&$mono): int {
+                return $mono;
+            },
+        );
+
+        $mono += 50;
+        $wall = $base + 50 + $driftNs;
+        $expected = $shouldReanchor ? $wall : $base + 50;
+        self::assertSame($expected, $clock->nowNs());
+        self::assertSame($shouldReanchor ? 1 : 0, $clock->reanchorCount());
+
+        // Subsequent reads must advance from the retained or newly established anchor.
+        $mono += 100;
+        $wall += 100;
+        self::assertSame($expected + 100, $clock->nowNs());
+        self::assertSame($shouldReanchor ? 1 : 0, $clock->reanchorCount());
+    }
+
+    /** @return iterable<string, array{int, bool}> */
+    public static function wallDrifts(): iterable
+    {
+        yield 'wall leads by 100 ms' => [100_000_000, false];
+        yield 'wall trails by 100 ms' => [-100_000_000, false];
+        yield 'wall leads by just under one second' => [999_999_999, false];
+        yield 'wall trails by just under one second' => [-999_999_999, false];
+        yield 'wall leads by exactly one second' => [1_000_000_000, false];
+        yield 'wall trails by exactly one second' => [-1_000_000_000, false];
+        yield 'wall leads by one second and one nanosecond' => [1_000_000_001, true];
+        yield 'wall trails by one second and one nanosecond' => [-1_000_000_001, true];
     }
 
     public function testReanchorsWhenWallDriftsBeyondThreshold(): void
