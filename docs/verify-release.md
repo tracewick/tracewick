@@ -28,7 +28,8 @@ dependencies to assess that resolved environment.
 GitHub's ZIP and our exported ZIP can differ in bytes and enclosing directory
 name. The contents manifest permits those container differences, but requires
 identical file bytes and the exact file set. Changed, missing and extra files,
-unsafe ZIP paths and symlinks fail verification. It verifies distribution files,
+unsafe ZIP paths, symlinks and non-regular files (such as named pipes) fail
+verification. It verifies distribution files,
 not filesystem permissions, the rest of vendor/, or a running process's memory.
 
 ## Authenticate the assets before executing the verifier

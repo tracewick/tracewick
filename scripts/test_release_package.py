@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import stat
 import subprocess
@@ -138,6 +139,21 @@ class ReleasePackageTest(unittest.TestCase):
         (package / "extra").symlink_to(package / "README.md")
         with self.assertRaisesRegex(ValueError, "Symlinks"):
             self.verify(package)
+
+    def test_extra_named_pipe_is_rejected_without_reading_it(self):
+        package = self.installed()
+        os.mkfifo(package / "extra.php")
+        with self.assertRaisesRegex(ValueError, "Non-regular"):
+            self.verify(package)
+
+    def test_non_regular_zip_member_is_rejected(self):
+        data = io.BytesIO()
+        with zipfile.ZipFile(data, "w") as archive:
+            member = zipfile.ZipInfo("root/file.php")
+            member.external_attr = (stat.S_IFIFO | 0o600) << 16
+            archive.writestr(member, b"content")
+        with self.assertRaisesRegex(ValueError, "Non-regular"):
+            PACKAGE.zip_tree(data.getvalue())
 
     def test_verifier_asset_is_authenticated_too(self):
         (self.assets / "verify-release.py").write_text("changed verifier")

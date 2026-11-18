@@ -25,7 +25,8 @@ Proposed for review; a signed release has not yet been published:
   Cosign. Only the publishing job on main receives OIDC permission.
 - The contents manifest binds the package name, release version, full Git commit
   and every distributed file's SHA-256. Ignore the ZIP's enclosing directory name
-  and compression; require an exact file set and reject symlinks and unsafe paths.
+  and compression; require an exact file set and reject symlinks, non-regular
+  files and unsafe paths.
 - The SBOM inventories distributed files and records Composer runtime constraints
   and suggestions as properties. It does not invent installed dependency versions
   or claim to replace an application's resolved SBOM.

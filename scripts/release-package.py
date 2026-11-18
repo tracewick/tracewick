@@ -50,6 +50,8 @@ def zip_tree(data):
             roots.add(parts[0])
             if entry.is_dir():
                 continue
+            if stat.S_IFMT(entry.external_attr >> 16) not in (0, stat.S_IFREG):
+                raise ValueError("Non-regular ZIP member")
             if len(parts) != 2 or parts[1] in files:
                 raise ValueError("Missing archive root or duplicate package file")
             files[parts[1]] = archive.read(entry)
@@ -67,6 +69,8 @@ def directory_tree(directory):
             raise ValueError("Symlinks are not release package files")
         if path.is_file():
             result[path.relative_to(directory).as_posix()] = path.read_bytes()
+        elif not path.is_dir():
+            raise ValueError("Non-regular package entry")
     return result
 
 
