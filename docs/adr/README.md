@@ -18,3 +18,4 @@ See [ADR 1](0001-record-architecture-decisions.md) for how and why we record dec
 | [11](0011-excimer-vm-interrupt-limits.md)       | Excimer VM-interrupt sampling limits     | Accepted |
 | [12](0012-aggregate-before-delivery.md)         | Aggregate profiles before delivery       | Accepted |
 | [13](0013-spool-v2-compact-payload.md)          | Spool v2: compact stacks on the hot path | Accepted |
+| [14](0014-verifiable-release-contents.md)      | Verifiable release contents and package SBOMs | Proposed |

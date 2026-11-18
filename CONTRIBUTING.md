@@ -222,6 +222,13 @@ Releases follow git flow and are automated with
 4. The workflow opens a pull request merging `main` back into `develop`. Merge it with a merge
    commit.
 
+The signed-asset job builds a package ZIP, contents manifest and package SBOM from
+the exact tag, signs their checksum manifest with keyless Cosign, and verifies
+downloaded assets and GitHub dist contents. Normal Composer/Packagist installation
+is unchanged and does not verify Cosign automatically. Existing releases remain
+unsigned; first publication through this job must confirm the signing path.
+See [verification, SBOM scope and recovery](docs/verify-release.md).
+
 Before 1.0.0, `feat` bumps the minor version and `fix` the patch version. A breaking change
 (`feat!:` or a `BREAKING CHANGE:` footer) bumps the minor version until 1.0.0 and the major
 version after it.

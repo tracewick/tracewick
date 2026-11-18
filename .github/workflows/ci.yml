@@ -22,6 +22,47 @@ env:
   INFECTION_VERSION: '0.35.8'
 
 jobs:
+  release-check:
+    name: Release packaging (unsigned)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # No publishing or OIDC permissions; fixtures are explicitly unsigned.
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Build and verify the actual exported package
+        run: |
+          python3 scripts/release-package.py build --output build/release --version 0.0.0-snapshot
+          python3 scripts/release-package.py verify --artifacts build/release --version 0.0.0-snapshot \
+            --reference "$(git rev-parse HEAD)" --unsigned
+          python3 -m unittest discover -s scripts -p 'test_*.py' -v
+      - name: Validate the package SBOM against CycloneDX 1.6
+        run: |
+          python3 -m pip install 'jsonschema==4.26.0'
+          python3 - <<'PY'
+          import json
+          import pathlib
+          import urllib.request
+          from jsonschema import Draft7Validator
+          from referencing import Registry, Resource
+          registry = Registry()
+          base = 'https://raw.githubusercontent.com/CycloneDX/specification/55343ba19dee1785acf1ce9191540d5fd7b590db/schema/'
+          for name in ('bom-1.6.schema.json', 'spdx.schema.json', 'jsf-0.82.schema.json'):
+              with urllib.request.urlopen(base + name, timeout=30) as stream:
+                  document = json.load(stream)
+              resource = Resource.from_contents(document)
+              for prefix in ('http://cyclonedx.org/schema/', 'https://cyclonedx.org/schema/'):
+                  registry = registry.with_resource(prefix + name, resource)
+              if name == 'bom-1.6.schema.json':
+                  schema = document
+          bom = json.loads(pathlib.Path('build/release/tracewick-0.0.0-snapshot.sbom.json').read_text())
+          Draft7Validator(schema, registry=registry).validate(bom)
+          PY
+
   checks:
     name: Checks
     runs-on: ubuntu-latest
