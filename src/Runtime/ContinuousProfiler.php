@@ -38,6 +38,8 @@ use Tracewick\Transport\DeliveryStatus;
  *
  * Every method is fail-open (ADR 5). Prefer {@see UnitOfWorkProfiler} for PHP-FPM, CLI, and
  * sequential workers that own one request at a time.
+ *
+ * @api
  */
 final class ContinuousProfiler
 {
@@ -80,7 +82,7 @@ final class ContinuousProfiler
     private readonly Labels $filteredLabels;
 
     /**
-     * @param ?\Closure(callable(): void): void $registerShutdownFunction `register_shutdown_function()` by default
+     * @param ?\Closure(callable(): void): void $registerShutdownFunction internal test seam; `register_shutdown_function()` by default
      */
     public function __construct(
         private readonly Sampler $sampler,

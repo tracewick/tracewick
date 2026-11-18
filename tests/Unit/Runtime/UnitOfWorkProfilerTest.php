@@ -37,7 +37,6 @@ use Tracewick\Tests\Support\ManualClock;
 use Tracewick\Tests\Support\RecordingLogger;
 use Tracewick\Tests\Support\RecordingSink;
 use Tracewick\Tests\Support\ScriptedSampler;
-use Tracewick\Tests\Support\TemporaryDirectory;
 use Tracewick\Transport\AtomicFile;
 use Tracewick\Transport\Delivery;
 
@@ -72,8 +71,6 @@ final class UnitOfWorkProfilerTest extends TestCase
 
     private RecordingLogger $logger;
 
-    private TemporaryDirectory $logDirectory;
-
     private RecordingSink $sink;
 
     /** @var list<string> */
@@ -89,12 +86,6 @@ final class UnitOfWorkProfilerTest extends TestCase
         $this->sampler = new ScriptedSampler();
         $this->sink = new RecordingSink();
         $this->logger = new RecordingLogger();
-        $this->logDirectory = new TemporaryDirectory();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->logDirectory->remove();
     }
 
     public function testRotationDuringPublicationIsPublishedOnTheNextCall(): void
@@ -505,7 +496,7 @@ final class UnitOfWorkProfilerTest extends TestCase
             null,
             null,
             null,
-            new DiagnosticLogger($this->logger, $this->logDirectory->path, clock: new ManualClock()),
+            new DiagnosticLogger($this->logger, clock: new ManualClock()),
         );
 
         self::assertSame(NullSamplerReason::ExtensionMissing, $profiler->diagnostics()->inactiveSampler);
@@ -517,7 +508,7 @@ final class UnitOfWorkProfilerTest extends TestCase
         new UnitOfWorkProfiler(
             new NullSampler(NullSamplerReason::Disabled, clock: new ManualClock()),
             $this->sink,
-            logger: new DiagnosticLogger($this->logger, $this->logDirectory->path, clock: new ManualClock()),
+            logger: new DiagnosticLogger($this->logger, clock: new ManualClock()),
         );
 
         self::assertSame(
@@ -532,7 +523,7 @@ final class UnitOfWorkProfilerTest extends TestCase
         new UnitOfWorkProfiler(
             new NullSampler(NullSamplerReason::Disabled, clock: new ManualClock()),
             $this->sink,
-            logger: new DiagnosticLogger($this->logger, $this->logDirectory->path, clock: new ManualClock()),
+            logger: new DiagnosticLogger($this->logger, clock: new ManualClock()),
         );
 
         self::assertSame(
@@ -548,7 +539,7 @@ final class UnitOfWorkProfilerTest extends TestCase
         new UnitOfWorkProfiler(
             new NullSampler(NullSamplerReason::InitializationFailed, cause: $cause, clock: new ManualClock()),
             $this->sink,
-            logger: new DiagnosticLogger($this->logger, $this->logDirectory->path, clock: new ManualClock()),
+            logger: new DiagnosticLogger($this->logger, clock: new ManualClock()),
         );
 
         self::assertSame(
@@ -604,7 +595,7 @@ final class UnitOfWorkProfilerTest extends TestCase
                 $this->shutdownFunctions[] = $callback;
             },
             null,
-            new DiagnosticLogger($this->logger, $this->logDirectory->path, clock: new ManualClock()),
+            new DiagnosticLogger($this->logger, clock: new ManualClock()),
             $clock,
         );
         $this->sampler->willSample('first')->willSample('second');
@@ -633,7 +624,7 @@ final class UnitOfWorkProfilerTest extends TestCase
             null,
             null,
             null,
-            new DiagnosticLogger($this->logger, $this->logDirectory->path, clock: new ManualClock()),
+            new DiagnosticLogger($this->logger, clock: new ManualClock()),
             $clock,
         );
         $this->sampler->willSample('handle');
@@ -820,7 +811,7 @@ final class UnitOfWorkProfilerTest extends TestCase
                 $this->shutdownFunctions[] = $callback;
             },
             $random,
-            new DiagnosticLogger($this->logger, $this->logDirectory->path, clock: new ManualClock()),
+            new DiagnosticLogger($this->logger, clock: new ManualClock()),
         );
     }
 }

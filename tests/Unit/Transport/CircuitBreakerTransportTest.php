@@ -117,7 +117,7 @@ final class CircuitBreakerTransportTest extends TestCase
             new CircuitBreakerConfig(3, 1_000, configurationOpenDurationMs: 5_000),
             $this->clock,
             new InMemoryCircuitBreakerStore(),
-            new DiagnosticLogger($logger, $directory->path, clock: $this->clock),
+            new DiagnosticLogger($logger, clock: $this->clock),
         );
 
         try {
@@ -381,7 +381,7 @@ final class CircuitBreakerTransportTest extends TestCase
         $directory = new TemporaryDirectory();
         $logger = new RecordingLogger();
         $inner = new ScriptedTransport(Delivery::delivered(), Delivery::failed('1'), Delivery::failed('2'), Delivery::failed('trial'), Delivery::delivered());
-        $breaker = new CircuitBreakerTransport($inner, new CircuitBreakerConfig(2, 1_500), $this->clock, new InMemoryCircuitBreakerStore(), new DiagnosticLogger($logger, $directory->path, clock: $this->clock));
+        $breaker = new CircuitBreakerTransport($inner, new CircuitBreakerConfig(2, 1_500), $this->clock, new InMemoryCircuitBreakerStore(), new DiagnosticLogger($logger, clock: $this->clock));
 
         try {
             $this->send($breaker);

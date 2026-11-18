@@ -8,6 +8,8 @@ namespace Tracewick\Diagnostics;
  * Host-wide integer counters that survive a single PHP-FPM request when backed by APCu or a file.
  *
  * Every method is fail-open: implementations must not throw into the host application.
+ *
+ * @api
  */
 interface CounterStore
 {

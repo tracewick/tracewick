@@ -9,6 +9,8 @@ namespace Tracewick\Profile;
  *
  * This is a hard filter (not a warning): denied pairs are dropped before they reach a profile.
  * Integrations set safe names such as a route template; raw URL paths are opt-in elsewhere.
+ *
+ * @internal
  */
 final class LabelPolicy
 {

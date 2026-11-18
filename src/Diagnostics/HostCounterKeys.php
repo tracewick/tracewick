@@ -9,6 +9,8 @@ namespace Tracewick\Diagnostics;
  *
  * Keys are product-prefixed so a shared {@see CounterStore} (APCu, a shared
  * directory) cannot collide with another library's counters.
+ *
+ * @api
  */
 final class HostCounterKeys
 {

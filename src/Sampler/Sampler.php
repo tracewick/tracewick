@@ -9,6 +9,8 @@ namespace Tracewick\Sampler;
  *
  * Implementations are used on runtime paths and must never throw: failures are swallowed and
  * reported through diagnostics, and the worst outcome for the host application is an empty batch.
+ *
+ * @api
  */
 interface Sampler
 {

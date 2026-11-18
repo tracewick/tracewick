@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-10-29
+- Updated: 2026-11-18
 
 ## Context
 
@@ -12,17 +13,27 @@ send profiles to an OpenTelemetry pipeline and to correlate them with traces.
 
 ## Decision
 
-- An OTLP profiles exporter is built in phase 4 against the current version of the specification,
-  using `open-telemetry/gen-otlp-protobuf` as an optional (`suggest`) dependency.
+- If an OTLP profiles exporter is implemented, it uses the then-current specification and an
+  optional (`suggest`) protobuf dependency. The exporter is not implemented or scheduled here.
 - It lives in a `Tracewick\Experimental` namespace, is marked `@experimental` in its docblocks,
   and is excluded from the backward compatibility promise, including after 1.0.
 - It must be enabled explicitly; no default configuration sends OTLP profiles.
-- Trace correlation (`trace_id` and `span_id` labels taken from the OpenTelemetry SDK context) is
-  separate from the exporter and is part of the stable API, because it works with pprof too.
+- Trace correlation is separate from the exporter. Automatic trace/span correlation is
+  indefinitely deferred, outside RC, without a target release/date or commitment to implement it.
+  This includes the request/root-span alternative. It is not part of the stable API promise.
 - When the specification becomes stable, a new ADR moves the exporter into the stable API.
 
 ## Consequences
 
-- Tracewick can follow spec changes in minor releases without breaking users of the stable API.
-- Users who need a stable path to an OpenTelemetry pipeline use pprof through the Collector's
-  pprof receiver until OTLP profiles are stable.
+- A future experimental exporter can follow spec changes without changing the stable PHP API.
+- Current supported production delivery is pprof through Pyroscope's push API; an unimplemented
+  exporter or unverified Collector receiver is not an available integration guarantee.
+
+## Implementation status
+
+The previous stable-correlation wording described an unimplemented plan, not an accepted working
+API. On 2026-11-18 the maintainer deferred correlation indefinitely. Proposal PR #81 was closed
+without merging and issue #80 was closed as not planned; no correlation ADR was accepted.
+The existing manually supplied profile-wide `span_id` label is not automatic SDK correlation.
+See [the compatibility policy](../compatibility.md) for the intended API boundary. This update
+corrects the implementation/status promise; it does not introduce an exporter or correlation.

@@ -9,7 +9,7 @@ use Tracewick\Exception\LogicException;
 /**
  * Validates application names, which sinks pass to backends as the service name.
  *
- * @internal
+ * @api
  */
 final class ApplicationName
 {

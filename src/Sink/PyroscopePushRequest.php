@@ -15,6 +15,8 @@ use Tracewick\Sampler\EventType;
  * empty except for span_id when the encoder includes it.
  *
  * @see https://grafana.com/docs/pyroscope/latest/reference-server-api/
+ *
+ * @internal
  */
 final readonly class PyroscopePushRequest
 {

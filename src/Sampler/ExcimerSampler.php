@@ -18,6 +18,8 @@ use Tracewick\Clock\SystemClock;
  * stays proportional to unique stacks rather than to the number of timer hits. A PID change resets
  * PHP-side state, but inherited native timers are not fork-safe. Start profiling only after worker
  * processes have forked; see docs/runtime.md.
+ *
+ * @api
  */
 final class ExcimerSampler implements Sampler
 {
@@ -68,6 +70,8 @@ final class ExcimerSampler implements Sampler
      * write the spool, or send HTTP — those belong in the application loop (see ContinuousProfiler).
      *
      * @param ?\Closure(): void $listener
+     *
+     * @internal runtime wiring; not a user extension callback
      */
     public function setSegmentListener(?\Closure $listener): void
     {

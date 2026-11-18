@@ -6,6 +6,8 @@ namespace Tracewick\Runtime;
 
 /**
  * Why a pass of {@see SpoolDrainer} ended.
+ *
+ * @api
  */
 enum DrainOutcome: string
 {

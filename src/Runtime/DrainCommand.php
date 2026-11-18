@@ -28,6 +28,8 @@ use Tracewick\Transport\DirectorySpoolSource;
  *
  * {@see stop()} makes the command exit after the current file; bin/tracewick-drain calls it on
  * SIGTERM and SIGINT when ext-pcntl is available.
+ *
+ * @internal
  */
 final class DrainCommand
 {
@@ -178,7 +180,7 @@ final class DrainCommand
                 $batchSize = min($batchSize, $settings->limit - $handled);
             }
 
-            $result = $drainer->drain($batchSize, $settings->once);
+            $result = $drainer->drain($batchSize);
             $delivered += $result->delivered;
             $rejected += $result->rejected;
             $ackFailures += $result->ackFailures;

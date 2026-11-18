@@ -12,6 +12,8 @@ use Tracewick\Transport\Delivery;
  *
  * Implementations never throw. A file the backend could never accept is reported as rejected,
  * and a failure that may pass, such as an unreachable backend, as failed or skipped.
+ *
+ * @api
  */
 interface SpoolForwarder
 {

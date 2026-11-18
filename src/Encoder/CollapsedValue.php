@@ -6,6 +6,8 @@ namespace Tracewick\Encoder;
 
 /**
  * Which number follows each stack in the collapsed format.
+ *
+ * @api
  */
 enum CollapsedValue: string
 {

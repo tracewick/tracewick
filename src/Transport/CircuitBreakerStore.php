@@ -12,6 +12,8 @@ namespace Tracewick\Transport;
  * trial cannot close a circuit that another process has already re-opened. Methods must be fast
  * and must never throw: a store that cannot read returns a closed circuit; one that cannot write
  * forgets the change.
+ *
+ * @api
  */
 interface CircuitBreakerStore
 {

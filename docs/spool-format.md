@@ -135,6 +135,10 @@ the file system only ([ADR 9](adr/0009-agent-hand-off.md)).
 Only version 2 is defined. A future version bump may introduce dual-read if Tracewick has
 public installs by then; until then readers reject unknown versions.
 
+The [compatibility policy](compatibility.md#cli-and-spool-interoperability) defines the intended
+upgrade guarantees from 1.0. A future writer format requires compatible readers and an explicit
+migration policy first. No new format or dual-read path is introduced by that policy.
+
 ## Fixtures
 
 - [`tests/Fixtures/spool/v2`](../tests/Fixtures/spool/v2) — version 2 / `compact-stacks`

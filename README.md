@@ -12,6 +12,9 @@ meant to run continuously in production.
 > public API is still not frozen until 1.0.0 — expect breaking changes in minor releases. Pin a
 > version and read the changelog before upgrading.
 
+The [public API boundary and compatibility policy](docs/compatibility.md) identifies intended
+1.0 contracts, internal/test-only members, tested versions and current pre-1.0 migration notes.
+
 ## Goals
 
 - **Safe in production.** Failures are caught and counted; the library must not throw into the host
@@ -24,12 +27,13 @@ meant to run continuously in production.
   Profiles export is planned and experimental ([ADR 6](docs/adr/0006-otlp-profiles-experimental.md)).
 - **Where PHP runs.** PHP-FPM, CLI and sequential workers use `UnitOfWorkProfiler` (one profile per
   request or job). Concurrent runtimes such as Swoole, Fibers or ReactPHP use `ContinuousProfiler`:
-  process-level sampling without per-request labels. Symfony and Laravel integrations are planned
-  as separate packages; they are not in this repository.
+  process-level sampling without per-request labels. The [Symfony bundle](https://github.com/tracewick/symfony-bundle)
+  is a separate package; Laravel integration remains planned. Framework integrations are not in
+  this repository.
 
 ## Requirements
 
-- PHP 8.2 or newer
+- PHP 8.2–8.5 (PHP 8.6 RC has an experimental stand job; it is not yet a supported Composer range)
 - [ext-excimer](https://www.mediawiki.org/wiki/Excimer) to collect profiles (optional at install time)
 
 **Fail-open.** Public profiler/sink calls catch failures and never throw into the host application.

@@ -6,6 +6,8 @@ namespace Tracewick\Transport;
 
 /**
  * Keeps the circuit state in the process, for drain, long-running workers, and tests.
+ *
+ * @internal
  */
 final class InMemoryCircuitBreakerStore implements CircuitBreakerStore
 {

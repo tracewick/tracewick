@@ -15,6 +15,8 @@ use Tracewick\Profile\Profile;
  * follow the order of the profile.
  *
  * @see https://github.com/jlfwong/speedscope/wiki/Importing-from-custom-sources
+ *
+ * @api
  */
 final readonly class SpeedscopeEncoder implements Encoder
 {

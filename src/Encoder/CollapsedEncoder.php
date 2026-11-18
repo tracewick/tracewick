@@ -13,6 +13,8 @@ use Tracewick\Profile\Profile;
  * Each line holds the frame names of one stack, outermost first and separated by semicolons,
  * then a space and a number. Stacks are merged by function name, ignoring the line being
  * executed, and lines are sorted so that equal profiles always produce identical output.
+ *
+ * @api
  */
 final readonly class CollapsedEncoder implements Encoder
 {

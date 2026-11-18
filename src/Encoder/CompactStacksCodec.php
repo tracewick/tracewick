@@ -19,6 +19,8 @@ use Tracewick\Sampler\Frame;
  * - u32 stack count; each stack is u32 weight, u8 flags (bit 0 = truncated), u32 frame count,
  *   then for each frame: u32 function index, u32 class index, u32 file index, u32 line,
  *   u32 closure line (`0xFFFFFFFF` means a null optional string or null closure line)
+ *
+ * @internal
  */
 final readonly class CompactStacksCodec
 {

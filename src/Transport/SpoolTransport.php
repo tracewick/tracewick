@@ -19,6 +19,8 @@ use Tracewick\Sink\SpoolAggregationKey;
  * lives under a two-hex shard and the hash appears in the name.
  *
  * @see https://github.com/tracewick/tracewick/blob/main/docs/spool-format.md
+ *
+ * @api
  */
 final readonly class SpoolTransport implements Transport
 {
@@ -32,6 +34,9 @@ final readonly class SpoolTransport implements Transport
 
     private SpoolAdmissionState $admission;
 
+    /**
+     * @param ?SpoolAdmissionState $admission internal cache wiring; excluded from the public API promise
+     */
     public function __construct(
         private SpoolConfig $config,
         private Clock $clock = new SystemClock(),
