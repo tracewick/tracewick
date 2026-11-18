@@ -15,8 +15,9 @@ use Tracewick\Clock\SystemClock;
  * and the last one is kept for diagnostics.
  *
  * Samples are aggregated by stack as the native flush callback drains the Excimer log, so memory
- * stays proportional to unique stacks rather than to the number of timer hits. After `pcntl_fork`
- * the sampler rebuilds its `ExcimerProfiler` on the next start or flush.
+ * stays proportional to unique stacks rather than to the number of timer hits. A PID change resets
+ * PHP-side state, but inherited native timers are not fork-safe. Start profiling only after worker
+ * processes have forked; see docs/runtime.md.
  */
 final class ExcimerSampler implements Sampler
 {
