@@ -10,6 +10,21 @@ Tracewick exposes two runtime adapters:
 Both are fail-open ([ADR 5](adr/0005-fail-open-policy.md)): no method throws into the host
 application.
 
+## Forking workers
+
+Initialize and start profiling **after** the worker has forked, or after an `exec` that starts a
+fresh interpreter. Do not start an Excimer profiler in a parent that will later call `pcntl_fork()`.
+This also applies to `auto_prepend_file`: boot it in the final worker, not in a forking supervisor.
+
+On Linux, Excimer 1.2.7 uses native timer threads and mutexes. A child can inherit a locked mutex
+without the thread that would unlock it, then hang in an interrupt or during cleanup. PHP
+`try/catch` cannot recover from that native wait. Calling `stop()` before the fork disarms the
+timer but does not destroy its native thread, so it is not a fork-safety guarantee.
+
+The sampler's PID check resets PHP-side batch state. The simulated-PID integration tests exercise
+that reset; they do not prove that a real fork with inherited native timers is safe. Storage
+concurrency tests run in fresh PHP interpreters so they cannot inherit timers left by other tests.
+
 ## Unit of work profiler
 
 `Tracewick\Runtime\UnitOfWorkProfiler` profiles one unit of work at a time, such as an HTTP

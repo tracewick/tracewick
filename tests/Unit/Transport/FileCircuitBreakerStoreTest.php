@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Tracewick\Tests\Unit\Transport;
 
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -175,8 +177,11 @@ final class FileCircuitBreakerStoreTest extends TestCase
     }
 
     #[RequiresPhpExtension('pcntl')]
+    #[RunInSeparateProcess]
+    #[PreserveGlobalState(false)]
     public function testConcurrentAcquireCompleteLeavesAReadableState(): void
     {
+        // Other tests retain native Excimer timers; fork only from a fresh interpreter.
         $path = $this->directory->path . '/state';
         $store = new FileCircuitBreakerStore($path);
         $this->writeFile(new CircuitBreakerState());
@@ -205,7 +210,10 @@ final class FileCircuitBreakerStoreTest extends TestCase
         }
 
         foreach ($children as $pid) {
-            pcntl_waitpid($pid, $status);
+            self::assertSame($pid, pcntl_waitpid($pid, $status));
+            self::assertIsInt($status);
+            self::assertTrue(pcntl_wifexited($status));
+            self::assertSame(0, pcntl_wexitstatus($status));
         }
 
         $state = $store->load();
