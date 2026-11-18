@@ -37,6 +37,8 @@ use Tracewick\Transport\SpoolSource;
  * it returns false the pass ends as {@see DrainOutcome::Failed} with no claims held.
  *
  * @see https://github.com/tracewick/tracewick/blob/main/docs/spool-format.md
+ *
+ * @api
  */
 final readonly class SpoolDrainer
 {
@@ -66,14 +68,10 @@ final readonly class SpoolDrainer
     }
 
     /**
-     * @param int  $maxFiles           the most files to claim in this pass
-     * @param bool $includeOpenWindows kept for call-site compatibility; the window is no longer a
-     *                                 send gate (always included)
+     * @param int $maxFiles the most files to claim in this pass; open windows are always eligible
      */
-    public function drain(int $maxFiles = \PHP_INT_MAX, bool $includeOpenWindows = false): DrainResult
+    public function drain(int $maxFiles = \PHP_INT_MAX): DrainResult
     {
-        unset($includeOpenWindows);
-
         if ($maxFiles <= 0) {
             return new DrainResult(DrainOutcome::LimitReached, 0, 0);
         }

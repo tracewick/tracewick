@@ -6,6 +6,8 @@ namespace Tracewick\Sampler;
 
 /**
  * A call stack observed by the sampler, with how many sampling periods it represents.
+ *
+ * @api
  */
 final readonly class Sample
 {

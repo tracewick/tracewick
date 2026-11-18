@@ -7,6 +7,8 @@ namespace Tracewick\Transport;
 /**
  * A spool file that one reader has claimed and must finish: acknowledge, release or reject it
  * through the {@see SpoolSource} it came from.
+ *
+ * @api
  */
 final readonly class ClaimedSpoolFile
 {

@@ -6,6 +6,8 @@ namespace Tracewick\Clock;
 
 /**
  * Source of wall-clock time for timestamps that end up in profiles.
+ *
+ * @api
  */
 interface Clock
 {

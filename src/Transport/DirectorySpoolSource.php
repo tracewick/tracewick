@@ -16,6 +16,8 @@ use Tracewick\Clock\SystemClock;
  * Files larger than {@see SpoolReaderConfig::$maxFileBytes} are rejected without loading them.
  *
  * @see https://github.com/tracewick/tracewick/blob/main/docs/spool-format.md
+ *
+ * @api
  */
 final class DirectorySpoolSource implements SpoolSource
 {

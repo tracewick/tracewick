@@ -26,6 +26,8 @@ use Tracewick\Diagnostics\DiagnosticLogger;
  * A stale complete (wrong generation) is ignored, so a late success cannot close a newer open.
  * Default store is in-process memory; set {@see CircuitBreakerConfig::$stateDirectory} for a
  * shared file store across workers.
+ *
+ * @api
  */
 final readonly class CircuitBreakerTransport implements Transport
 {

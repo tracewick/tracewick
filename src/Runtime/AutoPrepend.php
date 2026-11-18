@@ -16,6 +16,8 @@ use Tracewick\Transport\SpoolConfig;
  * throws into the host. Requires `TRACEWICK_APPLICATION` and `TRACEWICK_SPOOL_DIR`.
  *
  * @see ProcessProfiler
+ *
+ * @api
  */
 final class AutoPrepend
 {
@@ -97,6 +99,8 @@ final class AutoPrepend
      * see {@see rawPathFromServer()}.
      *
      * @param array<string, mixed> $server
+     *
+     * @internal request-label normalization
      */
     public static function routeFromServer(array $server): string
     {
@@ -112,6 +116,8 @@ final class AutoPrepend
      * {@see ENV_LABEL_RAW_PATH}; high cardinality and secrets in path segments are the caller's risk.
      *
      * @param array<string, mixed> $server
+     *
+     * @internal request-label normalization
      */
     public static function rawPathFromServer(array $server): string
     {

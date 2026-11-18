@@ -14,6 +14,8 @@ use Tracewick\Exception\LogicException;
  * configuration, where a clear error is better than labels silently missing in the backend.
  *
  * @implements \IteratorAggregate<string, string>
+ *
+ * @api
  */
 final readonly class Labels implements \IteratorAggregate, \Countable
 {

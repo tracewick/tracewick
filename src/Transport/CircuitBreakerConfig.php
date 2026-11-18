@@ -8,6 +8,8 @@ use Tracewick\Exception\LogicException;
 
 /**
  * When a {@see CircuitBreakerTransport} stops sending, and for how long.
+ *
+ * @api
  */
 final readonly class CircuitBreakerConfig
 {

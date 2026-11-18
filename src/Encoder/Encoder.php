@@ -11,6 +11,8 @@ use Tracewick\Profile\Profile;
  *
  * Encoders are pure functions of the profile: the same profile always produces the same bytes,
  * and encoding never changes the profile or touches I/O.
+ *
+ * @api
  */
 interface Encoder
 {

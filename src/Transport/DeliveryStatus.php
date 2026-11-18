@@ -6,6 +6,8 @@ namespace Tracewick\Transport;
 
 /**
  * Outcome of one attempt to deliver a payload.
+ *
+ * @api
  */
 enum DeliveryStatus: string
 {

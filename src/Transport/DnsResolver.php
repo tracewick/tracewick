@@ -6,6 +6,8 @@ namespace Tracewick\Transport;
 
 /**
  * Resolves a host name to an address suitable for {@see stream_socket_client()}.
+ *
+ * @api
  */
 interface DnsResolver
 {

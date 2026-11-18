@@ -14,6 +14,8 @@ use Tracewick\Sampler\EventType;
  * exact bytes a writer puts in the spool directory; {@see fromBytes()} reads them back.
  *
  * @see https://github.com/tracewick/tracewick/blob/main/docs/spool-format.md
+ *
+ * @api
  */
 final readonly class SpoolFile
 {

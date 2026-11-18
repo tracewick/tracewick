@@ -11,6 +11,8 @@ use Tracewick\Sampler\NullSamplerReason;
  *
  * Under PHP-FPM a profiler lives for one request, so the numbers cover that request; a
  * long-running worker accumulates them for its whole life.
+ *
+ * @api
  */
 final readonly class Diagnostics
 {

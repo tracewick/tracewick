@@ -21,6 +21,8 @@ use Tracewick\Clock\SystemClock;
  * after a quiet interval carries the number of copies suppressed in between as `suppressed` in its
  * context. Without a logger nothing happens, and an exception thrown by the logger is swallowed
  * (ADR 5).
+ *
+ * @api
  */
 final class DiagnosticLogger
 {
@@ -32,21 +34,13 @@ final class DiagnosticLogger
     private static array $rateLimits = [];
 
     /**
-     * @param ?string $directory  unused; kept so existing call sites that passed a state directory
-     *                            keep compiling
-     * @param int     $intervalMs the shortest time between two copies of one message
+     * @param int $intervalMs the shortest time between two copies of one message; zero disables suppression
      */
     public function __construct(
         private readonly ?LoggerInterface $logger = null,
-        ?string $directory = null,
         private readonly int $intervalMs = self::DEFAULT_INTERVAL_MS,
         private readonly Clock $clock = new SystemClock(),
-    ) {
-        // Legacy second argument was the rate-limit file directory; suppress is process-static now.
-        if (null !== $directory && '' === $directory) {
-            // Touch the parameter so call-site BC stays without file I/O.
-        }
-    }
+    ) {}
 
     /**
      * Clears in-process rate-limit state. For tests only.

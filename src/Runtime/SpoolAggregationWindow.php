@@ -9,6 +9,8 @@ use Tracewick\Exception\LogicException;
 /**
  * Wall-clock window used to merge spool files that share an aggregation key
  * ([ADR 12](../../docs/adr/0012-aggregate-before-delivery.md)).
+ *
+ * @api
  */
 final readonly class SpoolAggregationWindow
 {
@@ -46,7 +48,8 @@ final readonly class SpoolAggregationWindow
     }
 
     /**
-     * Whether the bucket is fully in the past relative to {@see $nowNs}, so drain may send it.
+     * Whether the bucket is fully in the past relative to {@see $nowNs}.
+     * Continuous profiling uses this to deliver closed buckets; drain does not wait for closure.
      */
     public function isClosed(int $windowId, int $nowNs): bool
     {

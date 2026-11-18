@@ -94,14 +94,14 @@ final class DiagnosticLoggerTest extends TestCase
         self::assertCount(1, $this->logger->records);
     }
 
-    public function testIgnoresTheLegacyDirectoryArgument(): void
+    public function testCanDisableSuppressionWithAZeroInterval(): void
     {
-        $logger = new DiagnosticLogger($this->logger, '/no/such/directory', 1_000, $this->clock);
+        $logger = new DiagnosticLogger($this->logger, 0, $this->clock);
 
         $logger->log(LogLevel::WARNING, 'Failed.');
         $logger->log(LogLevel::WARNING, 'Failed.');
 
-        self::assertCount(1, $this->logger->records);
+        self::assertCount(2, $this->logger->records);
     }
 
     public function testSwallowsExceptionsOfTheLogger(): void

@@ -13,6 +13,8 @@ use Tracewick\Sink\SpoolAggregationKey;
  *
  * Used by {@see ContinuousProfiler} so long-running workers send one payload per key per window
  * instead of one per Excimer segment. Drain uses the same key and window on spool files.
+ *
+ * @internal
  */
 final class ProfileAccumulator
 {

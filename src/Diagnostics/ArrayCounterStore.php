@@ -6,6 +6,8 @@ namespace Tracewick\Diagnostics;
 
 /**
  * In-process counters for tests and single-process hosts.
+ *
+ * @api
  */
 final class ArrayCounterStore implements CounterStore
 {

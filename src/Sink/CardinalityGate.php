@@ -19,6 +19,8 @@ use Tracewick\Sampler\EventType;
  * collapses (opt-in a real store to enable). Host-wide APCu is not the alpha default.
  *
  * Separate from {@see \Tracewick\Profile\LabelPolicy} (deny/normalize before spool).
+ *
+ * @api
  */
 final readonly class CardinalityGate
 {

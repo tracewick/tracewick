@@ -6,6 +6,8 @@ namespace Tracewick\Sampler;
 
 /**
  * What the sampling timer measures.
+ *
+ * @api
  */
 enum EventType: string
 {

@@ -10,6 +10,8 @@ use Tracewick\Transport\HttpConfig;
 
 /**
  * Connection settings for a Grafana Pyroscope server or Grafana Cloud Profiles.
+ *
+ * @api
  */
 final readonly class PyroscopeConfig
 {

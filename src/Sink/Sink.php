@@ -12,6 +12,8 @@ use Tracewick\Transport\Delivery;
  * labels, and hands the bytes to a transport.
  *
  * Implementations never throw; failures are reported through the returned {@see Delivery}.
+ *
+ * @api
  */
 interface Sink
 {

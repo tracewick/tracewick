@@ -9,6 +9,8 @@ use Tracewick\Sampler\Frame;
 
 /**
  * Frames and stacks decoded from a compact spool payload, before wrapping into a {@see \Tracewick\Profile\Profile}.
+ *
+ * @internal
  */
 final readonly class ProfileParts
 {

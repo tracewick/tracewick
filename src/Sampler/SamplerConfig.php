@@ -11,6 +11,8 @@ use Tracewick\Exception\LogicException;
  *
  * Invalid values throw immediately: configuration is built at boot or in tests, where a clear
  * error is more useful than a profiler that silently collects nothing.
+ *
+ * @api
  */
 final readonly class SamplerConfig
 {

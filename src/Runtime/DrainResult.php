@@ -6,6 +6,8 @@ namespace Tracewick\Runtime;
 
 /**
  * What one pass of {@see SpoolDrainer} did.
+ *
+ * @api
  */
 final readonly class DrainResult
 {

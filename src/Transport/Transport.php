@@ -10,6 +10,8 @@ namespace Tracewick\Transport;
  * Transports know nothing about formats or backends; a sink decides what to send and how to
  * describe it. Implementations never throw: every failure is reported through the returned
  * {@see Delivery}, so a broken or slow destination cannot break the host application (ADR 5).
+ *
+ * @api
  */
 interface Transport
 {

@@ -64,7 +64,7 @@ final class FallbackCircuitBreakerStoreTest extends TestCase
             $file = new FileCircuitBreakerStore($directory->path . '/blocked/state');
             $store = new FallbackCircuitBreakerStore(
                 $file,
-                new DiagnosticLogger($logger, $directory->path . '/logs', clock: new ManualClock()),
+                new DiagnosticLogger($logger, clock: new ManualClock()),
             );
 
             $attempt = $store->acquire(0, 1_000, 5_000);

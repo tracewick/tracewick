@@ -6,6 +6,8 @@ namespace Tracewick\Diagnostics;
 
 /**
  * No-op counters for tests and hosts that do not want host-wide metrics.
+ *
+ * @api
  */
 final class NullCounterStore implements CounterStore
 {

@@ -6,6 +6,8 @@ namespace Tracewick\Transport;
 
 /**
  * What a {@see CircuitBreakerTransport} remembers between deliveries.
+ *
+ * @api
  */
 final readonly class CircuitBreakerState
 {

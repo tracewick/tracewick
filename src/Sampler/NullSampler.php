@@ -12,6 +12,8 @@ use Tracewick\Clock\SystemClock;
  *
  * It keeps the configured period and event type so that its empty batches still describe what
  * would have been collected.
+ *
+ * @api
  */
 final class NullSampler implements Sampler
 {

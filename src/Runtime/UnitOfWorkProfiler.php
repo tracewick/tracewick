@@ -45,6 +45,8 @@ use Tracewick\Transport\DeliveryStatus;
  * profile it concerns (ADR 5). {@see diagnostics()} counts what happened, and a
  * {@see DiagnosticLogger} reports problems to the application's logger. With a {@see \Tracewick\Sink\SpoolSink} a flush is a local file
  * write; with a sink that sends over the network the work of the flush depends on the backend.
+ *
+ * @api
  */
 final class UnitOfWorkProfiler
 {
@@ -114,6 +116,9 @@ final class UnitOfWorkProfiler
     private readonly \Closure $random;
 
     /**
+     * The random and shutdown-registration overrides are internal test seams; normal defaults
+     * and the finishRequest callback are part of the public construction API.
+     *
      * @param ?\Closure(): void                 $finishRequest            ends the response to the client; `fastcgi_finish_request()` by default
      * @param ?\Closure(callable(): void): void $registerShutdownFunction `register_shutdown_function()` by default
      * @param ?\Closure(): float                $random                   a random number from 0 inclusive to 1 exclusive

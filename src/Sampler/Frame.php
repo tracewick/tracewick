@@ -6,6 +6,8 @@ namespace Tracewick\Sampler;
 
 /**
  * One frame of a sampled call stack.
+ *
+ * @api
  */
 final readonly class Frame
 {

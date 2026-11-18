@@ -12,6 +12,8 @@ use Tracewick\Exception\LogicException;
  * Stacks with the same sequence of frames have their weights added. The merged window is the
  * earliest start and the latest end. Every profile must share event type, period and labels.
  * Structural caps come from {@see BoundedProfileBuilder}; excess weight becomes `[overflow]`.
+ *
+ * @internal
  */
 final readonly class ProfileMerger
 {

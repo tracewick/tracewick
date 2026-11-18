@@ -168,6 +168,12 @@ experimental PHP 8.6 RC job that does not block merges.
 
 ## Rules
 
+- Classify every library type as `@api` or `@internal`. Review public member and named-argument
+  compatibility using [the API policy](docs/compatibility.md); test seams are explicitly excluded.
+- Before an RC, check the Symfony bridge against the proposed core source with its existing
+  unit/functional tests, without adding an Excimer requirement. Record actual pins/results;
+  its normal released `^0.2` dependency is not evidence about an unreleased 1.0 candidate.
+
 - **Fail-open.** Library code must never throw into, block, or noticeably slow down the host
   application. Failures are swallowed, counted and reported through diagnostics.
 - **Coding style** is [PER-CS 2.0](https://www.php-fig.org/per/coding-style/), enforced by

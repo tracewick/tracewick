@@ -10,6 +10,8 @@ use Tracewick\Sampler\EventType;
  * Stable hash of the aggregation key from ADR 12, for spool file names and shard directories.
  *
  * Key: application, labels (sorted by key), event_type, period_ns.
+ *
+ * @internal
  */
 final readonly class SpoolAggregationKey
 {

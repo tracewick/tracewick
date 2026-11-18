@@ -12,6 +12,8 @@ namespace Tracewick\Transport;
  * by an atomic rename. {@see acquire()} / {@see complete()} take a non-blocking exclusive flock on
  * a sibling lock file (with a short retry budget). When the lock cannot be taken, acquire denies
  * the send (Skipped) and complete returns false — never an unlocked read-modify-write.
+ *
+ * @internal
  */
 final readonly class FileCircuitBreakerStore implements CircuitBreakerStore
 {
