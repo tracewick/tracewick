@@ -16,8 +16,10 @@ and workloads, not automatically to your application.
   `pulse()` outside the sampling callback. Do not combine prepend with a second profiler for
   the same request. Construct/start profiling after fork/exec, never in a forking parent.
 - [ ] **Keep delivery outside request workers.** Use `SpoolSink` and one normal reader per
-  spool: either the [Go agent](https://github.com/tracewick/agent#readme) or
-  [PHP drain](drain.md). Do not start both against the same spool as the normal deployment.
+  spool. Prefer the [Go agent](https://github.com/tracewick/agent#readme) for a long-running
+  sidecar with HTTP connection reuse. [PHP drain](drain.md) ships with the library for
+  cron/`--once` and as a reference implementation. Do not run both against the same spool
+  as the normal deployment.
 - [ ] **Share the same local volume and identity.** Check the writer and reader see the same
   files, not separate container directories. Prefer the same numeric UID: writer-created
   directories are `0700` and files `0600`, so matching GIDs alone do not grant access.
