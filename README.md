@@ -37,9 +37,10 @@ The [public API boundary and compatibility policy](docs/compatibility.md) identi
 - [ext-excimer](https://www.mediawiki.org/wiki/Excimer) to collect profiles (optional at install time)
 
 **Fail-open.** Public profiler/sink calls catch failures and never throw into the host application.
-Without ext-excimer the library is a **no-op** (warn once, then idle). Turn profiling off without a
-deploy via the kill switch: `TRACEWICK_DISABLE_FILE` → `TRACEWICK_ENABLED` / `tracewick.enabled`
-([docs/runtime.md](docs/runtime.md), [ADR 5](docs/adr/0005-fail-open-policy.md)).
+Without ext-excimer the library is a **no-op** (warn once, then idle). Disable collection through
+the kill switch: `TRACEWICK_DISABLE_FILE` → `TRACEWICK_ENABLED` / `tracewick.enabled`.
+Recreate/restart workers to apply it to existing profilers; see the
+[operations checklist, troubleshooting and rollback](docs/operations.md).
 
 ## Installation
 
