@@ -47,6 +47,9 @@ deploy via the kill switch: `TRACEWICK_DISABLE_FILE` → `TRACEWICK_ENABLED` / `
 composer require tracewick/tracewick
 ```
 
+For releases with signed assets, [verify the release ZIP and SBOM](docs/verify-release.md).
+The v0.1.0 and v0.2.0 releases are unsigned; Composer does not verify Cosign automatically.
+
 Install the extension separately. Prefer [PIE](https://php.github.io/pie/) (PECL is deprecated):
 
 ```bash
