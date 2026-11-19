@@ -52,6 +52,10 @@ values are `0`, `false`, `off`, and `no`. The first profiler constructed in the 
 warning once (to the PSR-3 logger when given, otherwise to `error_log`) that names the reason:
 disabled, missing extension, or init failure.
 
+The switch is evaluated when the sampler is created, not at every `start()` or `pulse()`.
+The disable-file result is cached; recycle workers to apply a change to existing profilers.
+See [operating, disabling and rolling back Tracewick](operations.md).
+
 When constructing `SamplerConfig` yourself, set `projectRoot` to the application base path so frame
 files and closure names do not include release-directory prefixes (otherwise each deploy splits
 aggregation series).
@@ -267,6 +271,9 @@ or a full spool), **empty** (no samples — not the same as skipped), errors swa
 sampler is a no-op and why (`inactiveSampler`), and how many failures the sampler itself swallowed
 (`samplerFailures`). Under PHP-FPM a unit-of-work profiler lives for one request, so the numbers
 cover that request; in a long-running worker they add up.
+
+With `SpoolSink`, `deliveredProfiles` counts successful spool writes, not backend acceptance.
+Check the reader and Pyroscope separately; see [operations](operations.md#observe-collection-spool-and-delivery-separately).
 
 Optional host-wide counters (`Tracewick\Diagnostics\CounterStore`) survive FPM requests when APCu
 is available, otherwise a small file under the system temp dir (`CounterStoreFactory::create()`).

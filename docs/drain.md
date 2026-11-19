@@ -6,9 +6,10 @@ application only ever writes local files, and never waits for the network
 ([ADR 5](adr/0005-fail-open-policy.md), [ADR 7](adr/0007-language-neutral-spool-format.md)).
 
 It is written in PHP and ships with this library. For a long-running sidecar with HTTP keep-alive,
-prefer the Go binary [`tracewick-agent`](https://github.com/tracewick/agent). Several drains, or a
-drain and an agent, can read the same directory at the same time; each file goes to exactly one of
-them ([ADR 9](adr/0009-agent-hand-off.md)).
+prefer the Go binary [`tracewick-agent`](https://github.com/tracewick/agent). Run one normal reader
+per spool. Atomic claims coordinate concurrent readers, but delivery is at least once: a crash
+after send or a failed acknowledgement can cause a repeat. See the
+[operations checklist](operations.md) and [ADR 9](adr/0009-agent-hand-off.md).
 
 `PyroscopeSink::forward()` encodes pprof from compact spool payloads
 ([ADR 13](adr/0013-spool-v2-compact-payload.md)). Files that share an aggregation key and the same
@@ -162,8 +163,9 @@ WantedBy=multi-user.target
 * * * * * www-data /var/www/app/vendor/bin/tracewick-drain --once --time-limit=50 --spool-dir=/var/spool/tracewick --pyroscope-url=http://pyroscope:4040
 ```
 
-With cron, `--time-limit` below the cron interval keeps runs from piling up; if they do overlap,
-the runs share the files without delivering any of them twice.
+With cron, prevent overlapping runs. `--time-limit` is checked between passes, not a hard
+wall-clock deadline, so setting it below the cron interval alone does not guarantee this.
+Claims coordinate accidental overlap; they do not make delivery exactly once.
 
 Default HTTP timeouts are 200 ms connect / 1 s total (same as request-path). If Pyroscope is often
 slower than that on your network, raise them on `PyroscopeConfig` for the drain process only.
