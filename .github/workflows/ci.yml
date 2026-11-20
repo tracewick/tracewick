@@ -157,7 +157,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php: ['8.2', '8.3', '8.4', '8.5']
+        php: ['8.2', '8.3', '8.4', '8.5', '8.6']
         dependencies: [lowest, highest]
     steps:
       - uses: actions/checkout@v7
@@ -165,9 +165,21 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          extensions: excimer
+          extensions: ${{ matrix.php == '8.6' && ':excimer, mbstring, dom' || 'excimer' }}
           coverage: none
-          tools: composer:v2
+          tools: ${{ matrix.php == '8.6' && 'composer:v2, pie' || 'composer:v2' }}
+
+      # Same pending release pin as the stand; blocked until 1.2.8 is published.
+      - name: Install Excimer on PHP 8.6
+        if: ${{ matrix.php == '8.6' }}
+        run: |
+          # setup-php links INI files across SAPIs; let only one CLI file enable Excimer.
+          sudo pie install 'wikimedia/excimer:1.2.8' --auto-install-build-tools --skip-enable-extension
+          printf 'extension=excimer.so\n' | sudo tee /etc/php/8.6/cli/conf.d/30-tracewick-excimer.ini
+
+      - name: Require real Excimer integration coverage
+        run: |
+          php -r 'exit(extension_loaded("excimer") ? 0 : 1);'
 
       - uses: ramsey/composer-install@v4
         with:

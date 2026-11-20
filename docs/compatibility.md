@@ -112,14 +112,14 @@ The current change introduces no new format, dual reader or automatic migration.
 
 ## Compatibility evidence
 
-Snapshot: 2026-11-18. This lists declared ranges and direct evidence separately; it is not a
+Snapshot: 2026-11-20. This lists declared ranges and direct evidence separately; it is not a
 claim that every possible version combination or platform has been tested.
 
 | Component | Declared range / status | Direct evidence |
 | --- | --- | --- |
-| Core PHP | `~8.2.0 || ~8.3.0 || ~8.4.0 || ~8.5.0` | PHPUnit lowest/highest matrix; real Excimer stand on supported PHP versions |
-| PHP 8.6 RC | Experimental; excluded by Composer's supported PHP constraint | Non-blocking stand job with Excimer `dev-master`; not promoted to stable support |
-| Excimer | Optional at installation; needed for sampling | Stable stand pin 1.2.7; older/newer versions are not certified by that pin |
+| Core PHP | `~8.2.0 || ~8.3.0 || ~8.4.0 || ~8.5.0 || ~8.6.0` (8.6 proposed, pending release validation) | PHP 8.2–8.5 PHPUnit matrix and real Excimer stand; 8.6 admission is blocked below |
+| PHP 8.6 | Stable PHP; Tracewick support pending | Blocking stand and lowest/highest jobs reserve [Excimer 1.2.8](install-excimer.md#php-86), not yet published. Prior upstream-source probe passed; the future release is unvalidated |
+| Excimer | Optional at installation; needed for sampling | Released stand pin 1.2.7 on PHP 8.2–8.5; pending 1.2.8 on 8.6. No dev-source fallback or certification of the future release |
 | Pyroscope | Push API and pprof path | Current stand/reference app pin 2.4.3 (dependency update #85); recorded capacity/soak evidence pins 2.4.2. A second major and Grafana Cloud live validation are not established by this stand |
 | Symfony bundle | PHP 8.2–8.5; Symfony `^6.4 || ^7.0 || ^8.0`; core `^0.2` | Bundle CI uses Symfony 6.4 / 7.4 / 8.1 across selected PHP versions; runs without Excimer |
 | PHP / Go delivery | Spool v2, compact-stacks schema 1 | Shared v2 fixtures and delivery/readback tests; use tested release pairs or recorded source pins |

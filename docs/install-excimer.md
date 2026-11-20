@@ -11,13 +11,40 @@ warning.
 
 Both install paths are documented below. Prefer PIE on hosts and in Dockerfiles. The Bookworm
 development stand installs via PIE (`EXCIMER_PIE_CONSTRAINT` in `compose.yaml` /
-`docker/php/Dockerfile`). Official PHP **8.6 RC** images no longer ship `pecl`.
+`docker/php/Dockerfile`). Official PHP **8.6** images no longer ship `pecl`.
 
 | Path | How to pin today |
 | --- | --- |
-| PIE (recommended) | `pie install wikimedia/excimer:1.2.7` (Packagist tag) |
-| PIE on PHP 8.6 RC | `pie install wikimedia/excimer:dev-master` until a release builds on 8.6 (`XtOffsetOf` removed) |
-| PECL (deprecated) | `pecl install excimer-1.2.6` (not available in `php:8.6-rc-*` images) |
+| PIE on PHP 8.2–8.5 (recommended) | `pie install wikimedia/excimer:1.2.7` (Packagist tag) |
+| PIE on PHP 8.6 | Awaiting release; the stand reserves `1.2.8`. See [PHP 8.6](#php-86) |
+| PECL (deprecated) | `pecl install excimer-1.2.6` (not available in `php:8.6-*` images) |
+
+## PHP 8.6
+
+PHP 8.6.0 is stable as of 19 November 2026. The latest released Excimer, 1.2.7, fails to build on
+8.6 because Zend removed `XtOffsetOf` and changed the INI integer API. Upstream fixed both in
+[commit `34183f9`](https://github.com/wikimedia/php-excimer/commit/34183f9487bf95cd5b8dab50af737d19de5179f7),
+which has not yet been released.
+
+The 8.6 stand and CI reserve the exact next patch version, **1.2.8**. As of 20 November 2026,
+that release does not exist and its number has not been announced by upstream. This is a
+waiting dependency pin, not an available installation or a claim of compatibility:
+
+```bash
+# Expected to fail until this version is published on Packagist.
+pie install wikimedia/excimer:1.2.8
+```
+
+Use PHP 8.5 with released Excimer 1.2.7 in the meantime. The 8.6 jobs remain blocking and have no
+dev-source fallback. Once 1.2.8 is published, manually rerun CI to download, build and test it;
+a tag in the upstream repository does not automatically rerun our workflows. Green results also
+require that the release includes the fix and passes the suite. If upstream releases the fix
+under another version, change the exact pin before retrying. Local Docker retries should use
+[a fresh build](../CONTRIBUTING.md#updating-the-stand), not an existing dev-based image.
+
+The earlier successful probe against upstream commit `34183f9` is source-level evidence only;
+it does not validate the future 1.2.8 package. Historical benchmarks and soak reports retain
+their original PHP/extension versions.
 
 ## PIE (recommended)
 
@@ -97,7 +124,9 @@ docker run --rm tracewick-php-alpine:local php -m | grep -i excimer
 
 This image is **not** published to Docker Hub. Copy the `RUN` / `COPY --from=…pie` block into your
 application image, or use it only to verify that Excimer still builds on Alpine when you bump the
-PIE constraint (the Bookworm stand uses the same Packagist pin via `EXCIMER_PIE_CONSTRAINT`).
+PIE constraint. Prefer `make alpine-php-build PHP_VERSION=8.6` for 8.6: Make passes the
+pending 1.2.8 release pin. Direct Docker builds default to 1.2.7 and need an explicit
+`--build-arg EXCIMER_PIE_CONSTRAINT=1.2.8` on 8.6. These builds cannot pass until that release exists.
 
 ## After install
 
