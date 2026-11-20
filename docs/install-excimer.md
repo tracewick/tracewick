@@ -11,13 +11,32 @@ warning.
 
 Both install paths are documented below. Prefer PIE on hosts and in Dockerfiles. The Bookworm
 development stand installs via PIE (`EXCIMER_PIE_CONSTRAINT` in `compose.yaml` /
-`docker/php/Dockerfile`). Official PHP **8.6 RC** images no longer ship `pecl`.
+`docker/php/Dockerfile`). Official PHP **8.6** images no longer ship `pecl`.
 
 | Path | How to pin today |
 | --- | --- |
-| PIE (recommended) | `pie install wikimedia/excimer:1.2.7` (Packagist tag) |
-| PIE on PHP 8.6 RC | `pie install wikimedia/excimer:dev-master` until a release builds on 8.6 (`XtOffsetOf` removed) |
-| PECL (deprecated) | `pecl install excimer-1.2.6` (not available in `php:8.6-rc-*` images) |
+| PIE on PHP 8.2–8.5 (recommended) | `pie install wikimedia/excimer:1.2.7` (Packagist tag) |
+| PIE on PHP 8.6 | Pinned upstream compatibility fix; see [PHP 8.6](#php-86) below |
+| PECL (deprecated) | `pecl install excimer-1.2.6` (not available in `php:8.6-*` images) |
+
+## PHP 8.6
+
+PHP 8.6.0 is stable as of 19 November 2026. The latest released Excimer, 1.2.7, fails to build on
+8.6 because Zend removed `XtOffsetOf` and changed the INI integer API. Upstream fixed both in
+[commit `34183f9`](https://github.com/wikimedia/php-excimer/commit/34183f9487bf95cd5b8dab50af737d19de5179f7),
+which has not yet been released. The stand and PHP 8.6 CI use that exact source revision:
+
+```bash
+pie install 'wikimedia/excimer:dev-master#34183f9487bf95cd5b8dab50af737d19de5179f7'
+php --ri excimer
+```
+
+This is a development snapshot, not a released extension; its reported extension version is
+still `1.2.7`. Plain `pie install wikimedia/excimer` / `:1.2.7` does not select this fix, and
+unpinned `dev-master` can change on rebuild. If you require released extension sources, use PHP
+8.5 until a compatible Excimer release is available. Tracewick's 8.6 CI checks this pinned build;
+it does not certify every Excimer revision or replace workload-specific validation. Historical
+benchmarks and soak reports retain their original PHP/extension versions.
 
 ## PIE (recommended)
 
@@ -97,7 +116,9 @@ docker run --rm tracewick-php-alpine:local php -m | grep -i excimer
 
 This image is **not** published to Docker Hub. Copy the `RUN` / `COPY --from=…pie` block into your
 application image, or use it only to verify that Excimer still builds on Alpine when you bump the
-PIE constraint (the Bookworm stand uses the same Packagist pin via `EXCIMER_PIE_CONSTRAINT`).
+PIE constraint. Prefer `make alpine-php-build PHP_VERSION=8.6` for 8.6: Make passes the
+compatibility source pin. Direct Docker builds default to 1.2.7 and need an explicit
+`--build-arg EXCIMER_PIE_CONSTRAINT='dev-master#34183f9487bf95cd5b8dab50af737d19de5179f7'` on 8.6.
 
 ## After install
 

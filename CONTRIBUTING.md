@@ -55,23 +55,25 @@ make stand-shell   # open a shell in the PHP container
 make stand-down    # stop everything and remove volumes
 ```
 
-Set `PHP_VERSION` (8.2, 8.3, 8.4 or 8.5; 8.5 by default) to use another PHP version, for example
+Set `PHP_VERSION` (8.2–8.6; 8.5 by default) to use another PHP version, for example
 `make stand-test PHP_VERSION=8.2`. Each PHP version gets its own image (`tracewick-php:<version>`),
 built on first use; after changing anything under `docker/php/`, rebuild it with
 `make stand-build`. The PHP container runs as your user, so files it creates in the working copy
 stay yours.
 
-To exercise the next PHP release candidate (Docker Hub `php:8.6-rc-cli-bookworm`):
+To test PHP 8.6 stable (Docker Hub `php:8.6-cli-bookworm`):
 
 ```bash
-make stand-build PHP_VERSION=8.6-rc
-make stand-test PHP_VERSION=8.6-rc
+make stand-build PHP_VERSION=8.6
+make stand-test PHP_VERSION=8.6
 ```
 
-The Makefile then installs Excimer via PIE from `wikimedia/excimer:dev-master` (1.2.7 does not
-build on 8.6 yet) and sets `COMPOSER_IGNORE_PLATFORM_REQ=php` because `composer.json` does not
-list `~8.6.0` until support is promoted. The Stand workflow runs this as an experimental,
-non-blocking job.
+PHP 8.6.0 was released on 19 November 2026. Excimer 1.2.7 still does not build on it
+(removed Zend APIs), so Make installs `wikimedia/excimer:dev-master#34183f9487bf95cd5b8dab50af737d19de5179f7`
+through PIE. This is an immutable upstream source pin, **not an Excimer release**. Older PHP
+versions, including the default 8.5 stand, keep the released 1.2.7 pin. Composer's PHP constraint
+includes 8.6; no platform requirement is ignored. The Stand workflow tests 8.6 as a blocking job.
+See [the installation caveat](docs/install-excimer.md#php-86).
 
 The stand is for developing and testing Tracewick only. Neither `compose.yaml` nor `docker/` ships
 in the Composer package. Its PHP image deliberately runs with strict development settings
@@ -156,15 +158,16 @@ Proxies are defined in [`docker/toxiproxy/toxiproxy.json`](docker/toxiproxy/toxi
 
 ### Updating the stand
 
-The backend images and the ext-excimer version are pinned, so the stand does not change under
-you; Dependabot proposes backend image updates in `compose.yaml` into `develop`. The PHP base image
-follows its minor version tag (`php:8.5-cli-bookworm`), so a rebuild picks up PHP patch releases.
-ext-excimer on the Bookworm stand is installed with [PIE](https://php.github.io/pie/)
-(`EXCIMER_PIE_CONSTRAINT` in `compose.yaml` / `docker/php/Dockerfile`; default
-`wikimedia/excimer:1.2.7`, or `dev-master` when `PHP_VERSION` contains `-rc`). The Alpine proof
-image uses the same Packagist pin. The `Stand` workflow builds and tests the stand on every pull
-request that touches it, on PHP 8.5, on all supported PHP versions after the merge, and on an
-experimental PHP 8.6 RC job that does not block merges.
+Backend versions and Excimer sources are pinned; Dependabot proposes backend image updates in
+`compose.yaml` into `develop`. PHP follows its minor tag (`php:8.5-cli-bookworm` by default), so
+rebuilds pick up patch releases. Composer and PIE images also follow their tooling tags.
+Excimer is installed with [PIE](https://php.github.io/pie/) (`EXCIMER_PIE_CONSTRAINT` in
+`compose.yaml` / `docker/php/Dockerfile`): 1.2.7 for PHP 8.2–8.5, the pinned upstream fix above for
+8.6. `make alpine-php-build PHP_VERSION=8.6` selects the same source pin for the Alpine proof
+image. Direct `docker compose` / `docker build` calls must supply that override themselves;
+prefer the Make targets. Replace the source pin with a tested release once the fix is published.
+The blocking `Stand` workflow builds and tests PHP 8.6 on relevant pull requests and all
+supported PHP versions on `main`, `develop` and manual runs.
 
 ## Rules
 
@@ -206,8 +209,8 @@ Tracewick follows [git flow](https://nvie.com/posts/a-successful-git-branching-m
 - Do not edit `CHANGELOG.md`: it is generated from commit messages at release time, so write the
   commit subject for the user who reads the changelog. `feat` lands under Added, `fix` under
   Fixed, `perf`, `deps` and `revert` under Changed; other types are left out.
-- Pull requests run checks on a single PHP version; the full PHP 8.2–8.5 matrix runs on `main`,
-  `develop` and nightly.
+- Heavy checks (style, analysis, coverage and mutation) run on PHP 8.5. The PHP 8.2–8.6
+  lowest/highest dependency matrix runs on every PR, `main`, `develop` and nightly.
 
 ## Releasing
 
