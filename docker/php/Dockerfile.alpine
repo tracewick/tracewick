@@ -19,7 +19,7 @@ FROM composer:2 AS composer
 
 FROM php:${PHP_VERSION}-cli-alpine
 
-# Packagist constraint for wikimedia/excimer (PIE). Make selects the PHP 8.6 source pin.
+# Packagist constraint for wikimedia/excimer (PIE). Make selects the PHP 8.6 release pin.
 ARG EXCIMER_PIE_CONSTRAINT=1.2.7
 
 COPY --from=ghcr.io/php/pie:bin /pie /usr/local/bin/pie

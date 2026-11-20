@@ -33,7 +33,7 @@ The [public API boundary and compatibility policy](docs/compatibility.md) identi
 
 ## Requirements
 
-- PHP 8.2–8.6 ([Excimer installation caveat on 8.6](docs/install-excimer.md#php-86))
+- PHP 8.2–8.5; [PHP 8.6 support awaits a released Excimer build and CI validation](docs/install-excimer.md#php-86)
 - [ext-excimer](https://www.mediawiki.org/wiki/Excimer) to collect profiles (optional at install time)
 
 **Fail-open.** Public profiler/sink calls catch failures and never throw into the host application.

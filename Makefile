@@ -3,10 +3,10 @@
 COMPOSER ?= composer
 PHP_VERSION ?= 8.5
 
-# Excimer 1.2.7 cannot build on PHP 8.6 (removed Zend APIs). Pin the upstream
-# compatibility fix until a released version includes it; keep older PHP on 1.2.7.
+# Excimer 1.2.7 cannot build on PHP 8.6 (removed Zend APIs). Reserve the next
+# patch version; 8.6 builds must stay blocked until that release is available.
 ifneq (,$(filter 8.6 8.6.%,$(PHP_VERSION)))
-EXCIMER_PIE_CONSTRAINT ?= dev-master\#34183f9487bf95cd5b8dab50af737d19de5179f7
+EXCIMER_PIE_CONSTRAINT ?= 1.2.8
 else
 EXCIMER_PIE_CONSTRAINT ?= 1.2.7
 endif
@@ -68,7 +68,7 @@ ci: ## Run every check CI runs on a pull request
 	$(COMPOSER) ci
 	$(COMPOSER) audit
 
-stand-build: ## Build the stand's PHP image (PHP_VERSION=8.5; 8.2–8.6 supported)
+stand-build: ## Build the stand's PHP image (PHP_VERSION=8.5; 8.6 awaits Excimer 1.2.8)
 	$(STAND_ENV) docker compose build php
 
 stand-up: ## Start Pyroscope, Grafana, the OTel Collector and Toxiproxy

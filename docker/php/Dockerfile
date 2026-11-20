@@ -15,8 +15,8 @@ FROM composer:2 AS composer
 
 FROM php:${PHP_VERSION}-cli-bookworm
 
-# Packagist constraint for wikimedia/excimer. Make selects an immutable upstream
-# compatibility fix for PHP 8.6 until it is released; older PHP uses the stable tag.
+# Packagist constraint for wikimedia/excimer. Make selects the pending 1.2.8
+# release for PHP 8.6; missing releases must fail the build without a dev fallback.
 ARG EXCIMER_PIE_CONSTRAINT=1.2.7
 
 COPY --from=ghcr.io/php/pie:bin /pie /usr/local/bin/pie
