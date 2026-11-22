@@ -235,7 +235,33 @@ version after it.
 
 release-please computes the version from the commits since the last release; the release pull
 request shows it in its title. To choose another version, add a `Release-As: <version>` footer to a
-commit that lands on `main`, for example the merge commit of the release branch.
+commit that lands on `main`. Put it on a parseable Conventional Commit in the release branch;
+GitHub's default `Merge pull request #N` subject is not parsed.
+
+### Release candidates
+
+The 1.0 candidate series uses `versioning: prerelease`, `prerelease-type: rc` and
+`prerelease: true` in `release-please-config.json`. The first setting controls version bumps;
+the last also marks the GitHub Release as a prerelease.
+
+For the first candidate, include this footer on the preparation commit:
+
+```text
+chore: prepare 1.0.0-rc.1
+
+Release-As: 1.0.0-rc.1
+```
+
+Follow the same two-PR procedure above: the maintainer merges the preparation branch with a
+merge commit, then reviews and merges the generated `chore: release 1.0.0-rc.1` PR. The bot
+creates `v1.0.0-rc.1`; do not create the tag or edit the generated manifest/changelog manually.
+The candidate's README installation command becomes usable after publication to Packagist.
+
+For later candidates, keep prerelease mode and update the documented candidate version;
+release-please increments the RC suffix for fixes to this series. To select a particular
+candidate explicitly, add a new `Release-As` footer. For the final release, switch `versioning`
+to `default`, set `prerelease: false`, remove `prerelease-type`, and use `Release-As: 1.0.0` on
+a Conventional Commit. Review the generated version and GitHub prerelease status before merging.
 
 ### Release automation setup (maintainers)
 

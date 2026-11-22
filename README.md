@@ -8,9 +8,9 @@ Tracewick is a sampling profiler for PHP, built on [ext-excimer](https://www.med
 meant to run continuously in production.
 
 > [!WARNING]
-> Tracewick **0.2.x is beta**. Capacity evidence for the default spool path is published; the
-> public API is still not frozen until 1.0.0 — expect breaking changes in minor releases. Pin a
-> version and read the changelog before upgrading.
+> Tracewick **1.0.0-rc.1 is a release candidate**, not the final 1.0 release. The intended public
+> API is documented below; compatibility fixes may still be needed during RC validation. Pin the
+> candidate explicitly and read the migration notes before upgrading from 0.2.
 
 The [public API boundary and compatibility policy](docs/compatibility.md) identifies intended
 1.0 contracts, internal/test-only members, tested versions and current pre-1.0 migration notes.
@@ -33,7 +33,7 @@ The [public API boundary and compatibility policy](docs/compatibility.md) identi
 
 ## Requirements
 
-- PHP 8.2–8.5 (PHP 8.6 RC has an experimental stand job; it is not yet a supported Composer range)
+- PHP 8.2–8.5 (PHP 8.6 support is pending released Excimer support; see [#95](https://github.com/tracewick/tracewick/pull/95))
 - [ext-excimer](https://www.mediawiki.org/wiki/Excimer) to collect profiles (optional at install time)
 
 **Fail-open.** Public profiler/sink calls catch failures and never throw into the host application.
@@ -45,7 +45,7 @@ Recreate/restart workers to apply it to existing profilers; see the
 ## Installation
 
 ```bash
-composer require tracewick/tracewick
+composer require 'tracewick/tracewick:1.0.0-rc.1'
 ```
 
 For releases with signed assets, [verify the release ZIP and SBOM](docs/verify-release.md).

@@ -1,8 +1,8 @@
 # Public API and compatibility
 
-Tracewick 0.x is still pre-1.0. Breaking changes may ship in minor releases; pin a version and
-read the migration notes before upgrading. The annotations below identify the intended supported
-surface for 1.0. They do not freeze today's API or announce an RC release.
+Tracewick 1.0.0-rc.1 is a release candidate for the public contract below. Pin the candidate
+explicitly and read the migration notes before upgrading from 0.2. Compatibility fixes may still
+be needed during RC validation; the stable-version promise starts with the final 1.0.0 release.
 
 ## PHP API boundary
 
@@ -112,13 +112,13 @@ The current change introduces no new format, dual reader or automatic migration.
 
 ## Compatibility evidence
 
-Snapshot: 2026-11-18. This lists declared ranges and direct evidence separately; it is not a
+Snapshot: 2026-11-22. This lists declared ranges and direct evidence separately; it is not a
 claim that every possible version combination or platform has been tested.
 
 | Component | Declared range / status | Direct evidence |
 | --- | --- | --- |
 | Core PHP | `~8.2.0 || ~8.3.0 || ~8.4.0 || ~8.5.0` | PHPUnit lowest/highest matrix; real Excimer stand on supported PHP versions |
-| PHP 8.6 RC | Experimental; excluded by Composer's supported PHP constraint | Non-blocking stand job with Excimer `dev-master`; not promoted to stable support |
+| PHP 8.6 | Excluded by Composer's supported PHP constraint | Released Excimer 1.2.7 does not build on 8.6; support remains pending in [#95](https://github.com/tracewick/tracewick/pull/95), outside this candidate |
 | Excimer | Optional at installation; needed for sampling | Stable stand pin 1.2.7; older/newer versions are not certified by that pin |
 | Pyroscope | Push API and pprof path | Current stand/reference app pin 2.4.3 (dependency update #85); recorded capacity/soak evidence pins 2.4.2. A second major and Grafana Cloud live validation are not established by this stand |
 | Symfony bundle | PHP 8.2–8.5; Symfony `^6.4 || ^7.0 || ^8.0`; core `^0.2` | Bundle CI uses Symfony 6.4 / 7.4 / 8.1 across selected PHP versions; runs without Excimer |
@@ -130,11 +130,19 @@ Composer constraints and publish the actual tested package versions/source pins.
 run using only the released 0.2 dependency does not prove compatibility with a future RC. Do not
 invent compatible RC versions before they exist, or require Excimer in bridge CI for this check.
 
+The [current-development benchmark campaign](https://github.com/tracewick/benchmarks/pull/11)
+records a source preflight of core `edb2427` with bundle `7928d3e`, including its existing
+unit/functional suite and real-Excimer delivery checks. This candidate starts from that core
+snapshot; preparation changes release configuration and documentation, not runtime code.
+Source preflight does not verify published RC packages. Bundle constraint changes remain in
+[bundle #25](https://github.com/tracewick/symfony-bundle/pull/25); repeat Composer installation
+against the actual published core RC before releasing the bundle pair.
+
 On Linux with Excimer 1.2.7, initialize/start profiling after a worker fork or a fresh `exec`.
 Inherited native timer state is not fork-safe; `stop()` and PID detection do not establish
 safety. See [runtime.md](runtime.md#forking-workers) and [issue #86](https://github.com/tracewick/tracewick/issues/86).
 
-## Migration for this pre-1.0 change
+## Migration from 0.2 to 1.0.0-rc.1
 
 - `DiagnosticLogger` no longer accepts `directory`; it was ignored. Use
   `new DiagnosticLogger($logger, intervalMs: 1_000, clock: $clock)`. For positional calls, the
