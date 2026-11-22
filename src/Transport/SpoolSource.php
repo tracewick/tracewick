@@ -15,6 +15,8 @@ namespace Tracewick\Transport;
  *
  * Implementations never throw. A failure to claim looks like an empty spool, and a claim that
  * cannot be finished is returned to the spool once it is considered abandoned.
+ *
+ * @api
  */
 interface SpoolSource
 {

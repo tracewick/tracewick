@@ -5,6 +5,7 @@
 /.rector.cache/
 /.php-cs-fixer.cache
 /build/
+__pycache__/
 /artifacts/
 /.cursor/
 /phpstan.neon

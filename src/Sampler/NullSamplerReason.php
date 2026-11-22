@@ -6,6 +6,8 @@ namespace Tracewick\Sampler;
 
 /**
  * Why a no-op sampler is used instead of a real one.
+ *
+ * @api
  */
 enum NullSamplerReason: string
 {

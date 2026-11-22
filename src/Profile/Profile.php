@@ -15,6 +15,8 @@ use Tracewick\Sampler\SampleBatch;
  * Frames are stored once in {@see $frames} and referenced by index from each {@see Stack}, which
  * keeps memory proportional to the number of distinct functions rather than to the number of
  * samples. Encoders turn a profile into bytes and never change it.
+ *
+ * @api
  */
 final readonly class Profile
 {

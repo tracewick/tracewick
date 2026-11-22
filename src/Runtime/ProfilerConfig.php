@@ -9,6 +9,8 @@ use Tracewick\Profile\Labels;
 
 /**
  * Settings of a {@see UnitOfWorkProfiler}.
+ *
+ * @api
  */
 final readonly class ProfilerConfig
 {

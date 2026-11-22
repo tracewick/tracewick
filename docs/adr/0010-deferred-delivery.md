@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-10-29
-- Updated: 2026-11-01
+- Updated: 2026-11-17
 
 ## Context
 
@@ -25,6 +25,20 @@ does not. Output after that call is discarded.
 
 Why not always call `fastcgi_finish_request()`: it would silently drop later shutdown output
 (toolbar, logger) and is hard to debug. Opt-in keeps the default predictable.
+
+## Automatic UoW rotation and diagnostics
+
+Automatic duration rotation remains enabled from the Excimer segment listener. It buffers
+completed profiles in memory; it does not deliver them. Runtime counter-store and logger calls
+from this path are deferred to an explicit `stop()`, `pulse()` or `flush()` outside the callback
+(including shutdown). `diagnostics()` remains an immediate, in-memory view.
+
+Deferred state consists of cumulative totals for a fixed set of counter keys and the latest
+rotation error, rather than a queue of messages. Overflow and error logs are summarized at the
+next publication. Publication snapshots are acknowledged before calling external code; callbacks
+arriving during publication remain pending for the next call. A failed external counter update
+is not retried, since it may already have applied its increment; the failure remains observable
+in local diagnostics. External diagnostics may therefore lag, and are best-effort.
 
 ## Consequences
 

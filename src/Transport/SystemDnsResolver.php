@@ -6,6 +6,8 @@ namespace Tracewick\Transport;
 
 /**
  * Resolves host names with {@see gethostbynamel()}, preferring the first IPv4 address.
+ *
+ * @api
  */
 final readonly class SystemDnsResolver implements DnsResolver
 {

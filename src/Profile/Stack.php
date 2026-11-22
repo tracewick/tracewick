@@ -6,6 +6,8 @@ namespace Tracewick\Profile;
 
 /**
  * A distinct call stack of a profile and how often it was observed.
+ *
+ * @api
  */
 final readonly class Stack
 {

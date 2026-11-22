@@ -8,6 +8,8 @@ use Tracewick\Exception\LogicException;
 
 /**
  * Where an {@see HttpTransport} sends payloads and how long it may take.
+ *
+ * @api
  */
 final readonly class HttpConfig
 {

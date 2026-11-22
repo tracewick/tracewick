@@ -25,6 +25,8 @@ use Tracewick\Transport\Transport;
  * By default files are written by a {@see SpoolTransport}.
  *
  * @see https://github.com/tracewick/tracewick/blob/main/docs/spool-format.md
+ *
+ * @api
  */
 final readonly class SpoolSink implements Sink
 {

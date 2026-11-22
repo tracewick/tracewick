@@ -10,6 +10,8 @@ use Tracewick\Sink\ApplicationName;
 
 /**
  * Settings of a {@see ContinuousProfiler}.
+ *
+ * @api
  */
 final readonly class ContinuousProfilerConfig
 {

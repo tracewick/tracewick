@@ -10,6 +10,8 @@ namespace Tracewick\Clock;
  * Timestamps never go backwards for small NTP adjustments. When wall time and the
  * monotonic projection diverge by more than one second (VM suspend, large NTP step),
  * the clock re-anchors so long-lived workers do not stamp profiles in the past.
+ *
+ * @api
  */
 final class SystemClock implements Clock
 {
@@ -34,7 +36,7 @@ final class SystemClock implements Clock
      * @param ?\Closure(): int $wallNs       Unix time in nanoseconds; defaults to microtime
      * @param ?\Closure(): int $monotonicNs  monotonic nanoseconds; defaults to hrtime
      *
-     * @internal the callables exist so tests can force drift without sleeping
+     * The callable overrides are test seams excluded from the compatibility promise.
      */
     public function __construct(?\Closure $wallNs = null, ?\Closure $monotonicNs = null)
     {

@@ -9,6 +9,8 @@ namespace Tracewick\Transport;
  *
  * Parameters are destination metadata, such as the query string of an HTTP request; a transport
  * that has no use for them ignores them.
+ *
+ * @api
  */
 final readonly class Payload
 {

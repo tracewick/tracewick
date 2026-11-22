@@ -15,8 +15,11 @@ use Tracewick\Clock\SystemClock;
  * and the last one is kept for diagnostics.
  *
  * Samples are aggregated by stack as the native flush callback drains the Excimer log, so memory
- * stays proportional to unique stacks rather than to the number of timer hits. After `pcntl_fork`
- * the sampler rebuilds its `ExcimerProfiler` on the next start or flush.
+ * stays proportional to unique stacks rather than to the number of timer hits. A PID change resets
+ * PHP-side state, but inherited native timers are not fork-safe. Start profiling only after worker
+ * processes have forked; see docs/runtime.md.
+ *
+ * @api
  */
 final class ExcimerSampler implements Sampler
 {
@@ -49,6 +52,9 @@ final class ExcimerSampler implements Sampler
         private readonly SamplerConfig $config,
         ?Clock $clock = null,
     ) {
+        // Native ingestion and automatic UoW rotation must not invoke an autoloader.
+        class_exists(Frame::class);
+        class_exists(Sample::class);
         $this->clock = $clock ?? new SystemClock();
         $this->aggregator = new StackAggregator($config->maxUniqueStacks);
         $pid = getmypid();
@@ -64,6 +70,8 @@ final class ExcimerSampler implements Sampler
      * write the spool, or send HTTP — those belong in the application loop (see ContinuousProfiler).
      *
      * @param ?\Closure(): void $listener
+     *
+     * @internal runtime wiring; not a user extension callback
      */
     public function setSegmentListener(?\Closure $listener): void
     {
@@ -104,7 +112,8 @@ final class ExcimerSampler implements Sampler
     {
         try {
             $this->recreateAfterFork();
-            $this->converter->ingestLog($this->profiler->flush(), $this->aggregator);
+            // flush() invokes onNativeFlush(), which ingests the returned log exactly once.
+            $this->profiler->flush();
         } catch (\Throwable $e) {
             $this->recordFailure($e);
         }

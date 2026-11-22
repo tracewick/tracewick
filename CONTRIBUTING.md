@@ -168,6 +168,12 @@ experimental PHP 8.6 RC job that does not block merges.
 
 ## Rules
 
+- Classify every library type as `@api` or `@internal`. Review public member and named-argument
+  compatibility using [the API policy](docs/compatibility.md); test seams are explicitly excluded.
+- Before an RC, check the Symfony bridge against the proposed core source with its existing
+  unit/functional tests, without adding an Excimer requirement. Record actual pins/results;
+  its normal released `^0.2` dependency is not evidence about an unreleased 1.0 candidate.
+
 - **Fail-open.** Library code must never throw into, block, or noticeably slow down the host
   application. Failures are swallowed, counted and reported through diagnostics.
 - **Coding style** is [PER-CS 2.0](https://www.php-fig.org/per/coding-style/), enforced by
@@ -216,13 +222,46 @@ Releases follow git flow and are automated with
 4. The workflow opens a pull request merging `main` back into `develop`. Merge it with a merge
    commit.
 
+The signed-asset job builds a package ZIP and package SBOM from the exact tag,
+signs their checksums with keyless Cosign, and verifies the downloaded assets
+with standard Cosign/SHA-256 tools. Normal Composer/Packagist installation
+is unchanged and does not verify Cosign automatically. Existing releases remain
+unsigned; first publication through this job must confirm the signing path.
+See [verification, SBOM scope and recovery](docs/verify-release.md).
+
 Before 1.0.0, `feat` bumps the minor version and `fix` the patch version. A breaking change
 (`feat!:` or a `BREAKING CHANGE:` footer) bumps the minor version until 1.0.0 and the major
 version after it.
 
 release-please computes the version from the commits since the last release; the release pull
 request shows it in its title. To choose another version, add a `Release-As: <version>` footer to a
-commit that lands on `main`, for example the merge commit of the release branch.
+commit that lands on `main`. Put it on a parseable Conventional Commit in the release branch;
+GitHub's default `Merge pull request #N` subject is not parsed.
+
+### Release candidates
+
+The 1.0 candidate series uses `versioning: prerelease`, `prerelease-type: rc` and
+`prerelease: true` in `release-please-config.json`. The first setting controls version bumps;
+the last also marks the GitHub Release as a prerelease.
+
+For the first candidate, include this footer on the preparation commit:
+
+```text
+chore: prepare 1.0.0-rc.1
+
+Release-As: 1.0.0-rc.1
+```
+
+Follow the same two-PR procedure above: the maintainer merges the preparation branch with a
+merge commit, then reviews and merges the generated `chore: release 1.0.0-rc.1` PR. The bot
+creates `v1.0.0-rc.1`; do not create the tag or edit the generated manifest/changelog manually.
+The candidate's README installation command becomes usable after publication to Packagist.
+
+For later candidates, keep prerelease mode and update the documented candidate version;
+release-please increments the RC suffix for fixes to this series. To select a particular
+candidate explicitly, add a new `Release-As` footer. For the final release, switch `versioning`
+to `default`, set `prerelease: false`, remove `prerelease-type`, and use `Release-As: 1.0.0` on
+a Conventional Commit. Review the generated version and GitHub prerelease status before merging.
 
 ### Release automation setup (maintainers)
 

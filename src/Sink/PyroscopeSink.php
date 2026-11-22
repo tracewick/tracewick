@@ -35,6 +35,8 @@ use Tracewick\Transport\Transport;
  * `tracewick-drain`, so the worker never waits on the network.
  *
  * @see https://grafana.com/docs/pyroscope/latest/reference-server-api/
+ *
+ * @api
  */
 final readonly class PyroscopeSink implements Sink, SpoolForwarder
 {
@@ -137,7 +139,7 @@ final readonly class PyroscopeSink implements Sink, SpoolForwarder
             $config->circuitBreaker,
             $clock,
             $config->circuitBreaker->storeFor($http->url . "\n" . $config->tenantId),
-            new DiagnosticLogger($logger, $config->circuitBreaker->stateDirectory),
+            new DiagnosticLogger($logger),
         );
     }
 

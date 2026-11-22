@@ -16,6 +16,8 @@ use Tracewick\Clock\Clock;
  * `getenv` → `ini_get('tracewick.enabled')`. Unset or empty means enabled. The disable-file path
  * comes from `TRACEWICK_DISABLE_FILE` using the same source order; its existence is `stat`'d at
  * most once per process.
+ *
+ * @api
  */
 final class SamplerFactory
 {

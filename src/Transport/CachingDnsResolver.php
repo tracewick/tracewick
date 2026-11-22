@@ -16,6 +16,8 @@ use Tracewick\Clock\SystemClock;
  * that would force {@see stream_socket_client()} to resolve again unboundedly.
  *
  * Concurrent drain workers each keep their own cache.
+ *
+ * @api
  */
 final class CachingDnsResolver implements DnsResolver
 {

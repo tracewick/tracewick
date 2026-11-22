@@ -10,6 +10,8 @@ namespace Tracewick\Transport;
  * The count may briefly overshoot {@see SpoolConfig::$maxFiles} under concurrent writers; that is
  * accepted (soft admission). A full rescan runs at least every {@see self::REFRESH_EVERY_WRITES}
  * successful writes or when the cache is older than {@see self::TTL_NS}.
+ *
+ * @internal
  */
 final class SpoolAdmissionState
 {

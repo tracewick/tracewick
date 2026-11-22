@@ -6,11 +6,13 @@ namespace Tracewick\Diagnostics;
 
 /**
  * Picks APCu when available, otherwise a file under the given directory (or the system temp dir).
+ *
+ * @api
  */
 final class CounterStoreFactory
 {
     /**
-     * @param ?callable(): bool $apcuAvailable override for tests; defaults to ext-apcu enabled
+     * @param ?callable(): bool $apcuAvailable internal test seam; defaults to ext-apcu enabled
      */
     public static function create(?string $directory = null, ?callable $apcuAvailable = null): CounterStore
     {

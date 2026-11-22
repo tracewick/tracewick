@@ -9,6 +9,8 @@ use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Tracewick\Clock\SystemClock;
+use Tracewick\Diagnostics\ArrayCounterStore;
+use Tracewick\Diagnostics\CounterStore;
 use Tracewick\Diagnostics\DiagnosticLogger;
 use Tracewick\Diagnostics\HostCounterKeys;
 use Tracewick\Diagnostics\NullCounterStore;
@@ -35,11 +37,11 @@ use Tracewick\Tests\Support\ManualClock;
 use Tracewick\Tests\Support\RecordingLogger;
 use Tracewick\Tests\Support\RecordingSink;
 use Tracewick\Tests\Support\ScriptedSampler;
-use Tracewick\Tests\Support\TemporaryDirectory;
 use Tracewick\Transport\AtomicFile;
 use Tracewick\Transport\Delivery;
 
 #[CoversClass(UnitOfWorkProfiler::class)]
+#[UsesClass(ArrayCounterStore::class)]
 #[UsesClass(ProfilerConfig::class)]
 #[UsesClass(Labels::class)]
 #[UsesClass(Profile::class)]
@@ -69,8 +71,6 @@ final class UnitOfWorkProfilerTest extends TestCase
 
     private RecordingLogger $logger;
 
-    private TemporaryDirectory $logDirectory;
-
     private RecordingSink $sink;
 
     /** @var list<string> */
@@ -86,12 +86,93 @@ final class UnitOfWorkProfilerTest extends TestCase
         $this->sampler = new ScriptedSampler();
         $this->sink = new RecordingSink();
         $this->logger = new RecordingLogger();
-        $this->logDirectory = new TemporaryDirectory();
     }
 
-    protected function tearDown(): void
+    public function testRotationDuringPublicationIsPublishedOnTheNextCall(): void
     {
-        $this->logDirectory->remove();
+        $clock = new ManualClock(0);
+        $recorded = new ArrayCounterStore();
+        $counters = $this->createMock(CounterStore::class);
+        $profiler = new UnitOfWorkProfiler(
+            $this->sampler,
+            $this->sink,
+            new ProfilerConfig(sampleRate: 1.0, maxProfileDurationSeconds: 1),
+            clock: $clock,
+            counters: $counters,
+        );
+        $interrupted = false;
+        $counters->method('increment')->willReturnCallback(static function (string $key, int $by = 1) use ($recorded, $clock, $profiler, &$interrupted): void {
+            $recorded->increment($key, $by);
+            if ($key === HostCounterKeys::PROFILES_COLLECTED && !$interrupted) {
+                $interrupted = true;
+                $clock->advanceNs(1_000_000_000);
+                (new \ReflectionMethod($profiler, 'onSegment'))->invoke($profiler);
+                $profiler->pulse();
+            }
+        });
+        $this->sampler->willSample('first')->willSample('second');
+        $profiler->start();
+        $clock->advanceNs(1_000_000_000);
+        (new \ReflectionMethod($profiler, 'onSegment'))->invoke($profiler);
+        $profiler->flush();
+        self::assertSame(2, $profiler->diagnostics()->collectedProfiles);
+        self::assertSame(1, $recorded->get(HostCounterKeys::PROFILES_COLLECTED));
+        self::assertSame(['first', 'second'], $this->sink->functions());
+        $profiler->flush();
+        self::assertSame(2, $recorded->get(HostCounterKeys::PROFILES_COLLECTED));
+        $profiler->flush();
+        self::assertSame(2, $recorded->get(HostCounterKeys::PROFILES_COLLECTED));
+    }
+
+    public function testCallbackErrorsArePublishedOnceAtAnExplicitStop(): void
+    {
+        $clock = new ManualClock(0);
+        $counters = new ArrayCounterStore();
+        $profiler = new UnitOfWorkProfiler(
+            $this->sampler,
+            $this->sink,
+            new ProfilerConfig(sampleRate: 1.0, maxProfileDurationSeconds: 1),
+            logger: new DiagnosticLogger($this->logger),
+            clock: $clock,
+            counters: $counters,
+        );
+        $profiler->start();
+        $error = new \RuntimeException('stop failed');
+        $this->sampler->willFail('stop', $error);
+        $clock->advanceNs(1_000_000_000);
+        (new \ReflectionMethod($profiler, 'onSegment'))->invoke($profiler);
+        self::assertSame($error, $profiler->lastFailure());
+        self::assertSame(1, $profiler->diagnostics()->swallowedErrors);
+        self::assertSame(0, $counters->get(HostCounterKeys::PROFILES_SWALLOWED));
+        self::assertSame([], $this->logger->lines());
+        $profiler->stop();
+        self::assertSame(1, $counters->get(HostCounterKeys::PROFILES_SWALLOWED));
+        self::assertSame($error, $this->logger->records[0]['context']['exception'] ?? null);
+        $profiler->flush();
+        self::assertSame(1, $counters->get(HostCounterKeys::PROFILES_SWALLOWED));
+        self::assertCount(1, $this->logger->records);
+    }
+
+    public function testBrokenDeferredCounterDoesNotEscapeOrLoseTheProfile(): void
+    {
+        $clock = new ManualClock(0);
+        $counters = $this->createMock(CounterStore::class);
+        $error = new \RuntimeException('counter failed');
+        $counters->method('increment')->willThrowException($error);
+        $profiler = new UnitOfWorkProfiler(
+            $this->sampler,
+            $this->sink,
+            new ProfilerConfig(sampleRate: 1.0, maxProfileDurationSeconds: 1),
+            clock: $clock,
+            counters: $counters,
+        );
+        $this->sampler->willSample('work');
+        $profiler->start();
+        $clock->advanceNs(1_000_000_000);
+        (new \ReflectionMethod($profiler, 'onSegment'))->invoke($profiler);
+        $profiler->pulse();
+        self::assertSame($error, $profiler->lastFailure());
+        self::assertSame(1, $profiler->bufferedProfiles());
     }
 
     public function testBuffersAProfileUntilTheFlush(): void
@@ -415,7 +496,7 @@ final class UnitOfWorkProfilerTest extends TestCase
             null,
             null,
             null,
-            new DiagnosticLogger($this->logger, $this->logDirectory->path, clock: new ManualClock()),
+            new DiagnosticLogger($this->logger, clock: new ManualClock()),
         );
 
         self::assertSame(NullSamplerReason::ExtensionMissing, $profiler->diagnostics()->inactiveSampler);
@@ -427,7 +508,7 @@ final class UnitOfWorkProfilerTest extends TestCase
         new UnitOfWorkProfiler(
             new NullSampler(NullSamplerReason::Disabled, clock: new ManualClock()),
             $this->sink,
-            logger: new DiagnosticLogger($this->logger, $this->logDirectory->path, clock: new ManualClock()),
+            logger: new DiagnosticLogger($this->logger, clock: new ManualClock()),
         );
 
         self::assertSame(
@@ -442,7 +523,7 @@ final class UnitOfWorkProfilerTest extends TestCase
         new UnitOfWorkProfiler(
             new NullSampler(NullSamplerReason::Disabled, clock: new ManualClock()),
             $this->sink,
-            logger: new DiagnosticLogger($this->logger, $this->logDirectory->path, clock: new ManualClock()),
+            logger: new DiagnosticLogger($this->logger, clock: new ManualClock()),
         );
 
         self::assertSame(
@@ -458,7 +539,7 @@ final class UnitOfWorkProfilerTest extends TestCase
         new UnitOfWorkProfiler(
             new NullSampler(NullSamplerReason::InitializationFailed, cause: $cause, clock: new ManualClock()),
             $this->sink,
-            logger: new DiagnosticLogger($this->logger, $this->logDirectory->path, clock: new ManualClock()),
+            logger: new DiagnosticLogger($this->logger, clock: new ManualClock()),
         );
 
         self::assertSame(
@@ -514,7 +595,7 @@ final class UnitOfWorkProfilerTest extends TestCase
                 $this->shutdownFunctions[] = $callback;
             },
             null,
-            new DiagnosticLogger($this->logger, $this->logDirectory->path, clock: new ManualClock()),
+            new DiagnosticLogger($this->logger, clock: new ManualClock()),
             $clock,
         );
         $this->sampler->willSample('first')->willSample('second');
@@ -543,7 +624,7 @@ final class UnitOfWorkProfilerTest extends TestCase
             null,
             null,
             null,
-            new DiagnosticLogger($this->logger, $this->logDirectory->path, clock: new ManualClock()),
+            new DiagnosticLogger($this->logger, clock: new ManualClock()),
             $clock,
         );
         $this->sampler->willSample('handle');
@@ -730,7 +811,7 @@ final class UnitOfWorkProfilerTest extends TestCase
                 $this->shutdownFunctions[] = $callback;
             },
             $random,
-            new DiagnosticLogger($this->logger, $this->logDirectory->path, clock: new ManualClock()),
+            new DiagnosticLogger($this->logger, clock: new ManualClock()),
         );
     }
 }

@@ -13,6 +13,8 @@ namespace Tracewick\Runtime;
  * do not bind a second profiler for the same request.
  *
  * {@see clear()} is for tests only. Production code must not clear the holder mid-request.
+ *
+ * @api
  */
 final class ProcessProfiler
 {

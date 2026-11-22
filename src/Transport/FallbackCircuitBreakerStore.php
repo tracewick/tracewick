@@ -10,6 +10,8 @@ use Tracewick\Diagnostics\DiagnosticLogger;
 /**
  * Prefers a shared file store, and falls back to an in-memory store for this process when the
  * file cannot be used. The switch happens at most once per process and is logged.
+ *
+ * @internal
  */
 final class FallbackCircuitBreakerStore implements CircuitBreakerStore
 {

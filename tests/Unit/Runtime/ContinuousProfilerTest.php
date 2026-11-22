@@ -423,14 +423,14 @@ final class ContinuousProfilerTest extends TestCase
                 $this->sampler,
                 $this->sink,
                 new ContinuousProfilerConfig('blog', new Labels(['email' => 'user@example.com', 'env' => 'prod'])),
-                new DiagnosticLogger($logger, $directory->path, clock: $this->clock),
+                new DiagnosticLogger($logger, clock: $this->clock),
                 $this->clock,
             );
             new ContinuousProfiler(
                 $this->sampler,
                 $this->sink,
                 new ContinuousProfilerConfig('blog', new Labels(['email' => 'other@example.com'])),
-                new DiagnosticLogger($logger, $directory->path, clock: $this->clock),
+                new DiagnosticLogger($logger, clock: $this->clock),
                 $this->clock,
             );
 
@@ -472,7 +472,7 @@ final class ContinuousProfilerTest extends TestCase
                 new NullSampler(NullSamplerReason::Disabled, clock: $this->clock),
                 $this->sink,
                 new ContinuousProfilerConfig('blog'),
-                new DiagnosticLogger($logger, $directory->path, clock: $this->clock),
+                new DiagnosticLogger($logger, clock: $this->clock),
                 $this->clock,
             );
             self::assertSame(['warning: Tracewick profiling is disabled (TRACEWICK_ENABLED).'], $logger->lines());
@@ -486,7 +486,7 @@ final class ContinuousProfilerTest extends TestCase
                 ),
                 $this->sink,
                 new ContinuousProfilerConfig('blog'),
-                new DiagnosticLogger($logger, $directory->path, clock: $this->clock),
+                new DiagnosticLogger($logger, clock: $this->clock),
                 $this->clock,
             );
             self::assertContains(

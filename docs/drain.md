@@ -6,9 +6,10 @@ application only ever writes local files, and never waits for the network
 ([ADR 5](adr/0005-fail-open-policy.md), [ADR 7](adr/0007-language-neutral-spool-format.md)).
 
 It is written in PHP and ships with this library. For a long-running sidecar with HTTP keep-alive,
-prefer the Go binary [`tracewick-agent`](https://github.com/tracewick/agent). Several drains, or a
-drain and an agent, can read the same directory at the same time; each file goes to exactly one of
-them ([ADR 9](adr/0009-agent-hand-off.md)).
+prefer the Go binary [`tracewick-agent`](https://github.com/tracewick/agent). Run one normal reader
+per spool. Atomic claims coordinate concurrent readers, but delivery is at least once: a crash
+after send or a failed acknowledgement can cause a repeat. See the
+[operations checklist](operations.md) and [ADR 9](adr/0009-agent-hand-off.md).
 
 `PyroscopeSink::forward()` encodes pprof from compact spool payloads
 ([ADR 13](adr/0013-spool-v2-compact-payload.md)). Files that share an aggregation key and the same
@@ -78,16 +79,34 @@ vendor/bin/tracewick-drain --spool-dir=/var/spool/tracewick --pyroscope-url=http
 | `--pyroscope-user=USER` | `TRACEWICK_PYROSCOPE_USER`     | Basic authentication user                                      |
 |                         | `TRACEWICK_PYROSCOPE_PASSWORD` | Basic authentication password, from the environment only       |
 | `--pyroscope-tenant=ID` | `TRACEWICK_PYROSCOPE_TENANT`   | Tenant, sent as `X-Scope-OrgID`                                |
-| `--reader-id=ID`        |                                | Name of this reader in claimed file names; default `host-pid`  |
+| `--reader-id=ID`        | `TRACEWICK_READER_ID` | Name of this reader in claimed file names; default `host-pid`  |
 | `--once`                |                                | Deliver what is in the spool, then exit                        |
-| `--limit=COUNT`         |                                | Exit after handling COUNT files                                |
-| `--memory-limit=SIZE`   |                                | Exit when the process uses more memory, such as `128M`         |
-| `--time-limit=SECONDS`  |                                | Exit after running for SECONDS                                 |
-| `--sleep=SECONDS`       |                                | Pause while the spool is empty; default 1                      |
+| `--limit=COUNT`         | `TRACEWICK_LIMIT` | Exit after handling COUNT files                                |
+| `--memory-limit=SIZE`   | `TRACEWICK_MEMORY_LIMIT` | Exit when the process uses more memory, such as `128M`         |
+| `--time-limit=SECONDS`  | `TRACEWICK_TIME_LIMIT_SECONDS` | Exit after running for SECONDS                                 |
+| `--sleep=SECONDS`       | `TRACEWICK_SLEEP_SECONDS` | Pause while the spool is empty; default 1                      |
 | `--aggregation-window=S`| `TRACEWICK_AGGREGATION_WINDOW` | Merge window for compact-stacks files, 10–15; default 15       |
 
-An option wins over its environment variable. The password has no option, so that it does not
-show up in the process list.
+An explicitly supplied option wins over its environment variable **even when empty**.
+Empty required strings and numeric values are errors; empty optional user/tenant strings clear
+the setting. Clearing the user while a password is set is still an authentication error.
+`--reader-id=` resets to the automatic host/pid identifier. Empty environment variables mean
+unset and use defaults. `--once` and `--help` are CLI-only; the password is environment-only.
+
+**Pre-1.0 behavior change:** empty CLI options previously fell back to env/defaults. They now
+express an explicit value: for example, `--spool-dir=` fails even if `TRACEWICK_SPOOL_DIR` is set,
+and `--limit=` fails instead of removing the limit. Omit an option to inherit env/defaults.
+A valid CLI override also ignores an invalid value in the corresponding environment variable.
+
+The executable reads the process environment with `getenv()`. It does not load `.env` files or
+read another PHP application's `$_ENV`. Supply variables through the shell, systemd, or container
+configuration. File loading, when desired, belongs to that launcher.
+
+New variable formats match their CLI options: counts and time/sleep values are decimal integers;
+`TRACEWICK_MEMORY_LIMIT` accepts bytes or sizes such as `128M`. Zero sleep is valid; count/time
+limits must be positive. Existing defaults and validation bounds are unchanged. Go-agent uses
+`TRACEWICK_SLEEP` with Go duration syntax (`250ms`, `5s`); PHP drain uses
+`TRACEWICK_SLEEP_SECONDS` with integer seconds.
 
 `--limit`, `--memory-limit` and `--time-limit` are checked between files, so a file is never left
 halfway. They let the process exit cleanly and be started afresh by its supervisor, which bounds
@@ -144,8 +163,9 @@ WantedBy=multi-user.target
 * * * * * www-data /var/www/app/vendor/bin/tracewick-drain --once --time-limit=50 --spool-dir=/var/spool/tracewick --pyroscope-url=http://pyroscope:4040
 ```
 
-With cron, `--time-limit` below the cron interval keeps runs from piling up; if they do overlap,
-the runs share the files without delivering any of them twice.
+With cron, prevent overlapping runs. `--time-limit` is checked between passes, not a hard
+wall-clock deadline, so setting it below the cron interval alone does not guarantee this.
+Claims coordinate accidental overlap; they do not make delivery exactly once.
 
 Default HTTP timeouts are 200 ms connect / 1 s total (same as request-path). If Pyroscope is often
 slower than that on your network, raise them on `PyroscopeConfig` for the drain process only.

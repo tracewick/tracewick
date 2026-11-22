@@ -10,6 +10,8 @@ use Tracewick\Exception\LogicException;
  * Where a {@see DirectorySpoolSource} reads spool files and how it shares them with other readers.
  *
  * @see https://github.com/tracewick/tracewick/blob/main/docs/spool-format.md
+ *
+ * @api
  */
 final readonly class SpoolReaderConfig
 {

@@ -10,6 +10,21 @@ Tracewick exposes two runtime adapters:
 Both are fail-open ([ADR 5](adr/0005-fail-open-policy.md)): no method throws into the host
 application.
 
+## Forking workers
+
+Initialize and start profiling **after** the worker has forked, or after an `exec` that starts a
+fresh interpreter. Do not start an Excimer profiler in a parent that will later call `pcntl_fork()`.
+This also applies to `auto_prepend_file`: boot it in the final worker, not in a forking supervisor.
+
+On Linux, Excimer 1.2.7 uses native timer threads and mutexes. A child can inherit a locked mutex
+without the thread that would unlock it, then hang in an interrupt or during cleanup. PHP
+`try/catch` cannot recover from that native wait. Calling `stop()` before the fork disarms the
+timer but does not destroy its native thread, so it is not a fork-safety guarantee.
+
+The sampler's PID check resets PHP-side batch state. The simulated-PID integration tests exercise
+that reset; they do not prove that a real fork with inherited native timers is safe. Storage
+concurrency tests run in fresh PHP interpreters so they cannot inherit timers left by other tests.
+
 ## Unit of work profiler
 
 `Tracewick\Runtime\UnitOfWorkProfiler` profiles one unit of work at a time, such as an HTTP
@@ -36,6 +51,10 @@ runs as usual. The kill switch precedence is: `TRACEWICK_DISABLE_FILE` path exis
 values are `0`, `false`, `off`, and `no`. The first profiler constructed in the process logs a
 warning once (to the PSR-3 logger when given, otherwise to `error_log`) that names the reason:
 disabled, missing extension, or init failure.
+
+The switch is evaluated when the sampler is created, not at every `start()` or `pulse()`.
+The disable-file result is cached; recycle workers to apply a change to existing profilers.
+See [operating, disabling and rolling back Tracewick](operations.md).
 
 When constructing `SamplerConfig` yourself, set `projectRoot` to the application base path so frame
 files and closure names do not include release-directory prefixes (otherwise each deploy splits
@@ -191,6 +210,14 @@ With `maxProfileDurationSeconds` greater than 0, a long command is split into su
 windows. The Excimer flush callback calls `pulse()` as samples arrive; a worker loop can also call
 `pulse()` itself. Without a duration limit the profile covers the whole command until shutdown.
 
+Automatic rotation only buffers profiles. External counters and logging for those rotations are
+published by an explicit `stop()`, `pulse()` or `flush()` outside the callback, including shutdown.
+`diagnostics()` reflects local counts immediately. Repeated overflow/errors are summarized using
+bounded state (fixed counter keys and the latest error); no message queue grows with runtime.
+Call `flush()` at safe points during long jobs to deliver completed profiles and diagnostics.
+Otherwise the bounded profile buffer can fill and subsequent completed profiles are dropped.
+A failed external counter update is not retried and is recorded in local diagnostics.
+
 Sampling itself is capped in the sampler: Excimer drains its log every `maxSamples` hits into an
 in-memory stack→count map, and stacks beyond `maxUniqueStacks` go into an `[overflow]` frame so the
 profile stays bounded.
@@ -244,6 +271,9 @@ or a full spool), **empty** (no samples — not the same as skipped), errors swa
 sampler is a no-op and why (`inactiveSampler`), and how many failures the sampler itself swallowed
 (`samplerFailures`). Under PHP-FPM a unit-of-work profiler lives for one request, so the numbers
 cover that request; in a long-running worker they add up.
+
+With `SpoolSink`, `deliveredProfiles` counts successful spool writes, not backend acceptance.
+Check the reader and Pyroscope separately; see [operations](operations.md#observe-collection-spool-and-delivery-separately).
 
 Optional host-wide counters (`Tracewick\Diagnostics\CounterStore`) survive FPM requests when APCu
 is available, otherwise a small file under the system temp dir (`CounterStoreFactory::create()`).

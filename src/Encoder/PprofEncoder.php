@@ -23,6 +23,8 @@ use Tracewick\Sampler\Frame;
  * profile.
  *
  * @see https://github.com/google/pprof/blob/main/proto/profile.proto
+ *
+ * @api
  */
 final readonly class PprofEncoder implements Encoder
 {

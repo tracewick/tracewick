@@ -23,6 +23,8 @@ use Tracewick\Clock\SystemClock;
  * Payload parameters become the query string. Only the status code of the response is read:
  * 2xx is delivered; 408, 429 and 5xx are transient failures; 401, 403, 404 and 413 are
  * configuration errors; other non-2xx statuses mean the payload was rejected.
+ *
+ * @api
  */
 final readonly class HttpTransport implements Transport
 {

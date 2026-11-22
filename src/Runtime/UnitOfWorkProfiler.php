@@ -45,6 +45,8 @@ use Tracewick\Transport\DeliveryStatus;
  * profile it concerns (ADR 5). {@see diagnostics()} counts what happened, and a
  * {@see DiagnosticLogger} reports problems to the application's logger. With a {@see \Tracewick\Sink\SpoolSink} a flush is a local file
  * write; with a sink that sends over the network the work of the flush depends on the backend.
+ *
+ * @api
  */
 final class UnitOfWorkProfiler
 {
@@ -92,6 +94,18 @@ final class UnitOfWorkProfiler
 
     private bool $rotating = false;
 
+    private bool $inSegmentCallback = false;
+
+    private bool $publishingDiagnostics = false;
+
+    /** @var array<string, int> Fixed runtime counter keys only; cumulative callback totals. */
+    private array $deferredCounters = [];
+
+    /** @var array<string, int> */
+    private array $publishedCounters = [];
+
+    private ?\Throwable $deferredFailure = null;
+
     /** @var \Closure(): void */
     private readonly \Closure $finishRequest;
 
@@ -102,6 +116,9 @@ final class UnitOfWorkProfiler
     private readonly \Closure $random;
 
     /**
+     * The random and shutdown-registration overrides are internal test seams; normal defaults
+     * and the finishRequest callback are part of the public construction API.
+     *
      * @param ?\Closure(): void                 $finishRequest            ends the response to the client; `fastcgi_finish_request()` by default
      * @param ?\Closure(callable(): void): void $registerShutdownFunction `register_shutdown_function()` by default
      * @param ?\Closure(): float                $random                   a random number from 0 inclusive to 1 exclusive
@@ -117,6 +134,9 @@ final class UnitOfWorkProfiler
         ?Clock $clock = null,
         private readonly CounterStore $counters = new NullCounterStore(),
     ) {
+        // Prepare the in-memory rotation path before Excimer can interrupt application work.
+        class_exists(Profile::class);
+        class_exists(HostCounterKeys::class);
         $this->labels = LabelPolicy::filter($config->labels);
         $this->inactiveSampler = $sampler instanceof NullSampler ? $sampler->reason : null;
         $this->clock = $clock ?? new SystemClock();
@@ -132,7 +152,7 @@ final class UnitOfWorkProfiler
         };
         $this->random = $random ?? (static fn(): float => random_int(0, 1_000_000_000 - 1) / 1_000_000_000);
         if ($sampler instanceof ExcimerSampler && $this->maxProfileDurationNs > 0) {
-            $sampler->setSegmentListener($this->pulse(...));
+            $sampler->setSegmentListener($this->onSegment(...));
         }
 
         $this->logSampleRateOnce();
@@ -191,8 +211,12 @@ final class UnitOfWorkProfiler
      */
     public function pulse(): void
     {
+        if ($this->rotating) {
+            return;
+        }
+
         try {
-            if ($this->rotating || !$this->started || $this->maxProfileDurationNs <= 0 || null === $this->deadlineNs) {
+            if (!$this->started || $this->maxProfileDurationNs <= 0 || null === $this->deadlineNs) {
                 return;
             }
 
@@ -208,6 +232,7 @@ final class UnitOfWorkProfiler
             $this->swallow($e);
         } finally {
             $this->rotating = false;
+            $this->publishDeferredDiagnostics();
         }
     }
 
@@ -262,12 +287,16 @@ final class UnitOfWorkProfiler
             } else {
                 ++$this->droppedProfiles;
                 $this->bump(HostCounterKeys::PROFILES_DROPPED);
-                $this->logger->log(LogLevel::NOTICE, 'Tracewick dropped a profile because {count} profiles already wait for the flush.', ['count' => \count($this->buffer)]);
+                if (!$this->inSegmentCallback) {
+                    $this->logger->log(LogLevel::NOTICE, 'Tracewick dropped a profile because {count} profiles already wait for the flush.', ['count' => \count($this->buffer)]);
+                }
             }
         } catch (\Throwable $e) {
             $this->started = false;
             $this->deadlineNs = null;
             $this->swallow($e);
+        } finally {
+            $this->publishDeferredDiagnostics();
         }
     }
 
@@ -277,6 +306,7 @@ final class UnitOfWorkProfiler
      */
     public function flush(): void
     {
+        $this->publishDeferredDiagnostics();
         $profiles = $this->buffer;
         $this->buffer = [];
         foreach ($profiles as $profile) {
@@ -524,8 +554,68 @@ final class UnitOfWorkProfiler
         }
     }
 
+    private function onSegment(): void
+    {
+        if ($this->inSegmentCallback) {
+            return;
+        }
+
+        $this->inSegmentCallback = true;
+        try {
+            $this->pulse();
+        } finally {
+            $this->inSegmentCallback = false;
+        }
+    }
+
+    private function publishDeferredDiagnostics(): void
+    {
+        if ($this->inSegmentCallback || $this->rotating || $this->publishingDiagnostics) {
+            return;
+        }
+
+        $this->publishingDiagnostics = true;
+        // Cumulative totals avoid losing interrupts between taking a snapshot and publishing it.
+        $totals = $this->deferredCounters;
+        $previous = $this->publishedCounters;
+        $failure = $this->deferredFailure;
+        $this->publishedCounters = $totals;
+        try {
+            foreach ($totals as $key => $total) {
+                $delta = $total - ($previous[$key] ?? 0);
+                if ($delta > 0) {
+                    try {
+                        $this->counters->increment($key, $delta);
+                    } catch (\Throwable $error) {
+                        // A broken external counter must not prevent rotation or delivery.
+                        ++$this->swallowedErrors;
+                        $this->lastFailure = $error;
+                    }
+                }
+            }
+
+            $drops = ($totals[HostCounterKeys::PROFILES_DROPPED] ?? 0) - ($previous[HostCounterKeys::PROFILES_DROPPED] ?? 0);
+            if ($drops > 0) {
+                $this->logger->log(LogLevel::NOTICE, 'Tracewick dropped {count} profiles during automatic rotation because the buffer was full.', ['count' => $drops]);
+            }
+
+            $errors = ($totals[HostCounterKeys::PROFILES_SWALLOWED] ?? 0) - ($previous[HostCounterKeys::PROFILES_SWALLOWED] ?? 0);
+            if ($errors > 0 && $failure instanceof \Throwable) {
+                $this->logger->log(LogLevel::WARNING, 'Tracewick ignored {count} errors during automatic rotation; latest: {error}', ['count' => $errors, 'error' => $failure->getMessage(), 'exception' => $failure]);
+            }
+        } finally {
+            $this->publishingDiagnostics = false;
+        }
+    }
+
     private function bump(string $key): void
     {
+        if ($this->inSegmentCallback) {
+            $this->deferredCounters[$key] = ($this->deferredCounters[$key] ?? 0) + 1;
+
+            return;
+        }
+
         $this->counters->increment($key);
     }
 
@@ -534,6 +624,12 @@ final class UnitOfWorkProfiler
         ++$this->swallowedErrors;
         $this->bump(HostCounterKeys::PROFILES_SWALLOWED);
         $this->lastFailure = $error;
+        if ($this->inSegmentCallback) {
+            $this->deferredFailure = $error;
+
+            return;
+        }
+
         $this->logger->log(LogLevel::WARNING, 'Tracewick ignored an error: {error}', ['error' => $error->getMessage(), 'exception' => $error]);
     }
 

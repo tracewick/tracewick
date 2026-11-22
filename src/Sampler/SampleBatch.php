@@ -6,6 +6,8 @@ namespace Tracewick\Sampler;
 
 /**
  * Samples collected by a sampler between two flushes.
+ *
+ * @api
  */
 final readonly class SampleBatch
 {

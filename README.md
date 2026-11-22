@@ -8,9 +8,12 @@ Tracewick is a sampling profiler for PHP, built on [ext-excimer](https://www.med
 meant to run continuously in production.
 
 > [!WARNING]
-> Tracewick **0.2.x is beta**. Capacity evidence for the default spool path is published; the
-> public API is still not frozen until 1.0.0 — expect breaking changes in minor releases. Pin a
-> version and read the changelog before upgrading.
+> Tracewick **1.0.0-rc.1 is a release candidate**, not the final 1.0 release. The intended public
+> API is documented below; compatibility fixes may still be needed during RC validation. Pin the
+> candidate explicitly and read the migration notes before upgrading from 0.2.
+
+The [public API boundary and compatibility policy](docs/compatibility.md) identifies intended
+1.0 contracts, internal/test-only members, tested versions and current pre-1.0 migration notes.
 
 ## Goals
 
@@ -24,24 +27,29 @@ meant to run continuously in production.
   Profiles export is planned and experimental ([ADR 6](docs/adr/0006-otlp-profiles-experimental.md)).
 - **Where PHP runs.** PHP-FPM, CLI and sequential workers use `UnitOfWorkProfiler` (one profile per
   request or job). Concurrent runtimes such as Swoole, Fibers or ReactPHP use `ContinuousProfiler`:
-  process-level sampling without per-request labels. Symfony and Laravel integrations are planned
-  as separate packages; they are not in this repository.
+  process-level sampling without per-request labels. The [Symfony bundle](https://github.com/tracewick/symfony-bundle)
+  is a separate package; Laravel integration remains planned. Framework integrations are not in
+  this repository.
 
 ## Requirements
 
-- PHP 8.2 or newer
+- PHP 8.2–8.5 (PHP 8.6 support is pending released Excimer support; see [#95](https://github.com/tracewick/tracewick/pull/95))
 - [ext-excimer](https://www.mediawiki.org/wiki/Excimer) to collect profiles (optional at install time)
 
 **Fail-open.** Public profiler/sink calls catch failures and never throw into the host application.
-Without ext-excimer the library is a **no-op** (warn once, then idle). Turn profiling off without a
-deploy via the kill switch: `TRACEWICK_DISABLE_FILE` → `TRACEWICK_ENABLED` / `tracewick.enabled`
-([docs/runtime.md](docs/runtime.md), [ADR 5](docs/adr/0005-fail-open-policy.md)).
+Without ext-excimer the library is a **no-op** (warn once, then idle). Disable collection through
+the kill switch: `TRACEWICK_DISABLE_FILE` → `TRACEWICK_ENABLED` / `tracewick.enabled`.
+Recreate/restart workers to apply it to existing profilers; see the
+[operations checklist, troubleshooting and rollback](docs/operations.md).
 
 ## Installation
 
 ```bash
-composer require tracewick/tracewick
+composer require 'tracewick/tracewick:1.0.0-rc.1'
 ```
+
+For releases with signed assets, [verify the release ZIP and SBOM](docs/verify-release.md).
+The v0.1.0 and v0.2.0 releases are unsigned; Composer does not verify Cosign automatically.
 
 Install the extension separately. Prefer [PIE](https://php.github.io/pie/) (PECL is deprecated):
 

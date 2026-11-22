@@ -9,6 +9,8 @@ namespace Tracewick\Sink;
  *
  * With an aggregation-key hash: `<time>-<aggHash>-<random>.spool`.
  * Without: `<time>-<random>.spool`.
+ *
+ * @internal
  */
 final readonly class SpoolFileName
 {

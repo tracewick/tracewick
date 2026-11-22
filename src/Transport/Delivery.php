@@ -6,6 +6,8 @@ namespace Tracewick\Transport;
 
 /**
  * Result of a delivery attempt, with a short human-readable reason when it did not succeed.
+ *
+ * @api
  */
 final readonly class Delivery
 {

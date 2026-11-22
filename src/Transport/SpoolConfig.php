@@ -17,6 +17,8 @@ use Tracewick\Exception\LogicException;
  * aggregation-key hash is provided.
  *
  * @see https://github.com/tracewick/tracewick/blob/main/docs/spool-format.md
+ *
+ * @api
  */
 final readonly class SpoolConfig
 {
