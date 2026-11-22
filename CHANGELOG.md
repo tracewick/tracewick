@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.0.0-rc.1](https://github.com/tracewick/tracewick/compare/v0.2.0...v1.0.0-rc.1) (2026-11-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* **api:** define public contracts and remove ignored options ([#89](https://github.com/tracewick/tracewick/issues/89))
+* **runtime:** explicitly empty drain CLI options no longer inherit environment values. Empty required and numeric options fail; empty optional strings clear their settings.
+
+### Added
+
+* **api:** define public contracts and remove ignored options ([#89](https://github.com/tracewick/tracewick/issues/89)) ([37e5928](https://github.com/tracewick/tracewick/commit/37e5928506cee2b1c395c2c8d01e89f2bf43a6b8))
+* **runtime:** add drain env options with explicit CLI precedence ([#79](https://github.com/tracewick/tracewick/issues/79)) ([55eb7bd](https://github.com/tracewick/tracewick/commit/55eb7bdb91cd4269a86bb0dd8ce22a243e5486b4))
+
+
+### Fixed
+
+* **runtime:** defer UoW callback diagnostics and preserve automatic rotation ([#78](https://github.com/tracewick/tracewick/issues/78)) ([6cd62b1](https://github.com/tracewick/tracewick/commit/6cd62b169b999f8b52e178778603f661d907d9aa))
+* **runtime:** preload native callback dependencies ([#84](https://github.com/tracewick/tracewick/issues/84)) ([19eb91d](https://github.com/tracewick/tracewick/commit/19eb91d945cd28dceaec1ddfd39740a71cdd5113))
+
+
+### Chores
+
+* prepare 1.0.0-rc.1 ([2bfc385](https://github.com/tracewick/tracewick/commit/2bfc38526a58d067b3edd72a4b28254f34259415))
+
 ## [0.2.0](https://github.com/tracewick/tracewick/compare/v0.1.0...v0.2.0) (2026-11-09)
 
 
